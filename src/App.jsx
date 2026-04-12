@@ -141,7 +141,7 @@ async function fetchNews(cat, key) {
   if (!key) return null;
   const cached = cacheGet(`mb_news_${cat.id}`, 30);
   if (cached) return cached;
-  try { const d = await callAPI(key, { model: "claude-haiku-3-5-20241022", max_tokens: 3000, tools: [{ type: "web_search_20250305", name: "web_search" }], messages: [{ role: "user", content: `Search for the latest ${cat.q}.\n${SRC_GUIDE}\nReturn ONLY a JSON array of top ${cat.count} articles: [{"title":"...","source":"...","summary":"one sentence","url":"...","time":"relative"}]. Raw JSON only.` }] }); const raw = extractText(d); if (!raw) return null; const match = raw.match(/\[[\s\S]*\]/); const result = match ? JSON.parse(match[0]) : JSON.parse(raw); if (result) cacheSet(`mb_news_${cat.id}`, result); return result; } catch (e) { console.error("News fetch error:", e); return null; }
+  try { const d = await callAPI(key, { model: "claude-sonnet-4-20250514", max_tokens: 3000, tools: [{ type: "web_search_20250305", name: "web_search" }], messages: [{ role: "user", content: `Search for the latest ${cat.q}.\n${SRC_GUIDE}\nReturn ONLY a JSON array of top ${cat.count} articles: [{"title":"...","source":"...","summary":"one sentence","url":"...","time":"relative"}]. Raw JSON only.` }] }); const raw = extractText(d); if (!raw) return null; const match = raw.match(/\[[\s\S]*\]/); const result = match ? JSON.parse(match[0]) : JSON.parse(raw); if (result) cacheSet(`mb_news_${cat.id}`, result); return result; } catch (e) { console.error("News fetch error:", e); return null; }
 }
 async function fetchBriefing(type, key, forceRefresh = false) {
   const p = { morning: `Senior equity research analyst morning briefing. Search latest market news. Cover: 1) Overnight global markets 2) Macro/Fed developments 3) Pre-market sector moves 4) M&A/deals 5) What to watch today.\n${SRC_GUIDE}\nCite sources inline [Reuters]. End with ---SOURCES--- then JSON: [{"name":"...","url":"..."}]. Plain paragraphs, no markdown.`, close: `Senior equity research analyst close briefing. Search today's results. Cover: 1) Index closes with % 2) Session drivers 3) Stock movers 4) After-hours 5) Tomorrow watch.\n${SRC_GUIDE}\nCite inline [Reuters]. End with ---SOURCES--- then JSON: [{"name":"...","url":"..."}]. Plain paragraphs, no markdown.` };
@@ -162,7 +162,7 @@ async function fetchRegime(key) {
   const cached = cacheGet("mb_regime", 15);
   if (cached) return cached;
   try {
-    const d = await callAPI(key, { model: "claude-haiku-3-5-20241022", max_tokens: 1000, tools: [{ type: "web_search_20250305", name: "web_search" }],
+    const d = await callAPI(key, { model: "claude-sonnet-4-20250514", max_tokens: 1000, tools: [{ type: "web_search_20250305", name: "web_search" }],
         messages: [{ role: "user", content: `Search for the current VIX index level, CNN Fear and Greed Index score, and US 10-year Treasury yield.
 
 Then return ONLY a raw JSON object with no other text, no markdown, no backticks:
@@ -182,7 +182,7 @@ async function fetchEarnings(key) {
   const cached = cacheGet("mb_earnings", 60);
   if (cached) return cached;
   try {
-    const d = await callAPI(key, { model: "claude-haiku-3-5-20241022", max_tokens: 1000, tools: [{ type: "web_search_20250305", name: "web_search" }],
+    const d = await callAPI(key, { model: "claude-sonnet-4-20250514", max_tokens: 1000, tools: [{ type: "web_search_20250305", name: "web_search" }],
         messages: [{ role: "user", content: `Search for upcoming earnings reports this week and next week for major US companies. Return ONLY a raw JSON array with no other text, no markdown, no backticks. 8-10 most notable companies:
 [{"company":"Apple Inc.","ticker":"AAPL","date":"Apr 24","time":"AMC","est_eps":"$1.62"}]
 Replace with real upcoming earnings data. time should be "BMO" for before market open or "AMC" for after market close. Return ONLY the JSON array.` }] });
@@ -304,7 +304,7 @@ async function fetchEconCal(key) {
   const cached = cacheGet("mb_econ_cal", 120);
   if (cached) return cached;
   try {
-    const d = await callAPI(key, { model: "claude-haiku-3-5-20241022", max_tokens: 1500, tools: [{ type: "web_search_20250305", name: "web_search" }],
+    const d = await callAPI(key, { model: "claude-sonnet-4-20250514", max_tokens: 1500, tools: [{ type: "web_search_20250305", name: "web_search" }],
       messages: [{ role: "user", content: `Search for upcoming US economic calendar events for the next 2 weeks. Include Fed meetings (FOMC), CPI releases, jobs reports (NFP), GDP, PPI, retail sales, and any other major economic data releases. Return ONLY a JSON array: [{"event":"FOMC Rate Decision","date":"Apr 30","time":"2:00 PM ET","importance":"high","prior":"5.25-5.50%"}]. importance should be "high", "medium", or "low". Include 8-12 events. Return ONLY the JSON array.` }] });
     const raw = extractText(d);
     if (!raw) return null;
