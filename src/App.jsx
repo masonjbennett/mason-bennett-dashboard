@@ -604,7 +604,7 @@ export default function App() {
 
       {tab === "projects" && <div style={{ animation: "fadeUp 0.4s ease both" }}>
         <h1 style={S.pageTitle}>Projects</h1><p style={{ color: "#94a3b8", marginBottom: 32, fontSize: 14 }}>Financial modeling, econometrics, and quantitative analysis.</p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(360px,1fr))", gap: 14 }}>{PROJECTS.map((p, i) => <div key={i} style={{ ...S.pCard, ...(hovP === i ? { borderColor: "#34d39950", transform: "translateY(-6px) scale(1.01)", boxShadow: "0 20px 50px rgba(52,211,153,0.12), 0 0 0 1px rgba(52,211,153,0.15), 0 0 40px rgba(52,211,153,0.05)" } : {}), animation: "fadeUp 0.5s ease both", animationDelay: `${i * 0.07}s` }} onMouseEnter={() => setHovP(i)} onMouseLeave={() => setHovP(null)}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(min(360px,100%),1fr))", gap: 14 }}>{PROJECTS.map((p, i) => <div key={i} style={{ ...S.pCard, ...(hovP === i ? { borderColor: "#34d39950", transform: "translateY(-6px) scale(1.01)", boxShadow: "0 20px 50px rgba(52,211,153,0.12), 0 0 0 1px rgba(52,211,153,0.15), 0 0 40px rgba(52,211,153,0.05)" } : {}), animation: "fadeUp 0.5s ease both", animationDelay: `${i * 0.07}s` }} onMouseEnter={() => setHovP(i)} onMouseLeave={() => setHovP(null)}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}><span style={{ fontSize: 9, color: "#64748b", fontFamily: "JetBrains Mono, monospace", letterSpacing: 1 }}>PROJECT_{String(i + 1).padStart(2, "0")}</span><span style={{ fontSize: 9, padding: "3px 10px", borderRadius: 20, background: p.status === "In Progress" ? "#fbbf2408" : "#34d39908", color: p.status === "In Progress" ? "#fbbf24" : "#34d399", fontFamily: "JetBrains Mono, monospace" }}>{p.status}</span></div>
           <h3 style={{ color: "#e2e8f0", fontSize: 17, fontWeight: 600, marginBottom: 10, lineHeight: 1.3 }}>{p.title}</h3>
           <p style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.65, marginBottom: 16, flex: 1 }}>{p.desc}</p>
@@ -622,15 +622,15 @@ export default function App() {
         <div style={{ ...S.card, background: "linear-gradient(135deg,#080c16,#0d1828,#0b1120)", border: "none", borderRadius: 16, position: "relative", overflow: "hidden" }}>
           <div style={{ position: "absolute", top: -60, right: -60, width: 300, height: 300, background: "radial-gradient(circle,rgba(52,211,153,0.06) 0%,transparent 70%)", pointerEvents: "none" }} />
           <div style={{ position: "absolute", bottom: -40, left: -40, width: 200, height: 200, background: "radial-gradient(circle,rgba(96,165,250,0.04) 0%,transparent 70%)", pointerEvents: "none" }} />
-          <div style={{ display: "flex", gap: 28, alignItems: "flex-start", flexWrap: "wrap", position: "relative" }}>
+          <div className="bio-layout" style={{ display: "flex", gap: 28, alignItems: "flex-start", flexWrap: "wrap", position: "relative" }}>
             <div style={{ flexShrink: 0, borderRadius: 22, padding: 3, background: "linear-gradient(135deg, #34d399, #60a5fa, #a78bfa, #34d399)", backgroundSize: "300% 300%", animation: "gradientShift 4s ease infinite", boxShadow: "0 16px 50px rgba(52,211,153,0.2), 0 0 60px rgba(52,211,153,0.08)" }}>
-              <img src="/headshot.png" alt="Mason J. Bennett" style={{ width: 180, height: 180, borderRadius: 20, objectFit: "cover", objectPosition: "center 15%", imageRendering: "crisp-edges", filter: "contrast(1.04) brightness(1.02)", display: "block" }} />
+              <img src="/headshot.png" alt="Mason J. Bennett" className="bio-headshot" style={{ width: 180, height: 180, borderRadius: 20, objectFit: "cover", objectPosition: "center 15%", imageRendering: "crisp-edges", filter: "contrast(1.04) brightness(1.02)", display: "block" }} />
             </div>
             <div style={{ flex: 1 }}>
               <h2 style={{ color: "#e2e8f0", fontSize: 30, fontFamily: "Instrument Serif, serif", marginBottom: 4, textShadow: "0 2px 16px rgba(226,232,240,0.06)" }}>Mason J. Bennett</h2>
               <p style={{ color: "#34d399", fontSize: 12, fontFamily: "JetBrains Mono, monospace", marginBottom: 16 }}>M.S. Finance · University of Arkansas · Class of 2026</p>
               <p style={{ color: "#cbd5e1", fontSize: 14, lineHeight: 1.85, marginBottom: 18 }}>Finance graduate student at the Sam M. Walton College of Business focused on valuation, transaction analysis, portfolio management, and financial modeling. Pursuing investment banking, private equity, and transaction advisory with experience in DCF, LBO, and three-statement modeling.</p>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{["Investment Banking", "Private Equity", "Transaction Advisory"].map(t => <span key={t} style={{ fontSize: 10, padding: "5px 14px", borderRadius: 20, background: "linear-gradient(135deg, rgba(52,211,153,0.1), rgba(96,165,250,0.06))", color: "#34d399", border: "1px solid rgba(52,211,153,0.2)", fontFamily: "JetBrains Mono, monospace", boxShadow: "0 2px 8px rgba(52,211,153,0.06)" }}>{t}</span>)}</div>
+              <div className="bio-badges" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{["Investment Banking", "Private Equity", "Transaction Advisory"].map(t => <span key={t} style={{ fontSize: 10, padding: "5px 14px", borderRadius: 20, background: "linear-gradient(135deg, rgba(52,211,153,0.1), rgba(96,165,250,0.06))", color: "#34d399", border: "1px solid rgba(52,211,153,0.2)", fontFamily: "JetBrains Mono, monospace", boxShadow: "0 2px 8px rgba(52,211,153,0.06)" }}>{t}</span>)}</div>
             </div>
           </div>
         </div>
@@ -681,7 +681,7 @@ export default function App() {
         </div>
         <div style={S.card}>
           <h2 style={S.cardTitle}><span style={{ color: "#f472b6" }}>◆</span> Connect</h2>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>{LINKS.map(l => <a key={l.label} href={l.url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 24px", borderRadius: 12, background: "linear-gradient(145deg, #0c1222, #0a0f1c)", color: "#e2e8f0", textDecoration: "none", fontSize: 13, fontWeight: 500, border: "1px solid #1e2d4a", transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)", boxShadow: "0 4px 12px rgba(0,0,0,0.3)", flex: "1 1 0", justifyContent: "center", minWidth: 140 }} onMouseEnter={e => { e.currentTarget.style.borderColor = "#34d39950"; e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(52,211,153,0.12), 0 0 0 1px rgba(52,211,153,0.1)"; }} onMouseLeave={e => { e.currentTarget.style.borderColor = "#1e2d4a"; e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.3)"; }}><span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 12, fontWeight: 700, color: "#34d399" }}>{l.ic}</span>{l.label}</a>)}</div>
+          <div className="connect-links" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>{LINKS.map(l => <a key={l.label} href={l.url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 24px", borderRadius: 12, background: "linear-gradient(145deg, #0c1222, #0a0f1c)", color: "#e2e8f0", textDecoration: "none", fontSize: 13, fontWeight: 500, border: "1px solid #1e2d4a", transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)", boxShadow: "0 4px 12px rgba(0,0,0,0.3)", flex: "1 1 0", justifyContent: "center", minWidth: 140 }} onMouseEnter={e => { e.currentTarget.style.borderColor = "#34d39950"; e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(52,211,153,0.12), 0 0 0 1px rgba(52,211,153,0.1)"; }} onMouseLeave={e => { e.currentTarget.style.borderColor = "#1e2d4a"; e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.3)"; }}><span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 12, fontWeight: 700, color: "#34d399" }}>{l.ic}</span>{l.label}</a>)}</div>
         </div>
       </div>}
     </main>
@@ -710,24 +710,31 @@ export default function App() {
       button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #34d39960;outline-offset:2px;border-radius:10px}
       button:hover{transform:translateY(-1px)}button:active{transform:translateY(0px)}
       @media(max-width:768px){
-        header{flex-wrap:wrap!important;padding:10px 16px!important;gap:8px!important}
+        header{flex-wrap:wrap!important;padding:10px 14px!important;gap:8px!important}
         header nav{order:3;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
         header nav button{white-space:nowrap;font-size:11px!important;padding:6px 10px!important}
-        main{padding:16px!important}
+        main{padding:14px!important}
         .dash-grid-2{grid-template-columns:1fr!important}
-        .about-stats{flex-direction:column!important;gap:16px!important}
+        .about-stats{flex-direction:column!important;gap:10px!important}
         .about-stats>div>div:last-child{display:none!important}
         .portfolio-layout{flex-direction:column!important;align-items:center!important}
+        .bio-layout{flex-direction:column!important;align-items:center!important;text-align:center!important}
+        .bio-headshot{width:120px!important;height:120px!important}
+        .bio-badges{justify-content:center!important}
         .hero-name{font-size:42px!important}
         .hero-sub{font-size:13px!important}
         .status-bar{display:none!important}
         .cmd-modal{width:92vw!important}
         .settings-modal{width:92vw!important}
+        .connect-links{flex-direction:column!important}
+        .connect-links a{min-width:unset!important}
+        footer{padding:16px 14px!important}
       }
       @media(max-width:480px){
         header nav button span:first-child{display:none!important}
         main{padding:10px!important}
         .hero-name{font-size:32px!important}
+        .bio-headshot{width:100px!important;height:100px!important}
       }
     `}</style>
   </div>;
@@ -736,7 +743,7 @@ export default function App() {
 const S = {
   root: { background: "#040609", minHeight: "100vh", color: "#e2e8f0", fontFamily: "'Space Grotesk',sans-serif" },
   header: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 32px", borderBottom: "none", background: "rgba(4,6,9,0.9)", backdropFilter: "blur(30px) saturate(1.4)", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 4px 30px rgba(0,0,0,0.5)" },
-  tab: { background: "none", border: "none", color: "#64748b", fontSize: 12, padding: "8px 16px", cursor: "pointer", borderRadius: 10, fontWeight: 500, transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)", display: "flex", alignItems: "center", gap: 4 },
+  tab: { background: "none", borderTop: "none", borderLeft: "none", borderRight: "none", borderBottom: "2px solid transparent", color: "#64748b", fontSize: 12, padding: "8px 16px", cursor: "pointer", borderRadius: 10, fontWeight: 500, transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)", display: "flex", alignItems: "center", gap: 4 },
   tabA: { color: "#fff", background: "linear-gradient(135deg, rgba(52,211,153,0.15), rgba(96,165,250,0.1))", boxShadow: "0 0 20px rgba(52,211,153,0.15), 0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)", borderBottom: "2px solid #34d399", fontWeight: 600 },
   card: { background: "linear-gradient(145deg, #0c1222, #0a0f1c)", border: "1px solid #1e2d4a", borderRadius: 16, padding: 24, boxShadow: "0 8px 32px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.05) inset", transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)", borderTop: "1px solid rgba(255,255,255,0.06)" },
   cardTitle: { fontSize: 11, fontWeight: 600, color: "#94a3b8", marginBottom: 16, fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 2, paddingBottom: 12, borderBottom: "1px solid rgba(52,211,153,0.12)", display: "flex", alignItems: "center", gap: 8 },
