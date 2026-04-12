@@ -298,6 +298,48 @@ function EarningsCal({ apiKey }) {
   </div>;
 }
 
+// ============ ECON CALENDAR ============
+async function fetchEconCal(key) {
+  if (!key) return null;
+  const cached = cacheGet("mb_econ_cal", 120);
+  if (cached) return cached;
+  try {
+    const d = await callAPI(key, { model: "claude-haiku-3-5-20241022", max_tokens: 1500, tools: [{ type: "web_search_20250305", name: "web_search" }],
+      messages: [{ role: "user", content: `Search for upcoming US economic calendar events for the next 2 weeks. Include Fed meetings (FOMC), CPI releases, jobs reports (NFP), GDP, PPI, retail sales, and any other major economic data releases. Return ONLY a JSON array: [{"event":"FOMC Rate Decision","date":"Apr 30","time":"2:00 PM ET","importance":"high","prior":"5.25-5.50%"}]. importance should be "high", "medium", or "low". Include 8-12 events. Return ONLY the JSON array.` }] });
+    const raw = extractText(d);
+    if (!raw) return null;
+    const match = raw.match(/\[[\s\S]*\]/);
+    const result = match ? JSON.parse(match[0]) : JSON.parse(raw);
+    if (result) cacheSet("mb_econ_cal", result);
+    return result;
+  } catch (e) { console.error("EconCal error:", e); return null; }
+}
+function EconCalendar({ apiKey }) {
+  const [data, setData] = useState(null), [loading, setLoading] = useState(false), [error, setError] = useState(false);
+  const load = async () => { if (!apiKey) { setError(true); return; } setLoading(true); setError(false); const r = await fetchEconCal(apiKey); if (r) setData(r); else setError(true); setLoading(false); };
+  const ic = { high: "#f87171", medium: "#fbbf24", low: "#64748b" };
+  return <div style={{...S.card, animation:"fadeUp 0.5s ease 0.36s both", borderTop: "2px solid #f472b640"}}>
+    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:data?12:0}}>
+      <h2 style={S.cardTitle}><span style={{color:"#f472b6"}}>◆</span> Economic Calendar</h2>
+      <button onClick={load} disabled={loading} style={{...S.btn,fontSize:10,padding:"4px 10px",opacity:loading?0.5:1}}>{loading?"⟳...":data?"↻":"Load"}</button>
+    </div>
+    {!data&&!loading&&!error&&<p style={{color:"#64748b",fontSize:12,textAlign:"center",padding:"8px 0"}}>Upcoming Fed, CPI, NFP, GDP releases</p>}
+    {error&&!loading&&<p style={{color:"#f87171",fontSize:12,textAlign:"center",padding:"8px 0"}}>Failed to load — click Load to retry</p>}
+    {loading&&<div style={{textAlign:"center",padding:"12px 0"}}><div style={{display:"inline-flex",gap:4}}>{[0,1,2].map(i=><div key={i} style={{width:5,height:5,borderRadius:3,background:"#f472b6",animation:"pulse 1s infinite",animationDelay:`${i*0.2}s`}}/>)}</div></div>}
+    {data&&<div style={{display:"flex",flexDirection:"column",gap:4}}>{data.map((e,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 10px",borderRadius:8,background:i%2===0?"rgba(8,12,22,0.5)":"transparent",transition:"all 0.2s"}} onMouseEnter={ev=>ev.currentTarget.style.background="rgba(52,211,153,0.03)"} onMouseLeave={ev=>ev.currentTarget.style.background=i%2===0?"rgba(8,12,22,0.5)":"transparent"}>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <span style={{width:6,height:6,borderRadius:3,background:ic[e.importance]||"#64748b",flexShrink:0}}/>
+        <span style={{color:"#e2e8f0",fontSize:12,fontWeight:500}}>{e.event}</span>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:10}}>
+        <span style={{color:"#94a3b8",fontSize:10,fontFamily:"'JetBrains Mono',monospace"}}>{e.date}</span>
+        {e.time&&<span style={{color:"#64748b",fontSize:9,fontFamily:"'JetBrains Mono',monospace"}}>{e.time}</span>}
+        {e.prior&&<span style={{color:"#64748b",fontSize:9,fontFamily:"'JetBrains Mono',monospace",padding:"2px 6px",borderRadius:6,background:"rgba(30,41,59,0.4)"}}>Prior: {e.prior}</span>}
+      </div>
+    </div>)}</div>}
+  </div>;
+}
+
 // ============ NOTES ============
 function Notes(){const[notes,setNotes]=useState(()=>{try{const s=localStorage.getItem("mb_notes");return s?JSON.parse(s):[];}catch{return[];}});const[input,setInput]=useState("");const updateNotes=n=>{setNotes(n);localStorage.setItem("mb_notes",JSON.stringify(n))};const add=()=>{if(!input.trim())return;updateNotes([{text:input.trim(),time:new Date().toLocaleString(),id:Date.now()},...notes]);setInput("")};const rm=id=>updateNotes(notes.filter(n=>n.id!==id));return <section style={S.card}><h2 style={S.cardTitle}><span style={{color:"#f472b6"}}>◆</span> Quick Notes</h2><div style={{display:"flex",gap:8,marginBottom:notes.length?10:0}}><input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()} placeholder="Trade idea, research note, reminder..." style={{flex:1,background:"#080c16",border:"1px solid #1e293b",borderRadius:8,padding:"8px 12px",color:"#e2e8f0",fontSize:12,fontFamily:"'Space Grotesk',sans-serif",outline:"none"}}/><button onClick={add} style={{...S.btn,padding:"8px 16px"}}>Add</button></div>{notes.length===0&&<p style={{color:"#64748b",fontSize:11,textAlign:"center",padding:"8px 0"}}>Jot down ideas, questions, or reminders</p>}{notes.map(n=><div key={n.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 10px",borderRadius:6,background:"#080c16",border:"1px solid #1e293b",marginBottom:4}}><div><div style={{color:"#e2e8f0",fontSize:12}}>{n.text}</div><div style={{color:"#64748b",fontSize:9,fontFamily:"'JetBrains Mono',monospace",marginTop:1}}>{n.time}</div></div><button onClick={()=>rm(n.id)} style={{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:14,padding:"4px 8px"}}>×</button></div>)}</section>;}
 
@@ -510,7 +552,7 @@ export default function App() {
 
     <div style={{ height: 2, background: "linear-gradient(90deg, transparent, #34d399, #60a5fa, #a78bfa, transparent)", backgroundSize: "200% 100%", animation: "gradientShift 8s ease infinite", opacity: 0.6 }} />
 
-    <div style={{ overflow: "hidden", borderBottom: "1px solid #1e293b30", background: "rgba(5,8,16,0.85)", padding: "7px 0", position: "relative", maskImage: "linear-gradient(90deg, transparent, black 60px, black calc(100% - 60px), transparent)", WebkitMaskImage: "linear-gradient(90deg, transparent, black 60px, black calc(100% - 60px), transparent)" }}><div style={{ display: "flex", gap: 0, animation: "scroll 55s linear infinite", width: "max-content", fontFamily: "JetBrains Mono, monospace", fontSize: 11 }}>{[...prices, ...prices].map((t, i) => <span key={i} style={{ display: "flex", gap: 8, whiteSpace: "nowrap", paddingRight: 18, marginRight: 18, borderRight: "1px solid #1e293b30" }}><span style={{ color: "#64748b", fontWeight: 600 }}>{t.symbol}</span><span style={{ color: "#94a3b8" }}>${t.price}</span><span style={{ color: parseFloat(t.change) >= 0 ? "#34d399" : "#f87171", fontWeight: 600 }}>{parseFloat(t.change) >= 0 ? "+" : ""}{t.change}%</span></span>)}</div></div>
+    <div style={{ overflow: "hidden", borderBottom: "1px solid #1e293b30", background: "rgba(5,8,16,0.85)", padding: "7px 0", position: "relative", maskImage: "linear-gradient(90deg, transparent, black 60px, black calc(100% - 60px), transparent)", WebkitMaskImage: "linear-gradient(90deg, transparent, black 60px, black calc(100% - 60px), transparent)" }}><div style={{ display: "flex", gap: 0, animation: "scroll 55s linear infinite", width: "max-content", fontFamily: "JetBrains Mono, monospace", fontSize: 11 }}>{[...prices, ...prices].map((t, i) => <a key={i} href={`https://www.tradingview.com/symbols/${t.symbol}/`} target="_blank" rel="noopener noreferrer" style={{ display: "flex", gap: 8, whiteSpace: "nowrap", paddingRight: 18, marginRight: 18, borderRight: "1px solid #1e293b30", textDecoration: "none", transition: "opacity 0.2s" }} onMouseEnter={e=>e.currentTarget.style.opacity="0.7"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}><span style={{ color: "#64748b", fontWeight: 600 }}>{t.symbol}</span><span style={{ color: "#94a3b8" }}>${t.price}</span><span style={{ color: parseFloat(t.change) >= 0 ? "#34d399" : "#f87171", fontWeight: 600 }}>{parseFloat(t.change) >= 0 ? "+" : ""}{t.change}%</span></a>)}</div></div>
 
     <main style={{ padding: 32, maxWidth: 1300, margin: "0 auto", position: "relative", zIndex: 1, opacity: mounted ? 1 : 0, transform: mounted ? "none" : "translateY(16px)", transition: "all 0.6s ease 0.3s" }}>
 
@@ -519,10 +561,10 @@ export default function App() {
         <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
           <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.08s both", borderTop: "2px solid #34d39940" }}>
             <h2 style={S.cardTitle}><span style={{ color: "#34d399" }}>◆</span> Watchlist</h2>
-            {prices.map(t => <div key={t.symbol} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 12px", borderRadius: 10, transition: "all 0.2s", cursor: "pointer", borderLeft: "2px solid transparent" }} onMouseEnter={e => {e.currentTarget.style.background = "rgba(52,211,153,0.04)"; e.currentTarget.style.borderLeftColor = "#34d39950";}} onMouseLeave={e => {e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderLeftColor = "transparent";}}>
+            {prices.map(t => <a key={t.symbol} href={`https://www.tradingview.com/symbols/${t.symbol}/`} target="_blank" rel="noopener noreferrer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 12px", borderRadius: 10, transition: "all 0.2s", cursor: "pointer", borderLeft: "2px solid transparent", textDecoration: "none" }} onMouseEnter={e => {e.currentTarget.style.background = "rgba(52,211,153,0.04)"; e.currentTarget.style.borderLeftColor = "#34d39950";}} onMouseLeave={e => {e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderLeftColor = "transparent";}}>
               <div><span style={{ color: "#e2e8f0", fontWeight: 600, fontSize: 13 }}>{t.symbol}</span><span style={{ color: "#64748b", fontSize: 11, marginLeft: 8 }}>{t.name}</span></div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}><Spark pos={parseFloat(t.change) >= 0} /><span style={{ color: "#e2e8f0", fontFamily: "JetBrains Mono, monospace", fontSize: 13, minWidth: 60, textAlign: "right" }}>${t.price}</span><span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, minWidth: 52, textAlign: "right", color: parseFloat(t.change) >= 0 ? "#34d399" : "#f87171", fontWeight: 600 }}>{parseFloat(t.change) >= 0 ? "+" : ""}{t.change}%</span></div>
-            </div>)}
+            </a>)}
           </section>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.12s both", borderTop: "2px solid #a78bfa40" }}>
@@ -542,9 +584,12 @@ export default function App() {
           <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.2s both", borderTop: "2px solid #fbbf2440" }}><h2 style={S.cardTitle}><span style={{ color: "#fbbf24" }}>◆</span> Sector Heatmap</h2><HeatMap /></section>
           <div style={{ animation: "fadeUp 0.5s ease 0.24s both" }}><Notes /></div>
         </div>
-        <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
           <RegimeIndicator apiKey={apiKey} />
           <EarningsCal apiKey={apiKey} />
+        </div>
+        <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <EconCalendar apiKey={apiKey} />
         </div>
       </div>}
 
