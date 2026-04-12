@@ -290,13 +290,14 @@ function RegimeIndicator({ apiKey }) {
   return <div style={{...S.card, animation:"fadeUp 0.5s ease 0.28s both"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:data?12:0}}>
       <h2 style={S.cardTitle}><span style={{color:"#fb923c"}}>◆</span> Market Regime<Info text="Shows current market conditions using VIX (volatility), CNN Fear & Greed Index (sentiment), and 10Y Treasury yield. Risk-On = bullish conditions, Risk-Off = defensive positioning. Sources: CBOE (VIX), CNN Business (Fear & Greed), U.S. Treasury Dept (10Y yield) via AI web search." link="https://www.investopedia.com/terms/v/vix.asp" linkLabel="What is the VIX?" /></h2>
-      <div style={{display:"flex",alignItems:"center",gap:8}}>
+      {apiKey && <div style={{display:"flex",alignItems:"center",gap:8}}>
         {fetchTime&&<span style={{fontSize:9,color:"#64748b",fontFamily:"'JetBrains Mono',monospace"}}>Updated {fetchTime.toLocaleTimeString()}</span>}
         <button onClick={load} disabled={loading} style={{...S.btn,fontSize:10,padding:"4px 10px",opacity:loading?0.5:1}}>{loading?"⟳...":data?"↻":"Load"}</button>
-      </div>
+      </div>}
     </div>
-    {!data&&!loading&&!error&&<p style={{color:"#64748b",fontSize:12,textAlign:"center",padding:"8px 0"}}>Click Load to fetch VIX, Fear/Greed, and 10Y yield</p>}
-    {error&&!loading&&<p style={{color:"#f87171",fontSize:12,textAlign:"center",padding:"8px 0"}}>Failed to load — click Load to retry</p>}
+    {!apiKey&&!data&&<p style={{color:"#64748b",fontSize:12,textAlign:"center",padding:"12px 0",lineHeight:1.6}}>Live market regime analysis — tracks VIX, Fear & Greed Index, and 10Y Treasury yield in real time.<br/><span style={{fontSize:10,color:"#475569"}}>Powered by Claude AI + web search</span></p>}
+    {apiKey&&!data&&!loading&&!error&&<p style={{color:"#64748b",fontSize:12,textAlign:"center",padding:"8px 0"}}>Click Load to fetch VIX, Fear/Greed, and 10Y yield</p>}
+    {error&&!loading&&apiKey&&<p style={{color:"#f87171",fontSize:12,textAlign:"center",padding:"8px 0"}}>Failed to load — click Load to retry</p>}
     {loading&&<div style={{textAlign:"center",padding:"12px 0"}}><div style={{display:"inline-flex",gap:4}}>{[0,1,2].map(i=><div key={i} style={{width:5,height:5,borderRadius:3,background:"#fb923c",animation:"pulse 1s infinite",animationDelay:`${i*0.2}s`}}/>)}</div></div>}
     {data&&<div>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
@@ -328,13 +329,14 @@ function EarningsCal({ apiKey }) {
   return <div style={{...S.card, animation:"fadeUp 0.5s ease 0.32s both"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:data?12:0}}>
       <h2 style={S.cardTitle}><span style={{color:"#60a5fa"}}>◆</span> Earnings Calendar<Info text="Upcoming quarterly earnings reports for major companies. BMO = Before Market Open, AMC = After Market Close. Est EPS is the consensus analyst estimate. Source: Earnings data aggregated via AI web search from Yahoo Finance, Nasdaq, and MarketWatch." link="https://www.investopedia.com/terms/e/earningsreport.asp" linkLabel="Understanding earnings reports" /></h2>
-      <div style={{display:"flex",alignItems:"center",gap:8}}>
+      {apiKey && <div style={{display:"flex",alignItems:"center",gap:8}}>
         {fetchTime&&<span style={{fontSize:9,color:"#64748b",fontFamily:"'JetBrains Mono',monospace"}}>Updated {fetchTime.toLocaleTimeString()}</span>}
         <button onClick={load} disabled={loading} style={{...S.btn,fontSize:10,padding:"4px 10px",opacity:loading?0.5:1}}>{loading?"⟳...":data?"↻":"Load"}</button>
-      </div>
+      </div>}
     </div>
-    {!data&&!loading&&!error&&<p style={{color:"#64748b",fontSize:12,textAlign:"center",padding:"8px 0"}}>Load upcoming earnings reports</p>}
-    {error&&!loading&&<p style={{color:"#f87171",fontSize:12,textAlign:"center",padding:"8px 0"}}>Failed to load — click Load to retry</p>}
+    {!apiKey&&!data&&<p style={{color:"#64748b",fontSize:12,textAlign:"center",padding:"12px 0",lineHeight:1.6}}>Live earnings calendar — upcoming quarterly reports for major companies with EPS estimates.<br/><span style={{fontSize:10,color:"#475569"}}>Powered by Claude AI + web search</span></p>}
+    {apiKey&&!data&&!loading&&!error&&<p style={{color:"#64748b",fontSize:12,textAlign:"center",padding:"8px 0"}}>Load upcoming earnings reports</p>}
+    {error&&!loading&&apiKey&&<p style={{color:"#f87171",fontSize:12,textAlign:"center",padding:"8px 0"}}>Failed to load — click Load to retry</p>}
     {loading&&<div style={{textAlign:"center",padding:"12px 0"}}><div style={{display:"inline-flex",gap:4}}>{[0,1,2].map(i=><div key={i} style={{width:5,height:5,borderRadius:3,background:"#60a5fa",animation:"pulse 1s infinite",animationDelay:`${i*0.2}s`}}/>)}</div></div>}
     {data&&<div style={{display:"flex",flexDirection:"column",gap:4}}>{data.map((e,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 10px",borderRadius:6,background:i%2===0?"#080c1650":"transparent"}}>
       <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{color:"#34d399",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,fontSize:12,minWidth:42}}>{e.ticker}</span><span style={{color:"#e2e8f0",fontSize:12}}>{e.company}</span></div>
@@ -366,13 +368,14 @@ function EconCalendar({ apiKey }) {
   return <div style={{...S.card, animation:"fadeUp 0.5s ease 0.36s both", borderTop: "2px solid #f472b640"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:data?12:0}}>
       <h2 style={S.cardTitle}><span style={{color:"#f472b6"}}>◆</span> Economic Calendar<Info text="Upcoming economic data releases — Fed rate decisions (FOMC), inflation (CPI/PPI), employment (NFP), GDP, and retail sales. Red dot = high market impact. Source: Federal Reserve, BLS, BEA, and Census Bureau schedules via AI web search." link="https://www.investopedia.com/terms/e/economic-calendar.asp" linkLabel="Economic indicators explained" /></h2>
-      <div style={{display:"flex",alignItems:"center",gap:8}}>
+      {apiKey && <div style={{display:"flex",alignItems:"center",gap:8}}>
         {fetchTime&&<span style={{fontSize:9,color:"#64748b",fontFamily:"'JetBrains Mono',monospace"}}>Updated {fetchTime.toLocaleTimeString()}</span>}
         <button onClick={load} disabled={loading} style={{...S.btn,fontSize:10,padding:"4px 10px",opacity:loading?0.5:1}}>{loading?"⟳...":data?"↻":"Load"}</button>
-      </div>
+      </div>}
     </div>
-    {!data&&!loading&&!error&&<p style={{color:"#64748b",fontSize:12,textAlign:"center",padding:"8px 0"}}>Upcoming Fed, CPI, NFP, GDP releases</p>}
-    {error&&!loading&&<p style={{color:"#f87171",fontSize:12,textAlign:"center",padding:"8px 0"}}>Failed to load — click Load to retry</p>}
+    {!apiKey&&!data&&<p style={{color:"#64748b",fontSize:12,textAlign:"center",padding:"12px 0",lineHeight:1.6}}>Live economic calendar — upcoming FOMC, CPI, NFP, GDP, and PPI releases with impact ratings.<br/><span style={{fontSize:10,color:"#475569"}}>Powered by Claude AI + web search</span></p>}
+    {apiKey&&!data&&!loading&&!error&&<p style={{color:"#64748b",fontSize:12,textAlign:"center",padding:"8px 0"}}>Upcoming Fed, CPI, NFP, GDP releases</p>}
+    {error&&!loading&&apiKey&&<p style={{color:"#f87171",fontSize:12,textAlign:"center",padding:"8px 0"}}>Failed to load — click Load to retry</p>}
     {loading&&<div style={{textAlign:"center",padding:"12px 0"}}><div style={{display:"inline-flex",gap:4}}>{[0,1,2].map(i=><div key={i} style={{width:5,height:5,borderRadius:3,background:"#f472b6",animation:"pulse 1s infinite",animationDelay:`${i*0.2}s`}}/>)}</div></div>}
     {data&&<div style={{display:"flex",flexDirection:"column",gap:4}}>{data.map((e,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 10px",borderRadius:8,background:i%2===0?"rgba(8,12,22,0.5)":"transparent",transition:"all 0.2s"}} onMouseEnter={ev=>ev.currentTarget.style.background="rgba(52,211,153,0.03)"} onMouseLeave={ev=>ev.currentTarget.style.background=i%2===0?"rgba(8,12,22,0.5)":"transparent"}>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -592,7 +595,7 @@ export default function App() {
       </nav>
       <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
         <a href="#" style={{ ...S.btn, textDecoration: "none", display: "flex", alignItems: "center", gap: 5, fontSize: 10, padding: "5px 12px" }} title="Download Resume">📄 Resume</a>
-        <button onClick={() => setShowSettings(true)} style={{ display: "flex", alignItems: "center", gap: 5, background: apiKey ? "#34d39908" : "#f8717108", border: `1px solid ${apiKey ? "#34d39920" : "#f8717120"}`, borderRadius: 8, padding: "5px 10px", color: apiKey ? "#34d399" : "#f87171", fontSize: 10, cursor: "pointer", fontFamily: "JetBrains Mono, monospace" }} title={apiKey ? "API Connected" : "API Key Required"}>{apiKey ? "⚡ API" : "⚠ API"}</button>
+        <button onClick={() => setShowSettings(true)} style={{ display: "flex", alignItems: "center", gap: 5, background: apiKey ? "#34d39908" : "rgba(8,12,22,0.8)", border: `1px solid ${apiKey ? "#34d39920" : "#1e293b"}`, borderRadius: 8, padding: "5px 10px", color: apiKey ? "#34d399" : "#64748b", fontSize: 10, cursor: "pointer", fontFamily: "JetBrains Mono, monospace" }} title={apiKey ? "API Connected" : "Settings"}>{apiKey ? "⚡ API" : "⚙"}</button>
         <button onClick={() => setCmd(true)} style={{ display: "flex", alignItems: "center", gap: 5, background: "#080c16", border: "1px solid #1e293b", borderRadius: 8, padding: "5px 10px", color: "#64748b", fontSize: 10, cursor: "pointer", fontFamily: "JetBrains Mono, monospace" }}>⌘K</button>
         {LINKS.slice(0, 2).map(l => <a key={l.label} href={l.url} target="_blank" rel="noopener noreferrer" style={{ color: "#64748b", textDecoration: "none", width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 7, border: "1px solid #1e293b", transition: "all 0.25s" }}><span style={{ fontSize: 9, fontWeight: 700, fontFamily: "JetBrains Mono, monospace" }}>{l.ic}</span></a>)}
       </div>
