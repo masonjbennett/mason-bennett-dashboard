@@ -570,7 +570,7 @@ export default function App() {
         <div style={{ ...S.card, background: "linear-gradient(135deg,#080c16,#0d1425,#0b1120)", border: "1px solid #1a2540", position: "relative", overflow: "hidden" }}>
           <div style={{ position: "absolute", top: -60, right: -60, width: 250, height: 250, background: "radial-gradient(circle,rgba(52,211,153,0.04) 0%,transparent 70%)", pointerEvents: "none" }} />
           <div style={{ display: "flex", gap: 28, alignItems: "flex-start", flexWrap: "wrap", position: "relative" }}>
-            <div style={{ width: 100, height: 100, borderRadius: 16, background: "linear-gradient(135deg,#34d399,#60a5fa)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 38, color: "#050810", fontWeight: 700, fontFamily: "Instrument Serif, serif", flexShrink: 0, boxShadow: "0 12px 40px rgba(52,211,153,0.12)" }}>MB</div>
+            <img src="/headshot.png" alt="Mason Bennett" style={{ width: 100, height: 100, borderRadius: 16, objectFit: "cover", objectPosition: "center top", flexShrink: 0, boxShadow: "0 12px 40px rgba(52,211,153,0.12)", border: "2px solid #1e293b" }} />
             <div style={{ flex: 1 }}>
               <h2 style={{ color: "#e2e8f0", fontSize: 26, fontFamily: "Instrument Serif, serif", marginBottom: 4 }}>Mason Bennett</h2>
               <p style={{ color: "#34d399", fontSize: 12, fontFamily: "JetBrains Mono, monospace", marginBottom: 16 }}>M.S. Finance · University of Arkansas · Class of 2026</p>
