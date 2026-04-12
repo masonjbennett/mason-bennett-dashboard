@@ -498,7 +498,7 @@ export default function App() {
     <header style={S.header}>
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         <div style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 17, fontWeight: 700, color: "#f1f5f9", textShadow: "0 0 20px rgba(52,211,153,0.1)" }}><span style={{ color: "#34d399", textShadow: "0 0 12px rgba(52,211,153,0.4)" }}>$</span> Mason J. Bennett</div>
-        <div style={{ fontSize: 9, padding: "3px 10px", borderRadius: 20, background: "#34d39908", color: "#34d399", border: "1px solid #34d39915", fontFamily: "JetBrains Mono, monospace" }}>MSc Finance '26</div>
+        <div style={{ fontSize: 9, padding: "4px 12px", borderRadius: 20, background: "linear-gradient(135deg, rgba(52,211,153,0.12), rgba(52,211,153,0.06))", color: "#34d399", border: "1px solid #34d39925", fontFamily: "JetBrains Mono, monospace", boxShadow: "0 0 12px rgba(52,211,153,0.08)" }}>MSc Finance '26</div>
       </div>
       <nav style={{ display: "flex", gap: 2, background: "rgba(8,12,22,0.8)", borderRadius: 12, padding: 4, border: "1px solid #182240", boxShadow: "inset 0 2px 6px rgba(0,0,0,0.3)" }}>
         {tabs.map((t, i) => <button key={t.id} onClick={() => setTab(t.id)} style={{ ...S.tab, ...(tab === t.id ? S.tabA : {}) }}><span style={{ fontSize: 8, opacity: 0.3, marginRight: 4 }}>{i + 1}</span>{t.l}</button>)}
@@ -518,29 +518,29 @@ export default function App() {
       {tab === "dashboard" && <div>
         <div style={{ marginBottom: 24, animation: "fadeUp 0.5s ease both" }}><Clock /></div>
         <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
-          <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.08s both" }}>
+          <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.08s both", borderTop: "2px solid #34d39940" }}>
             <h2 style={S.cardTitle}><span style={{ color: "#34d399" }}>◆</span> Watchlist</h2>
-            {prices.map(t => <div key={t.symbol} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", borderRadius: 8, transition: "background 0.15s", cursor: "pointer" }} onMouseEnter={e => e.currentTarget.style.background = "#1e293b18"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+            {prices.map(t => <div key={t.symbol} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 12px", borderRadius: 10, transition: "all 0.2s", cursor: "pointer", borderLeft: "2px solid transparent" }} onMouseEnter={e => {e.currentTarget.style.background = "rgba(52,211,153,0.04)"; e.currentTarget.style.borderLeftColor = "#34d39950";}} onMouseLeave={e => {e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderLeftColor = "transparent";}}>
               <div><span style={{ color: "#e2e8f0", fontWeight: 600, fontSize: 13 }}>{t.symbol}</span><span style={{ color: "#64748b", fontSize: 11, marginLeft: 8 }}>{t.name}</span></div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}><Spark pos={parseFloat(t.change) >= 0} /><span style={{ color: "#e2e8f0", fontFamily: "JetBrains Mono, monospace", fontSize: 13, minWidth: 60, textAlign: "right" }}>${t.price}</span><span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, minWidth: 52, textAlign: "right", color: parseFloat(t.change) >= 0 ? "#34d399" : "#f87171", fontWeight: 600 }}>{parseFloat(t.change) >= 0 ? "+" : ""}{t.change}%</span></div>
             </div>)}
           </section>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.12s both" }}>
+            <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.12s both", borderTop: "2px solid #a78bfa40" }}>
               <h2 style={S.cardTitle}><span style={{ color: "#a78bfa" }}>◆</span> Portfolio</h2>
               <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
                 <Donut data={PORTFOLIO} size={170} />
                 <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1 }}>{PORTFOLIO.map((p, i) => { const C = ["#34d399", "#60a5fa", "#a78bfa", "#f472b6", "#fbbf24", "#fb923c", "#94a3b8"]; return <div key={p.ticker} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 11 }}><div style={{ width: 7, height: 7, borderRadius: 2, background: C[i % C.length] }} /><span style={{ color: "#e2e8f0", fontFamily: "JetBrains Mono, monospace", fontWeight: 600, minWidth: 42 }}>{p.ticker}</span><span style={{ color: "#94a3b8", flex: 1 }}>{p.name}</span><span style={{ color: "#94a3b8", fontFamily: "JetBrains Mono, monospace" }}>{p.weight}%</span></div>; })}</div>
               </div>
             </section>
-            <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.16s both" }}>
+            <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.16s both", borderTop: "2px solid #60a5fa40" }}>
               <h2 style={S.cardTitle}><span style={{ color: "#60a5fa" }}>◆</span> Quick Links</h2>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>{QLINKS.map(s => <a key={s.n} href={s.u} target="_blank" rel="noopener noreferrer" style={S.chip} onMouseEnter={e => { e.currentTarget.style.borderColor = "#34d39930"; e.currentTarget.style.color = "#34d399"; }} onMouseLeave={e => { e.currentTarget.style.borderColor = "#1e293b"; e.currentTarget.style.color = "#94a3b8"; }}>{s.n}</a>)}</div>
             </section>
           </div>
         </div>
         <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
-          <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.2s both" }}><h2 style={S.cardTitle}><span style={{ color: "#fbbf24" }}>◆</span> Sector Heatmap</h2><HeatMap /></section>
+          <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.2s both", borderTop: "2px solid #fbbf2440" }}><h2 style={S.cardTitle}><span style={{ color: "#fbbf24" }}>◆</span> Sector Heatmap</h2><HeatMap /></section>
           <div style={{ animation: "fadeUp 0.5s ease 0.24s both" }}><Notes /></div>
         </div>
         <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
@@ -685,12 +685,12 @@ const S = {
   root: { background: "#040609", minHeight: "100vh", color: "#e2e8f0", fontFamily: "'Space Grotesk',sans-serif" },
   header: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 32px", borderBottom: "1px solid #162035", background: "rgba(4,6,9,0.85)", backdropFilter: "blur(30px) saturate(1.4)", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 4px 30px rgba(0,0,0,0.5), 0 1px 0 rgba(52,211,153,0.05)" },
   tab: { background: "none", border: "none", color: "#64748b", fontSize: 12, padding: "8px 16px", cursor: "pointer", borderRadius: 10, fontWeight: 500, transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)", display: "flex", alignItems: "center", gap: 4 },
-  tabA: { color: "#e2e8f0", background: "linear-gradient(135deg, rgba(52,211,153,0.12), rgba(96,165,250,0.08))", boxShadow: "0 0 20px rgba(52,211,153,0.1), inset 0 1px 0 rgba(255,255,255,0.05)", borderBottom: "2px solid #34d399" },
-  card: { background: "linear-gradient(145deg, #0c1222, #0a0f1c)", border: "1px solid #182240", borderRadius: 16, padding: 24, boxShadow: "0 8px 32px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.03) inset", transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)" },
-  cardTitle: { fontSize: 11, fontWeight: 600, color: "#94a3b8", marginBottom: 16, fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 2, paddingBottom: 12, borderBottom: "1px solid rgba(52,211,153,0.08)" },
+  tabA: { color: "#fff", background: "linear-gradient(135deg, rgba(52,211,153,0.15), rgba(96,165,250,0.1))", boxShadow: "0 0 20px rgba(52,211,153,0.15), 0 2px 8px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.08)", borderBottom: "2px solid #34d399", fontWeight: 600 },
+  card: { background: "linear-gradient(145deg, #0c1222, #0a0f1c)", border: "1px solid #1e2d4a", borderRadius: 16, padding: 24, boxShadow: "0 8px 32px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.05) inset", transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)", borderTop: "1px solid rgba(255,255,255,0.06)" },
+  cardTitle: { fontSize: 11, fontWeight: 600, color: "#94a3b8", marginBottom: 16, fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 2, paddingBottom: 12, borderBottom: "1px solid rgba(52,211,153,0.12)", display: "flex", alignItems: "center", gap: 8 },
   pageTitle: { fontSize: 40, fontWeight: 700, fontFamily: "'Instrument Serif',serif", color: "#f1f5f9", marginBottom: 10, letterSpacing: "-0.03em", lineHeight: 1.1, textShadow: "0 4px 30px rgba(52,211,153,0.08)" },
   chip: { display: "inline-block", padding: "7px 14px", borderRadius: 10, background: "rgba(8,12,22,0.8)", color: "#94a3b8", fontSize: 11, fontWeight: 500, textDecoration: "none", border: "1px solid #1e293b", transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)", backdropFilter: "blur(8px)" },
-  pCard: { display: "flex", flexDirection: "column", background: "linear-gradient(145deg, #0c1222, #0a0f1c)", border: "1px solid #182240", borderRadius: 16, padding: 24, transition: "all 0.4s cubic-bezier(0.4,0,0.2,1)", cursor: "pointer", boxShadow: "0 8px 32px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.03) inset" },
+  pCard: { display: "flex", flexDirection: "column", background: "linear-gradient(145deg, #0c1222, #0a0f1c)", border: "1px solid #1e2d4a", borderRadius: 16, padding: 24, transition: "all 0.4s cubic-bezier(0.4,0,0.2,1)", cursor: "pointer", boxShadow: "0 8px 32px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.05) inset", borderTop: "1px solid rgba(255,255,255,0.06)", borderLeft: "3px solid #34d39930" },
   btn: { background: "linear-gradient(135deg, #0c1222, #101828)", color: "#34d399", border: "1px solid #34d39925", borderRadius: 10, padding: "7px 16px", fontSize: 11, cursor: "pointer", fontFamily: "'JetBrains Mono',monospace", fontWeight: 500, transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)", boxShadow: "0 2px 8px rgba(0,0,0,0.2)" },
   input: { background: "#080c16", border: "1px solid #1e293b", borderRadius: 10, padding: "10px 14px", color: "#e2e8f0", fontSize: 12, fontFamily: "'Space Grotesk',sans-serif", outline: "none", width: "100%", transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)" },
 };
