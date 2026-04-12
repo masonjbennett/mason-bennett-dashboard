@@ -135,14 +135,21 @@ async function callAPI(key, body) {
   });
 }
 
+// Cache helpers
+function cacheGet(key, maxAgeMin = 30) { try { const c = JSON.parse(localStorage.getItem(key)); if (c && Date.now() - c.ts < maxAgeMin * 60000) return c.data; } catch {} return null; }
+function cacheSet(key, data) { try { localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })); } catch {} }
+
 async function fetchNews(cat, key) {
   if (!key) return null;
-  try { const d = await callAPI(key, { model: "claude-sonnet-4-20250514", max_tokens: 3000, tools: [{ type: "web_search_20250305", name: "web_search" }], messages: [{ role: "user", content: `Search for the latest ${cat.q}.\n${SRC_GUIDE}\nReturn ONLY a JSON array of top ${cat.count} articles: [{"title":"...","source":"...","summary":"one sentence","url":"...","time":"relative"}]. Raw JSON only.` }] }); const raw = extractText(d); if (!raw) return null; const match = raw.match(/\[[\s\S]*\]/); if (match) return JSON.parse(match[0]); return JSON.parse(raw); } catch (e) { console.error("News fetch error:", e); return null; }
+  const cached = cacheGet(`mb_news_${cat.id}`, 30);
+  if (cached) return cached;
+  try { const d = await callAPI(key, { model: "claude-haiku-3-5-20241022", max_tokens: 3000, tools: [{ type: "web_search_20250305", name: "web_search" }], messages: [{ role: "user", content: `Search for the latest ${cat.q}.\n${SRC_GUIDE}\nReturn ONLY a JSON array of top ${cat.count} articles: [{"title":"...","source":"...","summary":"one sentence","url":"...","time":"relative"}]. Raw JSON only.` }] }); const raw = extractText(d); if (!raw) return null; const match = raw.match(/\[[\s\S]*\]/); const result = match ? JSON.parse(match[0]) : JSON.parse(raw); if (result) cacheSet(`mb_news_${cat.id}`, result); return result; } catch (e) { console.error("News fetch error:", e); return null; }
 }
-async function fetchBriefing(type, key) {
+async function fetchBriefing(type, key, forceRefresh = false) {
   const p = { morning: `Senior equity research analyst morning briefing. Search latest market news. Cover: 1) Overnight global markets 2) Macro/Fed developments 3) Pre-market sector moves 4) M&A/deals 5) What to watch today.\n${SRC_GUIDE}\nCite sources inline [Reuters]. End with ---SOURCES--- then JSON: [{"name":"...","url":"..."}]. Plain paragraphs, no markdown.`, close: `Senior equity research analyst close briefing. Search today's results. Cover: 1) Index closes with % 2) Session drivers 3) Stock movers 4) After-hours 5) Tomorrow watch.\n${SRC_GUIDE}\nCite inline [Reuters]. End with ---SOURCES--- then JSON: [{"name":"...","url":"..."}]. Plain paragraphs, no markdown.` };
   if (!key) return null;
-  try { const d = await callAPI(key, { model: "claude-sonnet-4-20250514", max_tokens: 4000, tools: [{ type: "web_search_20250305", name: "web_search" }], messages: [{ role: "user", content: p[type] }] }); const raw = extractTextMulti(d); if (!raw) return null; let text = raw, sources = []; const sep = raw.indexOf("---SOURCES---"); if (sep !== -1) { text = raw.slice(0, sep).trim(); try { const srcRaw = raw.slice(sep + 13).trim().replace(/```json|```/g, "").trim(); const srcMatch = srcRaw.match(/\[[\s\S]*\]/); sources = JSON.parse(srcMatch ? srcMatch[0] : srcRaw); } catch {} } if (!sources.length) { const m = text.match(/\[([A-Z][A-Za-z\s\.&']+?)\]/g); if (m) sources = [...new Set(m.map(x => x.slice(1, -1).trim()))].map(n => ({ name: n, url: SRC_URLS[n] || "#" })); } return { text, sources }; } catch (e) { console.error("Briefing error:", e); return null; }
+  if (!forceRefresh) { const cached = cacheGet(`mb_brief_${type}`, 60); if (cached) return cached; }
+  try { const d = await callAPI(key, { model: "claude-sonnet-4-20250514", max_tokens: 4000, tools: [{ type: "web_search_20250305", name: "web_search" }], messages: [{ role: "user", content: p[type] }] }); const raw = extractTextMulti(d); if (!raw) return null; let text = raw, sources = []; const sep = raw.indexOf("---SOURCES---"); if (sep !== -1) { text = raw.slice(0, sep).trim(); try { const srcRaw = raw.slice(sep + 13).trim().replace(/```json|```/g, "").trim(); const srcMatch = srcRaw.match(/\[[\s\S]*\]/); sources = JSON.parse(srcMatch ? srcMatch[0] : srcRaw); } catch {} } if (!sources.length) { const m = text.match(/\[([A-Z][A-Za-z\s\.&']+?)\]/g); if (m) sources = [...new Set(m.map(x => x.slice(1, -1).trim()))].map(n => ({ name: n, url: SRC_URLS[n] || "#" })); } const result = { text, sources }; cacheSet(`mb_brief_${type}`, result); return result; } catch (e) { console.error("Briefing error:", e); return null; }
 }
 async function verifyBriefing(t, key) {
   if (!key) return null;
@@ -154,38 +161,39 @@ async function fetchSoWhat(t, type, key) {
 }
 async function fetchRegime(key) {
   if (!key) return null;
+  const cached = cacheGet("mb_regime", 15);
+  if (cached) return cached;
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: apiHeaders(key),
-      body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, tools: [{ type: "web_search_20250305", name: "web_search" }],
+    const d = await callAPI(key, { model: "claude-haiku-3-5-20241022", max_tokens: 1000, tools: [{ type: "web_search_20250305", name: "web_search" }],
         messages: [{ role: "user", content: `Search for the current VIX index level, CNN Fear and Greed Index score, and US 10-year Treasury yield.
 
 Then return ONLY a raw JSON object with no other text, no markdown, no backticks:
 {"vix":{"level":20.5,"change":-0.3},"fear_greed":{"score":45,"label":"Neutral"},"ten_year":{"yield":4.25,"change":0.02},"regime":"Neutral","summary":"Markets trading cautiously amid mixed signals."}
 
-Replace the example values with the real current data you found. The regime field should be "Risk-On" if VIX < 16 and Fear/Greed > 55, "Risk-Off" if VIX > 25 or Fear/Greed < 30, otherwise "Neutral". Return ONLY the JSON.` }] }) });
-    const d = await r.json();
-    const raw = d.content.filter(b => b.type === "text").map(b => b.text).join("");
-    const clean = raw.replace(/```json|```/g, "").trim();
-    // Try to find JSON object in the response
-    const match = clean.match(/\{[\s\S]*\}/);
-    if (match) return JSON.parse(match[0]);
-    return JSON.parse(clean);
+Replace the example values with the real current data you found. The regime field should be "Risk-On" if VIX < 16 and Fear/Greed > 55, "Risk-Off" if VIX > 25 or Fear/Greed < 30, otherwise "Neutral". Return ONLY the JSON.` }] });
+    const raw = extractText(d);
+    if (!raw) return null;
+    const match = raw.match(/\{[\s\S]*\}/);
+    const result = match ? JSON.parse(match[0]) : JSON.parse(raw);
+    if (result) cacheSet("mb_regime", result);
+    return result;
   } catch (e) { console.error("Regime error:", e); return null; }
 }
 async function fetchEarnings(key) {
   if (!key) return null;
+  const cached = cacheGet("mb_earnings", 60);
+  if (cached) return cached;
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: apiHeaders(key),
-      body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, tools: [{ type: "web_search_20250305", name: "web_search" }],
+    const d = await callAPI(key, { model: "claude-haiku-3-5-20241022", max_tokens: 1000, tools: [{ type: "web_search_20250305", name: "web_search" }],
         messages: [{ role: "user", content: `Search for upcoming earnings reports this week and next week for major US companies. Return ONLY a raw JSON array with no other text, no markdown, no backticks. 8-10 most notable companies:
 [{"company":"Apple Inc.","ticker":"AAPL","date":"Apr 24","time":"AMC","est_eps":"$1.62"}]
-Replace with real upcoming earnings data. time should be "BMO" for before market open or "AMC" for after market close. Return ONLY the JSON array.` }] }) });
-    const d = await r.json();
-    const raw = d.content.filter(b => b.type === "text").map(b => b.text).join("");
-    const clean = raw.replace(/```json|```/g, "").trim();
-    const match = clean.match(/\[[\s\S]*\]/);
-    if (match) return JSON.parse(match[0]);
-    return JSON.parse(clean);
+Replace with real upcoming earnings data. time should be "BMO" for before market open or "AMC" for after market close. Return ONLY the JSON array.` }] });
+    const raw = extractText(d);
+    if (!raw) return null;
+    const match = raw.match(/\[[\s\S]*\]/);
+    const result = match ? JSON.parse(match[0]) : JSON.parse(raw);
+    if (result) cacheSet("mb_earnings", result);
+    return result;
   } catch (e) { console.error("Earnings error:", e); return null; }
 }
 
@@ -265,11 +273,11 @@ function Cmd({open,onClose,onNav}){const[q,setQ]=useState("");const ref=useRef()
 
 // ============ BRIEFINGS (compact) ============
 function Briefings({apiKey}){const[morning,setMorning]=useState(null),[close,setClose]=useState(null),[vM,setVM]=useState(null),[vC,setVC]=useState(null),[swM,setSwM]=useState(null),[swC,setSwC]=useState(null),[lM,setLM]=useState(false),[lC,setLC]=useState(false),[vLM,setVLM]=useState(false),[vLC,setVLC]=useState(false),[swLM,setSwLM]=useState(false),[swLC,setSwLC]=useState(false),[tM,setTM]=useState(null),[tC,setTC]=useState(null),[showCl,setShowCl]=useState(false),[showSW,setShowSW]=useState(true),[tab,setTab]=useState(()=>new Date().getHours()>=16?"close":"morning");const sugg=new Date().getHours()>=16?"close":"morning";
-const gen=async(type)=>{if(!apiKey)return;const sL=type==="morning"?setLM:setLC,sD=type==="morning"?setMorning:setClose,sT=type==="morning"?setTM:setTC,sV=type==="morning"?setVM:setVC,sSW=type==="morning"?setSwM:setSwC,sVL=type==="morning"?setVLM:setVLC,sSWL=type==="morning"?setSwLM:setSwLC;sL(true);sV(null);sSW(null);const r=await fetchBriefing(type,apiKey);if(r){sD(r);sT(new Date())}sL(false);if(r?.text){await delay(2000);sVL(true);const v=await verifyBriefing(r.text,apiKey);if(v)sV(v);sVL(false);await delay(2000);sSWL(true);const sw=await fetchSoWhat(r.text,type,apiKey);if(sw)sSW(sw);sSWL(false)}};
+const gen=async(type,force=false)=>{if(!apiKey)return;const sL=type==="morning"?setLM:setLC,sD=type==="morning"?setMorning:setClose,sT=type==="morning"?setTM:setTC,sV=type==="morning"?setVM:setVC,sSW=type==="morning"?setSwM:setSwC,sVL=type==="morning"?setVLM:setVLC,sSWL=type==="morning"?setSwLM:setSwLC;sL(true);sV(null);sSW(null);const r=await fetchBriefing(type,apiKey,force);if(r){sD(r);sT(new Date())}sL(false);if(r?.text){sVL(true);const v=await verifyBriefing(r.text,apiKey);if(v)sV(v);sVL(false);sSWL(true);const sw=await fetchSoWhat(r.text,type,apiKey);if(sw)sSW(sw);sSWL(false)}};
 const data=tab==="morning"?morning:close,loading=tab==="morning"?lM:lC,verifying=tab==="morning"?vLM:vLC,verify=tab==="morning"?vM:vC,soWhat=tab==="morning"?swM:swC,swLoad=tab==="morning"?swLM:swLC,time=tab==="morning"?tM:tC;
 const SC={verified:"#34d399",minor_discrepancy:"#fbbf24",unverified:"#f87171"},SI={verified:"✓",minor_discrepancy:"~",unverified:"✗"},SL={verified:"Verified",minor_discrepancy:"Discrepancy",unverified:"Unverified"};
 return <div style={{...S.card,background:"linear-gradient(135deg,#080c16,#0d1425,#0b1120)",border:"1px solid #1a2540",position:"relative",overflow:"hidden"}}><div style={{position:"absolute",top:-40,right:-40,width:200,height:200,background:`radial-gradient(circle,${tab==="morning"?"rgba(251,191,36,0.03)":"rgba(99,102,241,0.03)"} 0%,transparent 70%)`,pointerEvents:"none"}}/>
-<div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18,position:"relative",flexWrap:"wrap",gap:12}}><div><div style={{display:"flex",gap:6,marginBottom:8}}>{["morning","close"].map(t=><button key={t} onClick={()=>setTab(t)} style={{fontSize:12,padding:"6px 16px",borderRadius:8,cursor:"pointer",fontWeight:600,transition:"all 0.25s",border:"1px solid",display:"flex",alignItems:"center",gap:8,background:tab===t?(t==="morning"?"#fbbf2410":"#818cf810"):"transparent",borderColor:tab===t?(t==="morning"?"#fbbf2430":"#818cf830"):"#1e293b",color:tab===t?(t==="morning"?"#fbbf24":"#818cf8"):"#64748b"}}><span style={{fontSize:15}}>{t==="morning"?"☀":"🌙"}</span>{t==="morning"?"Morning":"Close"} Brief{sugg===t&&<span style={{width:5,height:5,borderRadius:3,background:t==="morning"?"#fbbf24":"#818cf8",animation:"pulse 2s infinite"}}/>}</button>)}</div><p style={{color:"#64748b",fontSize:10,fontFamily:"'JetBrains Mono',monospace"}}>AI briefing → fact-check → implications {time?`· ${time.toLocaleTimeString()}`:""}</p></div><button onClick={()=>gen(tab)} disabled={loading||verifying} style={{...S.btn,opacity:(loading||verifying)?0.5:1}}>{loading?"⟳ Generating...":verifying||swLoad?"⟳ Analyzing...":data?"↻ Regenerate":"Generate Brief"}</button></div>
+<div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18,position:"relative",flexWrap:"wrap",gap:12}}><div><div style={{display:"flex",gap:6,marginBottom:8}}>{["morning","close"].map(t=><button key={t} onClick={()=>setTab(t)} style={{fontSize:12,padding:"6px 16px",borderRadius:8,cursor:"pointer",fontWeight:600,transition:"all 0.25s",border:"1px solid",display:"flex",alignItems:"center",gap:8,background:tab===t?(t==="morning"?"#fbbf2410":"#818cf810"):"transparent",borderColor:tab===t?(t==="morning"?"#fbbf2430":"#818cf830"):"#1e293b",color:tab===t?(t==="morning"?"#fbbf24":"#818cf8"):"#64748b"}}><span style={{fontSize:15}}>{t==="morning"?"☀":"🌙"}</span>{t==="morning"?"Morning":"Close"} Brief{sugg===t&&<span style={{width:5,height:5,borderRadius:3,background:t==="morning"?"#fbbf24":"#818cf8",animation:"pulse 2s infinite"}}/>}</button>)}</div><p style={{color:"#64748b",fontSize:10,fontFamily:"'JetBrains Mono',monospace"}}>AI briefing → fact-check → implications {time?`· ${time.toLocaleTimeString()}`:""}</p></div><button onClick={()=>gen(tab,!!data)} disabled={loading||verifying} style={{...S.btn,opacity:(loading||verifying)?0.5:1}}>{loading?"⟳ Generating...":verifying||swLoad?"⟳ Analyzing...":data?"↻ Regenerate":"Generate Brief"}</button></div>
 {!data&&!loading&&<div style={{textAlign:"center",padding:"36px 0"}}><div style={{fontSize:36,marginBottom:12,opacity:0.15}}>{tab==="morning"?"☀":"🌙"}</div><p style={{color:"#94a3b8",fontSize:13}}>{tab==="morning"?"Pre-market briefing with overnight futures, macro, and what to watch":"End-of-day summary with closes, movers, and tomorrow's catalysts"}</p></div>}
 {loading&&<div style={{padding:"32px 0",textAlign:"center"}}><div style={{display:"inline-flex",gap:8}}>{[0,1,2,3].map(i=><div key={i} style={{width:7,height:7,borderRadius:4,background:tab==="morning"?"#fbbf24":"#818cf8",animation:"pulse 1.2s infinite",animationDelay:`${i*0.2}s`}}/>)}</div><p style={{color:"#64748b",fontSize:12,marginTop:14,fontFamily:"'JetBrains Mono',monospace"}}>Step 1/3 — Searching & drafting...</p></div>}
 {data&&<div>
