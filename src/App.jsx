@@ -2,11 +2,13 @@ import { useState, useEffect, useRef, useCallback } from "react";
 
 // ============ CONFIG ============
 const TICKERS = [
-  { symbol: "AAPL", name: "Apple" }, { symbol: "NVDA", name: "NVIDIA" },
-  { symbol: "MSFT", name: "Microsoft" }, { symbol: "GOOGL", name: "Alphabet" },
-  { symbol: "AMZN", name: "Amazon" }, { symbol: "TSLA", name: "Tesla" },
-  { symbol: "SPY", name: "S&P 500 ETF" }, { symbol: "QQQ", name: "Nasdaq 100" },
-  { symbol: "JPM", name: "JP Morgan" }, { symbol: "GS", name: "Goldman Sachs" },
+  { symbol: "SPY", name: "S&P 500" }, { symbol: "QQQ", name: "Nasdaq 100" },
+  { symbol: "IWM", name: "Russell 2000" },
+  { symbol: "NVDA", name: "NVIDIA" }, { symbol: "AAPL", name: "Apple" },
+  { symbol: "MSFT", name: "Microsoft" }, { symbol: "JPM", name: "JP Morgan" },
+  { symbol: "TSLA", name: "Tesla" },
+  { symbol: "TLT", name: "20Y+ Treasury" }, { symbol: "GLD", name: "Gold" },
+  { symbol: "UUP", name: "US Dollar" },
 ];
 const HEATMAP = [
   { ticker: "AAPL", sector: "Tech", w: 2 }, { ticker: "NVDA", sector: "Tech", w: 2 },
@@ -611,7 +613,7 @@ export default function App() {
         <div style={{ marginBottom: 24, animation: "fadeUp 0.5s ease both", padding: "20px 24px", background: "linear-gradient(135deg, rgba(12,18,34,0.8), rgba(10,15,28,0.6))", borderRadius: 16, border: "1px solid #1e2d4a", boxShadow: "0 4px 20px rgba(0,0,0,0.3)" }}><Clock /></div>
         <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
           <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.08s both", borderTop: "2px solid #34d39940" }}>
-            <h2 style={S.cardTitle}><span style={{ color: "#34d399" }}>◆</span> Watchlist<Info text="Live stock prices updated via Finnhub API with 5-minute caching. Click any ticker to open its TradingView chart. Green = up, red = down from previous close. Source: Finnhub.io" /></h2>
+            <h2 style={S.cardTitle}><span style={{ color: "#34d399" }}>◆</span> Watchlist<Info text="Live market prices grouped by signal: indices (SPY, QQQ, IWM), mega-cap movers (NVDA, AAPL, MSFT, JPM, TSLA), and macro indicators (TLT for rates, GLD for risk-off, UUP for dollar). Click any ticker for TradingView. Source: Finnhub.io" /></h2>
             {prices.map(t => <a key={t.symbol} href={`https://www.tradingview.com/symbols/${t.symbol}/`} target="_blank" rel="noopener noreferrer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 12px", borderRadius: 10, transition: "all 0.2s", cursor: "pointer", borderLeft: "2px solid transparent", textDecoration: "none" }} onMouseEnter={e => {e.currentTarget.style.background = "rgba(52,211,153,0.04)"; e.currentTarget.style.borderLeftColor = "#34d39950";}} onMouseLeave={e => {e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderLeftColor = "transparent";}}>
               <div><span style={{ color: "#e2e8f0", fontWeight: 600, fontSize: 13 }}>{t.symbol}</span><span style={{ color: "#64748b", fontSize: 11, marginLeft: 8 }}>{t.name}</span></div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}><Spark pos={parseFloat(t.change) >= 0} /><span style={{ color: "#e2e8f0", fontFamily: "JetBrains Mono, monospace", fontSize: 13, minWidth: 60, textAlign: "right" }}>${t.price}</span><span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, minWidth: 52, textAlign: "right", color: parseFloat(t.change) >= 0 ? "#34d399" : "#f87171", fontWeight: 600 }}>{parseFloat(t.change) >= 0 ? "+" : ""}{t.change}%</span></div>
