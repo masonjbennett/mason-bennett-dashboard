@@ -97,27 +97,43 @@ function getSmartInterval() {
 function apiHeaders(key) { return { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }; }
 function extractText(d) { if (d.error) { console.error("API error:", d.error); return null; } if (!d.content) { console.error("No content in response:", d); return null; } return d.content.filter(b => b.type === "text").map(b => b.text).join("").replace(/```json|```/g, "").trim(); }
 function extractTextMulti(d) { if (d.error) { console.error("API error:", d.error); return null; } if (!d.content) { console.error("No content in response:", d); return null; } return d.content.filter(b => b.type === "text").map(b => b.text).join("\n\n"); }
-async function callAPI(key, body, retries = 3) {
-  for (let i = 0; i < retries; i++) {
-    const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: apiHeaders(key), body: JSON.stringify(body) });
-    if (r.status === 429) {
-      const wait = Math.min(2000 * Math.pow(2, i), 15000);
-      console.warn(`Rate limited (429), retrying in ${wait/1000}s... (attempt ${i+1}/${retries})`);
-      await new Promise(res => setTimeout(res, wait));
-      continue;
-    }
-    if (r.status === 529) {
-      const wait = Math.min(3000 * Math.pow(2, i), 20000);
-      console.warn(`API overloaded (529), retrying in ${wait/1000}s... (attempt ${i+1}/${retries})`);
-      await new Promise(res => setTimeout(res, wait));
-      continue;
-    }
-    return r.json();
-  }
-  console.error("API failed after all retries");
-  return { error: { type: "rate_limit", message: "Too many requests — please wait a moment and try again" } };
-}
 function delay(ms) { return new Promise(res => setTimeout(res, ms)); }
+
+// Global queue — ensures only ONE API call at a time with mandatory spacing
+const apiQueue = { running: false, queue: [] };
+function enqueueAPI(fn) {
+  return new Promise((resolve) => {
+    apiQueue.queue.push(async () => { const r = await fn(); resolve(r); });
+    processQueue();
+  });
+}
+async function processQueue() {
+  if (apiQueue.running || apiQueue.queue.length === 0) return;
+  apiQueue.running = true;
+  while (apiQueue.queue.length > 0) {
+    const task = apiQueue.queue.shift();
+    await task();
+    if (apiQueue.queue.length > 0) await delay(3000); // 3s gap between calls
+  }
+  apiQueue.running = false;
+}
+
+async function callAPI(key, body) {
+  return enqueueAPI(async () => {
+    for (let i = 0; i < 3; i++) {
+      const r = await fetch("https://api.anthropic.com/v1/messages", { method: "POST", headers: apiHeaders(key), body: JSON.stringify(body) });
+      if (r.status === 429 || r.status === 529) {
+        const wait = 10000 * (i + 1); // 10s, 20s, 30s
+        console.warn(`Rate limited (${r.status}), retrying in ${wait/1000}s... (attempt ${i+1}/3)`);
+        await delay(wait);
+        continue;
+      }
+      return r.json();
+    }
+    console.error("API failed after all retries");
+    return { error: { type: "rate_limit", message: "Too many requests — please wait and try again" } };
+  });
+}
 
 async function fetchNews(cat, key) {
   if (!key) return null;
