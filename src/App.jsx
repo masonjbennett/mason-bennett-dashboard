@@ -237,9 +237,12 @@ function usePrices(tickers, finnhubKey) {
 // ============ INFO TOOLTIP ============
 function Info({ text, link, linkLabel }) {
   const [show, setShow] = useState(false);
-  return <span style={{ position: "relative", display: "inline-flex", marginLeft: 6 }} onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
-    <span style={{ width: 15, height: 15, borderRadius: 8, background: "rgba(148,163,184,0.1)", border: "1px solid rgba(148,163,184,0.2)", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: "#64748b", cursor: "help", fontFamily: "'JetBrains Mono',monospace", fontWeight: 600, transition: "all 0.2s" }}>?</span>
-    {show && <div style={{ position: "absolute", bottom: "calc(100% + 8px)", left: "50%", transform: "translateX(-50%)", background: "#0f172a", border: "1px solid #1e2d4a", borderRadius: 10, padding: "10px 14px", fontSize: 11, color: "#cbd5e1", lineHeight: 1.6, width: 260, zIndex: 50, boxShadow: "0 8px 24px rgba(0,0,0,0.5)", fontFamily: "'Space Grotesk',sans-serif", textTransform: "none", letterSpacing: 0, fontWeight: 400, animation: "fadeUp 0.15s ease" }}>{text}{link && <a href={link} target="_blank" rel="noopener noreferrer" style={{ display: "block", marginTop: 8, fontSize: 10, color: "#34d399", textDecoration: "none", fontFamily: "'JetBrains Mono',monospace" }} onMouseEnter={e=>e.currentTarget.style.opacity="0.7"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>{linkLabel || "Learn more"} ↗</a>}</div>}
+  const timer = useRef(null);
+  const enter = () => { clearTimeout(timer.current); setShow(true); };
+  const leave = () => { timer.current = setTimeout(() => setShow(false), 250); };
+  return <span style={{ position: "relative", display: "inline-flex", marginLeft: 6 }} onMouseEnter={enter} onMouseLeave={leave}>
+    <span style={{ width: 15, height: 15, borderRadius: 8, background: show ? "rgba(52,211,153,0.15)" : "rgba(148,163,184,0.1)", border: `1px solid ${show ? "rgba(52,211,153,0.3)" : "rgba(148,163,184,0.2)"}`, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: show ? "#34d399" : "#64748b", cursor: "help", fontFamily: "'JetBrains Mono',monospace", fontWeight: 600, transition: "all 0.2s" }}>?</span>
+    {show && <div onMouseEnter={enter} onMouseLeave={leave} style={{ position: "absolute", bottom: "calc(100% + 4px)", left: "50%", transform: "translateX(-50%)", background: "#0f172a", border: "1px solid #1e2d4a", borderRadius: 10, padding: "12px 16px", fontSize: 11, color: "#cbd5e1", lineHeight: 1.6, width: 280, zIndex: 50, boxShadow: "0 8px 24px rgba(0,0,0,0.5), 0 0 0 1px rgba(52,211,153,0.05)", fontFamily: "'Space Grotesk',sans-serif", textTransform: "none", letterSpacing: 0, fontWeight: 400, animation: "fadeUp 0.15s ease", cursor: "default" }}>{text}{link && <a href={link} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 10, fontSize: 10, color: "#34d399", textDecoration: "none", fontFamily: "'JetBrains Mono',monospace", padding: "4px 10px", borderRadius: 6, background: "rgba(52,211,153,0.06)", border: "1px solid rgba(52,211,153,0.15)", transition: "all 0.2s" }} onMouseEnter={e=>{e.currentTarget.style.background="rgba(52,211,153,0.12)";e.currentTarget.style.borderColor="rgba(52,211,153,0.3)"}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(52,211,153,0.06)";e.currentTarget.style.borderColor="rgba(52,211,153,0.15)"}}>{linkLabel || "Learn more"} ↗</a>}</div>}
   </span>;
 }
 
@@ -254,13 +257,16 @@ function Clock(){const[now,setNow]=useState(new Date());useEffect(()=>{const iv=
 
 // ============ MARKET REGIME ============
 function RegimeIndicator({ apiKey }) {
-  const [data, setData] = useState(null), [loading, setLoading] = useState(false), [error, setError] = useState(false);
-  const load = async () => { if (!apiKey) { setError(true); setLoading(false); return; } setLoading(true); setError(false); const r = await fetchRegime(apiKey); if (r) setData(r); else setError(true); setLoading(false); };
+  const [data, setData] = useState(null), [loading, setLoading] = useState(false), [error, setError] = useState(false), [fetchTime, setFetchTime] = useState(null);
+  const load = async () => { if (!apiKey) { setError(true); setLoading(false); return; } setLoading(true); setError(false); const r = await fetchRegime(apiKey); if (r) { setData(r); setFetchTime(new Date()); } else setError(true); setLoading(false); };
   const rc = data ? (data.regime === "Risk-On" ? "#34d399" : data.regime === "Risk-Off" ? "#f87171" : "#fbbf24") : "#64748b";
   return <div style={{...S.card, animation:"fadeUp 0.5s ease 0.28s both"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:data?12:0}}>
       <h2 style={S.cardTitle}><span style={{color:"#fb923c"}}>◆</span> Market Regime<Info text="Shows current market conditions using VIX (volatility), CNN Fear & Greed Index (sentiment), and 10Y Treasury yield. Risk-On = bullish conditions, Risk-Off = defensive positioning. Sources: CBOE (VIX), CNN Business (Fear & Greed), U.S. Treasury Dept (10Y yield) via AI web search." link="https://www.investopedia.com/terms/v/vix.asp" linkLabel="What is the VIX?" /></h2>
-      <button onClick={load} disabled={loading} style={{...S.btn,fontSize:10,padding:"4px 10px",opacity:loading?0.5:1}}>{loading?"⟳...":data?"↻":"Load"}</button>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        {fetchTime&&<span style={{fontSize:9,color:"#64748b",fontFamily:"'JetBrains Mono',monospace"}}>Updated {fetchTime.toLocaleTimeString()}</span>}
+        <button onClick={load} disabled={loading} style={{...S.btn,fontSize:10,padding:"4px 10px",opacity:loading?0.5:1}}>{loading?"⟳...":data?"↻":"Load"}</button>
+      </div>
     </div>
     {!data&&!loading&&!error&&<p style={{color:"#64748b",fontSize:12,textAlign:"center",padding:"8px 0"}}>Click Load to fetch VIX, Fear/Greed, and 10Y yield</p>}
     {error&&!loading&&<p style={{color:"#f87171",fontSize:12,textAlign:"center",padding:"8px 0"}}>Failed to load — click Load to retry</p>}
@@ -290,12 +296,15 @@ function RegimeIndicator({ apiKey }) {
 
 // ============ EARNINGS CALENDAR ============
 function EarningsCal({ apiKey }) {
-  const [data, setData] = useState(null), [loading, setLoading] = useState(false), [error, setError] = useState(false);
-  const load = async () => { if (!apiKey) { setError(true); setLoading(false); return; } setLoading(true); setError(false); const r = await fetchEarnings(apiKey); if (r) setData(r); else setError(true); setLoading(false); };
+  const [data, setData] = useState(null), [loading, setLoading] = useState(false), [error, setError] = useState(false), [fetchTime, setFetchTime] = useState(null);
+  const load = async () => { if (!apiKey) { setError(true); setLoading(false); return; } setLoading(true); setError(false); const r = await fetchEarnings(apiKey); if (r) { setData(r); setFetchTime(new Date()); } else setError(true); setLoading(false); };
   return <div style={{...S.card, animation:"fadeUp 0.5s ease 0.32s both"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:data?12:0}}>
       <h2 style={S.cardTitle}><span style={{color:"#60a5fa"}}>◆</span> Earnings Calendar<Info text="Upcoming quarterly earnings reports for major companies. BMO = Before Market Open, AMC = After Market Close. Est EPS is the consensus analyst estimate. Source: Earnings data aggregated via AI web search from Yahoo Finance, Nasdaq, and MarketWatch." link="https://www.investopedia.com/terms/e/earningsreport.asp" linkLabel="Understanding earnings reports" /></h2>
-      <button onClick={load} disabled={loading} style={{...S.btn,fontSize:10,padding:"4px 10px",opacity:loading?0.5:1}}>{loading?"⟳...":data?"↻":"Load"}</button>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        {fetchTime&&<span style={{fontSize:9,color:"#64748b",fontFamily:"'JetBrains Mono',monospace"}}>Updated {fetchTime.toLocaleTimeString()}</span>}
+        <button onClick={load} disabled={loading} style={{...S.btn,fontSize:10,padding:"4px 10px",opacity:loading?0.5:1}}>{loading?"⟳...":data?"↻":"Load"}</button>
+      </div>
     </div>
     {!data&&!loading&&!error&&<p style={{color:"#64748b",fontSize:12,textAlign:"center",padding:"8px 0"}}>Load upcoming earnings reports</p>}
     {error&&!loading&&<p style={{color:"#f87171",fontSize:12,textAlign:"center",padding:"8px 0"}}>Failed to load — click Load to retry</p>}
@@ -324,13 +333,16 @@ async function fetchEconCal(key) {
   } catch (e) { console.error("EconCal error:", e); return null; }
 }
 function EconCalendar({ apiKey }) {
-  const [data, setData] = useState(null), [loading, setLoading] = useState(false), [error, setError] = useState(false);
-  const load = async () => { if (!apiKey) { setError(true); return; } setLoading(true); setError(false); const r = await fetchEconCal(apiKey); if (r) setData(r); else setError(true); setLoading(false); };
+  const [data, setData] = useState(null), [loading, setLoading] = useState(false), [error, setError] = useState(false), [fetchTime, setFetchTime] = useState(null);
+  const load = async () => { if (!apiKey) { setError(true); return; } setLoading(true); setError(false); const r = await fetchEconCal(apiKey); if (r) { setData(r); setFetchTime(new Date()); } else setError(true); setLoading(false); };
   const ic = { high: "#f87171", medium: "#fbbf24", low: "#64748b" };
   return <div style={{...S.card, animation:"fadeUp 0.5s ease 0.36s both", borderTop: "2px solid #f472b640"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:data?12:0}}>
       <h2 style={S.cardTitle}><span style={{color:"#f472b6"}}>◆</span> Economic Calendar<Info text="Upcoming economic data releases — Fed rate decisions (FOMC), inflation (CPI/PPI), employment (NFP), GDP, and retail sales. Red dot = high market impact. Source: Federal Reserve, BLS, BEA, and Census Bureau schedules via AI web search." link="https://www.investopedia.com/terms/e/economic-calendar.asp" linkLabel="Economic indicators explained" /></h2>
-      <button onClick={load} disabled={loading} style={{...S.btn,fontSize:10,padding:"4px 10px",opacity:loading?0.5:1}}>{loading?"⟳...":data?"↻":"Load"}</button>
+      <div style={{display:"flex",alignItems:"center",gap:8}}>
+        {fetchTime&&<span style={{fontSize:9,color:"#64748b",fontFamily:"'JetBrains Mono',monospace"}}>Updated {fetchTime.toLocaleTimeString()}</span>}
+        <button onClick={load} disabled={loading} style={{...S.btn,fontSize:10,padding:"4px 10px",opacity:loading?0.5:1}}>{loading?"⟳...":data?"↻":"Load"}</button>
+      </div>
     </div>
     {!data&&!loading&&!error&&<p style={{color:"#64748b",fontSize:12,textAlign:"center",padding:"8px 0"}}>Upcoming Fed, CPI, NFP, GDP releases</p>}
     {error&&!loading&&<p style={{color:"#f87171",fontSize:12,textAlign:"center",padding:"8px 0"}}>Failed to load — click Load to retry</p>}
