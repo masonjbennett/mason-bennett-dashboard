@@ -577,7 +577,7 @@ export default function App() {
         <div style={{ ...S.card, background: "linear-gradient(135deg,#080c16,#0d1425,#0b1120)", border: "1px solid #1a2540", position: "relative", overflow: "hidden" }}>
           <div style={{ position: "absolute", top: -60, right: -60, width: 250, height: 250, background: "radial-gradient(circle,rgba(52,211,153,0.04) 0%,transparent 70%)", pointerEvents: "none" }} />
           <div style={{ display: "flex", gap: 28, alignItems: "flex-start", flexWrap: "wrap", position: "relative" }}>
-            <img src="/headshot.png" alt="Mason Bennett" style={{ width: 140, height: 140, borderRadius: 18, objectFit: "cover", objectPosition: "center 15%", flexShrink: 0, boxShadow: "0 12px 40px rgba(52,211,153,0.15), 0 0 0 1px rgba(52,211,153,0.1)", border: "2px solid #34d39940" }} />
+            <img src="/headshot.png" alt="Mason Bennett" style={{ width: 180, height: 180, borderRadius: 20, objectFit: "cover", objectPosition: "center 15%", imageRendering: "auto", flexShrink: 0, boxShadow: "0 12px 40px rgba(52,211,153,0.15), 0 0 0 1px rgba(52,211,153,0.1)", border: "2px solid #34d39940" }} />
             <div style={{ flex: 1 }}>
               <h2 style={{ color: "#e2e8f0", fontSize: 30, fontFamily: "Instrument Serif, serif", marginBottom: 4, textShadow: "0 2px 16px rgba(226,232,240,0.06)" }}>Mason Bennett</h2>
               <p style={{ color: "#34d399", fontSize: 12, fontFamily: "JetBrains Mono, monospace", marginBottom: 16 }}>M.S. Finance · University of Arkansas · Class of 2026</p>
