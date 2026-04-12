@@ -33,6 +33,7 @@ const PROJECTS = [
   { title: "Cost of Equity & Alpha Regression", desc: "Regression models calculating cost of equity via CAPM and multi-factor approaches. Estimated Jensen's alpha for equities against benchmarks.", tags: ["Excel", "CAPM", "Valuation"], status: "In Progress" },
   { title: "New Venture — Women's Apparel", desc: "25-page business plan with 5-year forecasts projecting $10M revenue. Market research, competitive analysis, feasibility studies.", tags: ["Financial Modeling", "Business Plan"], status: "Completed" },
   { title: "Python Finance Projects", desc: "Python-based financial analysis tools: portfolio optimization, DCF automation, and equity research data visualization.", tags: ["Python", "Automation", "Finance"], status: "In Progress" },
+  { title: "Portfolio Analytics App", desc: "Interactive portfolio analytics tool built with Streamlit for real-time equity portfolio construction, optimization, and risk analysis. Features efficient frontier visualization, CAPM regression, rolling risk metrics, and custom portfolio builder with scipy optimization.", tags: ["Python", "Streamlit", "Portfolio Optimization", "Plotly"], status: "Completed", url: "https://github.com/masonjbennett/portfolio-app" },
 ];
 const EXPERIENCE = [
   { role: "M.S. Finance", org: "Walton College of Business", date: "2025–2026", type: "edu", detail: "4.0 GPA · Advanced Financial Modeling, Investments, Investment Theory, Data Analytics, Shollmier Project" },
@@ -561,7 +562,8 @@ export default function App() {
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}><span style={{ fontSize: 9, color: "#64748b", fontFamily: "JetBrains Mono, monospace", letterSpacing: 1 }}>PROJECT_{String(i + 1).padStart(2, "0")}</span><span style={{ fontSize: 9, padding: "3px 10px", borderRadius: 20, background: p.status === "In Progress" ? "#fbbf2408" : "#34d39908", color: p.status === "In Progress" ? "#fbbf24" : "#34d399", fontFamily: "JetBrains Mono, monospace" }}>{p.status}</span></div>
           <h3 style={{ color: "#e2e8f0", fontSize: 17, fontWeight: 600, marginBottom: 10, lineHeight: 1.3 }}>{p.title}</h3>
           <p style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.65, marginBottom: 16, flex: 1 }}>{p.desc}</p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>{p.tags.map(t => <span key={t} style={{ fontSize: 9, padding: "3px 10px", borderRadius: 20, background: "#1e293b30", color: "#94a3b8", fontFamily: "JetBrains Mono, monospace" }}>{t}</span>)}</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: p.url ? 12 : 0 }}>{p.tags.map(t => <span key={t} style={{ fontSize: 9, padding: "3px 10px", borderRadius: 20, background: "#1e293b30", color: "#94a3b8", fontFamily: "JetBrains Mono, monospace" }}>{t}</span>)}</div>
+          {p.url && <a href={p.url} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10, color: "#34d399", textDecoration: "none", fontFamily: "JetBrains Mono, monospace", padding: "4px 0", transition: "opacity 0.2s" }} onMouseEnter={e=>e.currentTarget.style.opacity="0.7"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>View on GitHub <span style={{fontSize:9}}>↗</span></a>}
         </div>)}</div>
       </div>}
 
@@ -580,7 +582,7 @@ export default function App() {
           </div>
         </div>
         <div className="about-stats" style={{ ...S.card, margin: "14px 0", display: "flex", justifyContent: "space-around", padding: "20px 32px", flexWrap: "wrap", gap: 16 }}>
-          {[["Master's GPA", "4.0", "Walton College"], ["Undergrad GPA", "3.62", "Dean's List ×4"], ["Projects", "5", "Academic & Independent"], ["Graduation", "May 2026", "M.S. Finance"]].map(([label, val, sub], i) => (
+          {[["Master's GPA", "4.0", "Walton College"], ["Undergrad GPA", "3.62", "Dean's List ×4"], ["Projects", "6", "Academic & Independent"], ["Graduation", "May 2026", "M.S. Finance"]].map(([label, val, sub], i) => (
             <div key={label} style={{ textAlign: "center", position: "relative" }}>
               <div style={{ fontSize: 24, fontWeight: 700, fontFamily: "JetBrains Mono, monospace", color: "#e2e8f0", marginBottom: 4 }}>{val}</div>
               <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 500, marginBottom: 2 }}>{label}</div>
