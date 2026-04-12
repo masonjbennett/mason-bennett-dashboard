@@ -50,9 +50,9 @@ const READING = [
 ];
 const LINKS = [
   { label: "LinkedIn", url: "https://linkedin.com/in/bennettmason", ic: "in" },
-  { label: "GitHub", url: "#", ic: "gh" },
+  { label: "GitHub", url: "https://github.com/masonjbennett", ic: "gh" },
   { label: "Resume", url: "#", ic: "cv" },
-  { label: "Email", url: "mailto:", ic: "✉" },
+  { label: "Email", url: "mailto:masonjbennett@aol.com", ic: "✉" },
 ];
 const NEWS_CATS = [
   { id: "markets", label: "Markets", q: "stock market news today", color: "#34d399", count: 15 },
@@ -198,7 +198,43 @@ Replace with real upcoming earnings data. time should be "BMO" for before market
 }
 
 // ============ HOOKS ============
-function usePrices(tickers) { const [p, setP] = useState(() => tickers.map(t => ({ ...t, price: (80 + Math.random() * 450).toFixed(2), change: (Math.random() * 7 - 3.5).toFixed(2) }))); useEffect(() => { const iv = setInterval(() => setP(prev => prev.map(t => { const d = (Math.random() - 0.47) * 1.8; return { ...t, price: Math.max(1, parseFloat(t.price) + d).toFixed(2), change: (parseFloat(t.change) + d * 0.08).toFixed(2) }; })), 3000); return () => clearInterval(iv); }, []); return p; }
+function usePrices(tickers, finnhubKey) {
+  const [p, setP] = useState(() => tickers.map(t => ({ ...t, price: "—", change: "0.00", loading: true })));
+  const fetchedRef = useRef(false);
+  useEffect(() => {
+    if (!finnhubKey || fetchedRef.current) return;
+    fetchedRef.current = true;
+    // Check cache first
+    const cached = cacheGet("mb_prices", 5);
+    if (cached) { setP(cached); return; }
+    // Fetch real quotes from Finnhub
+    async function load() {
+      const results = [...p];
+      for (let i = 0; i < tickers.length; i++) {
+        try {
+          const r = await fetch(`https://finnhub.io/api/v1/quote?symbol=${tickers[i].symbol}&token=${finnhubKey}`);
+          const d = await r.json();
+          if (d.c) results[i] = { ...tickers[i], price: d.c.toFixed(2), change: d.dp ? d.dp.toFixed(2) : "0.00", loading: false };
+        } catch {}
+        if (i < tickers.length - 1) await delay(120); // Rate limit: ~60/min
+      }
+      setP(results);
+      cacheSet("mb_prices", results);
+    }
+    load();
+    // Refresh every 60s during market hours
+    const iv = setInterval(() => { fetchedRef.current = false; }, 60000);
+    return () => clearInterval(iv);
+  }, [finnhubKey]);
+  // Fallback: simulated if no key
+  useEffect(() => {
+    if (finnhubKey) return;
+    setP(tickers.map(t => ({ ...t, price: (80 + Math.random() * 450).toFixed(2), change: (Math.random() * 7 - 3.5).toFixed(2) })));
+    const iv = setInterval(() => setP(prev => prev.map(t => { const d = (Math.random() - 0.47) * 1.8; return { ...t, price: Math.max(1, parseFloat(t.price) + d).toFixed(2), change: (parseFloat(t.change) + d * 0.08).toFixed(2) }; })), 3000);
+    return () => clearInterval(iv);
+  }, [finnhubKey]);
+  return p;
+}
 
 // ============ SMALL COMPONENTS ============
 function Spark({ pos, w = 88, h = 28 }) { const id = useRef(`s${Math.random().toString(36).slice(2,6)}`); const pts = useRef(Array.from({length:22},(_,i)=>{const x=(i/21)*w,y=h/2+(pos?-1:1)*i*0.35+(Math.random()-0.5)*h*0.45;return`${x},${Math.max(2,Math.min(h-2,y))}`;}).join(" ")); return <svg width={w} height={h} style={{display:"block"}}><defs><linearGradient id={id.current} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={pos?"#34d399":"#f87171"} stopOpacity="0.2"/><stop offset="100%" stopColor={pos?"#34d399":"#f87171"} stopOpacity="0"/></linearGradient></defs><polyline points={pts.current+` ${w},${h} 0,${h}`} fill={`url(#${id.current})`}/><polyline points={pts.current} fill="none" stroke={pos?"#34d399":"#f87171"} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/></svg>; }
@@ -268,8 +304,8 @@ function EarningsCal({ apiKey }) {
 function Notes(){const[notes,setNotes]=useState(()=>{try{const s=localStorage.getItem("mb_notes");return s?JSON.parse(s):[];}catch{return[];}});const[input,setInput]=useState("");const updateNotes=n=>{setNotes(n);localStorage.setItem("mb_notes",JSON.stringify(n))};const add=()=>{if(!input.trim())return;updateNotes([{text:input.trim(),time:new Date().toLocaleString(),id:Date.now()},...notes]);setInput("")};const rm=id=>updateNotes(notes.filter(n=>n.id!==id));return <section style={S.card}><h2 style={S.cardTitle}><span style={{color:"#f472b6"}}>◆</span> Quick Notes</h2><div style={{display:"flex",gap:8,marginBottom:notes.length?10:0}}><input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()} placeholder="Trade idea, research note, reminder..." style={{flex:1,background:"#080c16",border:"1px solid #1e293b",borderRadius:8,padding:"8px 12px",color:"#e2e8f0",fontSize:12,fontFamily:"'Space Grotesk',sans-serif",outline:"none"}}/><button onClick={add} style={{...S.btn,padding:"8px 16px"}}>Add</button></div>{notes.length===0&&<p style={{color:"#64748b",fontSize:11,textAlign:"center",padding:"8px 0"}}>Jot down ideas, questions, or reminders</p>}{notes.map(n=><div key={n.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 10px",borderRadius:6,background:"#080c16",border:"1px solid #1e293b",marginBottom:4}}><div><div style={{color:"#e2e8f0",fontSize:12}}>{n.text}</div><div style={{color:"#64748b",fontSize:9,fontFamily:"'JetBrains Mono',monospace",marginTop:1}}>{n.time}</div></div><button onClick={()=>rm(n.id)} style={{background:"none",border:"none",color:"#64748b",cursor:"pointer",fontSize:14,padding:"4px 8px"}}>×</button></div>)}</section>;}
 
 // ============ HERO + CMD ============
-function Hero(){const[ph,setPh]=useState(0);useEffect(()=>{const a=setTimeout(()=>setPh(1),300),b=setTimeout(()=>setPh(2),1200),c=setTimeout(()=>setPh(3),2200);return()=>{clearTimeout(a);clearTimeout(b);clearTimeout(c)}},[]);return <div style={{position:"fixed",inset:0,background:"#050810",zIndex:9999,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",transition:"opacity 0.8s",opacity:ph>=3?0:1,pointerEvents:ph>=3?"none":"all"}} onClick={()=>setPh(3)}><div style={{position:"absolute",width:500,height:500,borderRadius:"50%",background:"radial-gradient(circle,rgba(52,211,153,0.08) 0%,transparent 70%)",animation:"breathe 4s ease-in-out infinite"}}/><div style={{position:"relative",textAlign:"center"}}><div style={{fontSize:13,fontFamily:"'JetBrains Mono',monospace",color:"#34d399",letterSpacing:8,textTransform:"uppercase",marginBottom:24,opacity:ph>=1?1:0,transform:`translateY(${ph>=1?0:15}px)`,transition:"all 0.8s"}}>$ terminal / active</div><h1 style={{fontSize:68,fontWeight:700,fontFamily:"'Instrument Serif',serif",color:"#e2e8f0",lineHeight:1,marginBottom:16,opacity:ph>=1?1:0,transform:`translateY(${ph>=1?0:20}px)`,transition:"all 0.8s 0.15s"}}>Mason Bennett</h1><p style={{fontSize:16,color:"#94a3b8",letterSpacing:1,opacity:ph>=2?1:0,transform:`translateY(${ph>=2?0:15}px)`,transition:"all 0.8s"}}>M.S. Finance · University of Arkansas · Investment Banking & Private Equity</p></div></div>;}
-function Cmd({open,onClose,onNav}){const[q,setQ]=useState("");const ref=useRef();const items=[{l:"Dashboard",t:"dashboard"},{l:"News",t:"news"},{l:"Portfolio",t:"portfolio"},{l:"Research",t:"research"},{l:"Projects",t:"projects"},{l:"About",t:"about"},...QLINKS.map(l=>({l:l.n,u:l.u}))];const f=items.filter(i=>i.l.toLowerCase().includes(q.toLowerCase()));useEffect(()=>{if(open&&ref.current){ref.current.focus();setQ("")}},[open]);if(!open)return null;return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",backdropFilter:"blur(12px)",zIndex:1000,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:100,animation:"fadeIn 0.15s"}} onClick={onClose}><div style={{background:"#0f172a",border:"1px solid #334155",borderRadius:16,width:520,overflow:"hidden",boxShadow:"0 32px 80px rgba(0,0,0,0.6)"}} onClick={e=>e.stopPropagation()}><div style={{padding:"16px 20px",borderBottom:"1px solid #1e293b",display:"flex",alignItems:"center",gap:12}}><span style={{color:"#34d399"}}>⌘</span><input ref={ref} value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..." style={{flex:1,background:"none",border:"none",outline:"none",color:"#e2e8f0",fontSize:15}}/><kbd style={{fontSize:9,padding:"2px 7px",borderRadius:4,background:"#1e293b",color:"#64748b",border:"1px solid #334155",fontFamily:"'JetBrains Mono',monospace"}}>ESC</kbd></div><div style={{maxHeight:320,overflowY:"auto",padding:6}}>{f.map((item,i)=><button key={i} onClick={()=>{if(item.t)onNav(item.t);else window.open(item.u,"_blank");onClose()}} style={{display:"flex",alignItems:"center",gap:12,width:"100%",padding:"11px 14px",background:"none",border:"none",color:"#e2e8f0",fontSize:14,cursor:"pointer",borderRadius:10,textAlign:"left",transition:"background 0.1s"}} onMouseEnter={e=>e.currentTarget.style.background="#1e293b"} onMouseLeave={e=>e.currentTarget.style.background="none"}><span style={{color:"#34d399",width:20,textAlign:"center"}}>→</span><span>{item.l}</span>{item.u&&<span style={{marginLeft:"auto",fontSize:10,color:"#64748b"}}>↗</span>}</button>)}</div></div></div>;}
+function Hero(){const[ph,setPh]=useState(0);useEffect(()=>{const a=setTimeout(()=>setPh(1),300),b=setTimeout(()=>setPh(2),1200),c=setTimeout(()=>setPh(3),2200);return()=>{clearTimeout(a);clearTimeout(b);clearTimeout(c)}},[]);return <div style={{position:"fixed",inset:0,background:"#050810",zIndex:9999,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",transition:"opacity 0.8s",opacity:ph>=3?0:1,pointerEvents:ph>=3?"none":"all"}} onClick={()=>setPh(3)}><div style={{position:"absolute",width:500,height:500,borderRadius:"50%",background:"radial-gradient(circle,rgba(52,211,153,0.08) 0%,transparent 70%)",animation:"breathe 4s ease-in-out infinite"}}/><div style={{position:"relative",textAlign:"center"}}><div style={{fontSize:13,fontFamily:"'JetBrains Mono',monospace",color:"#34d399",letterSpacing:8,textTransform:"uppercase",marginBottom:24,opacity:ph>=1?1:0,transform:`translateY(${ph>=1?0:15}px)`,transition:"all 0.8s"}}>$ terminal / active</div><h1 className="hero-name" style={{fontSize:68,fontWeight:700,fontFamily:"'Instrument Serif',serif",color:"#e2e8f0",lineHeight:1,marginBottom:16,opacity:ph>=1?1:0,transform:`translateY(${ph>=1?0:20}px)`,transition:"all 0.8s 0.15s"}}>Mason Bennett</h1><p className="hero-sub" style={{fontSize:16,color:"#94a3b8",letterSpacing:1,opacity:ph>=2?1:0,transform:`translateY(${ph>=2?0:15}px)`,transition:"all 0.8s"}}>M.S. Finance · University of Arkansas · Investment Banking & Private Equity</p></div></div>;}
+function Cmd({open,onClose,onNav}){const[q,setQ]=useState("");const ref=useRef();const items=[{l:"Dashboard",t:"dashboard"},{l:"News",t:"news"},{l:"Portfolio",t:"portfolio"},{l:"Research",t:"research"},{l:"Projects",t:"projects"},{l:"About",t:"about"},...QLINKS.map(l=>({l:l.n,u:l.u}))];const f=items.filter(i=>i.l.toLowerCase().includes(q.toLowerCase()));useEffect(()=>{if(open&&ref.current){ref.current.focus();setQ("")}},[open]);if(!open)return null;return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",backdropFilter:"blur(12px)",zIndex:1000,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:100,animation:"fadeIn 0.15s"}} onClick={onClose}><div style={{background:"#0f172a",border:"1px solid #334155",borderRadius:16,width:520,overflow:"hidden",boxShadow:"0 32px 80px rgba(0,0,0,0.6)"}} onClick={e=>e.stopPropagation()} className="cmd-modal"><div style={{padding:"16px 20px",borderBottom:"1px solid #1e293b",display:"flex",alignItems:"center",gap:12}}><span style={{color:"#34d399"}}>⌘</span><input ref={ref} value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..." style={{flex:1,background:"none",border:"none",outline:"none",color:"#e2e8f0",fontSize:15}}/><kbd style={{fontSize:9,padding:"2px 7px",borderRadius:4,background:"#1e293b",color:"#64748b",border:"1px solid #334155",fontFamily:"'JetBrains Mono',monospace"}}>ESC</kbd></div><div style={{maxHeight:320,overflowY:"auto",padding:6}}>{f.map((item,i)=><button key={i} onClick={()=>{if(item.t)onNav(item.t);else window.open(item.u,"_blank");onClose()}} style={{display:"flex",alignItems:"center",gap:12,width:"100%",padding:"11px 14px",background:"none",border:"none",color:"#e2e8f0",fontSize:14,cursor:"pointer",borderRadius:10,textAlign:"left",transition:"background 0.1s"}} onMouseEnter={e=>e.currentTarget.style.background="#1e293b"} onMouseLeave={e=>e.currentTarget.style.background="none"}><span style={{color:"#34d399",width:20,textAlign:"center"}}>→</span><span>{item.l}</span>{item.u&&<span style={{marginLeft:"auto",fontSize:10,color:"#64748b"}}>↗</span>}</button>)}</div></div></div>;}
 
 // ============ BRIEFINGS (compact) ============
 function Briefings({apiKey}){const[morning,setMorning]=useState(null),[close,setClose]=useState(null),[vM,setVM]=useState(null),[vC,setVC]=useState(null),[swM,setSwM]=useState(null),[swC,setSwC]=useState(null),[lM,setLM]=useState(false),[lC,setLC]=useState(false),[vLM,setVLM]=useState(false),[vLC,setVLC]=useState(false),[swLM,setSwLM]=useState(false),[swLC,setSwLC]=useState(false),[tM,setTM]=useState(null),[tC,setTC]=useState(null),[showCl,setShowCl]=useState(false),[showSW,setShowSW]=useState(true),[tab,setTab]=useState(()=>new Date().getHours()>=16?"close":"morning");const sugg=new Date().getHours()>=16?"close":"morning";
@@ -397,14 +433,15 @@ function ResearchTab() {
 }
 
 // ============ MAIN ============
-function SettingsPanel({ apiKey, setApiKey, open, onClose }) {
+function SettingsPanel({ apiKey, setApiKey, finnhubKey, setFinnhubKey, open, onClose }) {
   const [input, setInput] = useState(apiKey || "");
+  const [fhInput, setFhInput] = useState(finnhubKey || "");
   const [show, setShow] = useState(false);
-  const save = () => { const k = input.trim(); setApiKey(k); localStorage.setItem("mb_api_key", k); onClose(); };
-  const clear = () => { setInput(""); setApiKey(""); localStorage.removeItem("mb_api_key"); };
+  const save = () => { const k = input.trim(); const fk = fhInput.trim(); setApiKey(k); setFinnhubKey(fk); localStorage.setItem("mb_api_key", k); localStorage.setItem("mb_finnhub_key", fk); onClose(); };
+  const clear = () => { setInput(""); setFhInput(""); setApiKey(""); setFinnhubKey(""); localStorage.removeItem("mb_api_key"); localStorage.removeItem("mb_finnhub_key"); };
   if (!open) return null;
   return <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",backdropFilter:"blur(12px)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",animation:"fadeIn 0.15s"}} onClick={onClose}>
-    <div style={{background:"#0f172a",border:"1px solid #334155",borderRadius:16,width:480,padding:28,boxShadow:"0 32px 80px rgba(0,0,0,0.6)"}} onClick={e=>e.stopPropagation()}>
+    <div className="settings-modal" style={{background:"#0f172a",border:"1px solid #334155",borderRadius:16,width:480,padding:28,boxShadow:"0 32px 80px rgba(0,0,0,0.6)"}} onClick={e=>e.stopPropagation()}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
         <h2 style={{color:"#e2e8f0",fontSize:18,fontFamily:"'Instrument Serif',serif"}}>Settings</h2>
         <button onClick={onClose} style={{background:"none",border:"none",color:"#64748b",fontSize:18,cursor:"pointer"}}>×</button>
@@ -415,10 +452,16 @@ function SettingsPanel({ apiKey, setApiKey, open, onClose }) {
           <input type={show?"text":"password"} value={input} onChange={e=>setInput(e.target.value)} placeholder="sk-ant-..." style={{flex:1,background:"#080c16",border:"1px solid #1e293b",borderRadius:8,padding:"10px 12px",color:"#e2e8f0",fontSize:12,fontFamily:"'JetBrains Mono',monospace",outline:"none"}} />
           <button onClick={()=>setShow(!show)} style={{background:"#080c16",border:"1px solid #1e293b",borderRadius:8,padding:"8px 12px",color:"#64748b",fontSize:11,cursor:"pointer"}}>{show?"Hide":"Show"}</button>
         </div>
-        <p style={{fontSize:10,color:"#64748b",marginTop:6}}>Stored locally in your browser. Never sent to any server except Anthropic's API.</p>
+        <p style={{fontSize:10,color:"#64748b",marginTop:6}}>Powers AI briefings, news feed, market regime. Get a key at console.anthropic.com</p>
       </div>
+      <div style={{marginBottom:16}}>
+        <label style={{fontSize:10,color:"#64748b",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:1.5,display:"block",marginBottom:6}}>Finnhub API Key</label>
+        <input type={show?"text":"password"} value={fhInput} onChange={e=>setFhInput(e.target.value)} placeholder="Finnhub API key..." style={{width:"100%",background:"#080c16",border:"1px solid #1e293b",borderRadius:8,padding:"10px 12px",color:"#e2e8f0",fontSize:12,fontFamily:"'JetBrains Mono',monospace",outline:"none"}} />
+        <p style={{fontSize:10,color:"#64748b",marginTop:6}}>Powers real-time stock prices. Free at finnhub.io — sign up and copy your key.</p>
+      </div>
+      <p style={{fontSize:9,color:"#475569",marginBottom:16}}>Both keys stored locally in your browser only. Never committed to code.</p>
       <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-        <button onClick={clear} style={{background:"none",border:"1px solid #f8717120",borderRadius:8,padding:"8px 16px",color:"#f87171",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>Clear Key</button>
+        <button onClick={clear} style={{background:"none",border:"1px solid #f8717120",borderRadius:8,padding:"8px 16px",color:"#f87171",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>Clear All</button>
         <button onClick={save} style={{background:"#34d39915",border:"1px solid #34d39930",borderRadius:8,padding:"8px 20px",color:"#34d399",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",fontWeight:600}}>Save</button>
       </div>
     </div>
@@ -426,9 +469,10 @@ function SettingsPanel({ apiKey, setApiKey, open, onClose }) {
 }
 
 export default function App() {
-  const prices = usePrices(TICKERS);
   const [apiKey, setApiKey] = useState(() => localStorage.getItem("mb_api_key") || "");
+  const [finnhubKey, setFinnhubKey] = useState(() => localStorage.getItem("mb_finnhub_key") || "");
   const [showSettings, setShowSettings] = useState(false);
+  const prices = usePrices(TICKERS, finnhubKey);
   const [tab, setTab] = useState("dashboard"), [hovP, setHovP] = useState(null), [cmd, setCmd] = useState(false), [showHero, setShowHero] = useState(true), [mounted, setMounted] = useState(false);
   useEffect(() => { const t = setTimeout(() => { setShowHero(false); setMounted(true); }, 2500); return () => clearTimeout(t); }, []);
   useEffect(() => { const h = e => { if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setCmd(true); } if (e.key === "Escape") setCmd(false); if (!e.metaKey && !e.ctrlKey && !e.altKey && ["1", "2", "3", "4", "5", "6"].includes(e.key) && !e.target.closest("input") && !e.target.closest("textarea")) setTab(["dashboard", "news", "portfolio", "research", "projects", "about"][+e.key - 1]); }; window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, []);
@@ -439,11 +483,11 @@ export default function App() {
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&family=Instrument+Serif&display=swap" rel="stylesheet" />
     {showHero && <Hero />}
     <Cmd open={cmd} onClose={() => setCmd(false)} onNav={t => setTab(t)} />
-    <SettingsPanel apiKey={apiKey} setApiKey={setApiKey} open={showSettings} onClose={() => setShowSettings(false)} />
+    <SettingsPanel apiKey={apiKey} setApiKey={setApiKey} finnhubKey={finnhubKey} setFinnhubKey={setFinnhubKey} open={showSettings} onClose={() => setShowSettings(false)} />
     <div style={{ position: "fixed", top: -300, right: -200, width: 800, height: 800, background: "radial-gradient(circle,rgba(52,211,153,0.025) 0%,transparent 60%)", pointerEvents: "none" }} />
     <div style={{ position: "fixed", inset: 0, opacity: 0.012, backgroundImage: "url('data:image/svg+xml,%3Csvg viewBox=%220 0 256 256%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22n%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.9%22 numOctaves=%224%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22/%3E%3C/svg%3E')", pointerEvents: "none" }} />
 
-    <div style={{ background: "#050810", borderBottom: "1px solid #0b1120", padding: "5px 32px", display: "flex", justifyContent: "space-between", fontSize: 9, fontFamily: "JetBrains Mono, monospace", color: "#64748b", position: "relative", zIndex: 2 }}>
+    <div className="status-bar" style={{ background: "#050810", borderBottom: "1px solid #0b1120", padding: "5px 32px", display: "flex", justifyContent: "space-between", fontSize: 9, fontFamily: "JetBrains Mono, monospace", color: "#64748b", position: "relative", zIndex: 2 }}>
       <span>WALTON COLLEGE OF BUSINESS · UNIVERSITY OF ARKANSAS</span>
       <span><span style={{ color: "#fbbf24" }}>●</span> Working on: LBO Analysis — Jagex & EA</span>
     </div>
@@ -470,7 +514,7 @@ export default function App() {
 
       {tab === "dashboard" && <div>
         <div style={{ marginBottom: 24, animation: "fadeUp 0.5s ease both" }}><Clock /></div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+        <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
           <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.08s both" }}>
             <h2 style={S.cardTitle}><span style={{ color: "#34d399" }}>◆</span> Watchlist</h2>
             {prices.map(t => <div key={t.symbol} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 10px", borderRadius: 8, transition: "background 0.15s", cursor: "pointer" }} onMouseEnter={e => e.currentTarget.style.background = "#1e293b18"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
@@ -492,11 +536,11 @@ export default function App() {
             </section>
           </div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+        <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
           <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.2s both" }}><h2 style={S.cardTitle}><span style={{ color: "#fbbf24" }}>◆</span> Sector Heatmap</h2><HeatMap /></section>
           <div style={{ animation: "fadeUp 0.5s ease 0.24s both" }}><Notes /></div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+        <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           <RegimeIndicator apiKey={apiKey} />
           <EarningsCal apiKey={apiKey} />
         </div>
@@ -506,7 +550,7 @@ export default function App() {
 
       {tab === "portfolio" && <div style={{ animation: "fadeUp 0.4s ease both" }}>
         <h1 style={S.pageTitle}>Portfolio Allocation</h1><p style={{ color: "#94a3b8", marginBottom: 32, fontSize: 14 }}>Target weights — rebalanced quarterly.</p>
-        <div style={{ display: "flex", gap: 40, alignItems: "flex-start", flexWrap: "wrap" }}><Donut data={PORTFOLIO} size={220} /><div style={{ flex: 1, minWidth: 300 }}><table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr>{["Ticker", "Name", "Type", "Weight"].map(h => <th key={h} style={{ textAlign: "left", padding: "10px 12px", fontSize: 9, textTransform: "uppercase", letterSpacing: 2, color: "#64748b", fontFamily: "JetBrains Mono, monospace", borderBottom: "1px solid #1e293b" }}>{h}</th>)}</tr></thead><tbody>{PORTFOLIO.map(p => <tr key={p.ticker} style={{ borderBottom: "1px solid #1e293b10" }} onMouseEnter={e => e.currentTarget.style.background = "#1e293b10"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}><td style={{ padding: "12px", fontSize: 13, color: "#34d399", fontWeight: 700, fontFamily: "JetBrains Mono, monospace" }}>{p.ticker}</td><td style={{ padding: "12px", fontSize: 13, color: "#94a3b8" }}>{p.name}</td><td style={{ padding: "12px" }}><span style={{ fontSize: 10, padding: "3px 10px", borderRadius: 20, background: p.type === "ETF" ? "#60a5fa10" : p.type === "Crypto" ? "#fbbf2410" : "#34d39910", color: p.type === "ETF" ? "#60a5fa" : p.type === "Crypto" ? "#fbbf24" : "#34d399" }}>{p.type}</span></td><td style={{ padding: "12px", fontFamily: "JetBrains Mono, monospace", fontSize: 13, color: "#94a3b8" }}><div style={{ display: "flex", alignItems: "center", gap: 8 }}><div style={{ width: 80, height: 4, background: "#0b1120", borderRadius: 2, overflow: "hidden" }}><div style={{ width: `${p.weight * 3.3}%`, height: "100%", background: "linear-gradient(90deg,#34d399,#60a5fa)", borderRadius: 2 }} /></div>{p.weight}%</div></td></tr>)}</tbody></table></div></div>
+        <div className="portfolio-layout" style={{ display: "flex", gap: 40, alignItems: "flex-start", flexWrap: "wrap" }}><Donut data={PORTFOLIO} size={220} /><div style={{ flex: 1, minWidth: 300 }}><table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr>{["Ticker", "Name", "Type", "Weight"].map(h => <th key={h} style={{ textAlign: "left", padding: "10px 12px", fontSize: 9, textTransform: "uppercase", letterSpacing: 2, color: "#64748b", fontFamily: "JetBrains Mono, monospace", borderBottom: "1px solid #1e293b" }}>{h}</th>)}</tr></thead><tbody>{PORTFOLIO.map(p => <tr key={p.ticker} style={{ borderBottom: "1px solid #1e293b10" }} onMouseEnter={e => e.currentTarget.style.background = "#1e293b10"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}><td style={{ padding: "12px", fontSize: 13, color: "#34d399", fontWeight: 700, fontFamily: "JetBrains Mono, monospace" }}>{p.ticker}</td><td style={{ padding: "12px", fontSize: 13, color: "#94a3b8" }}>{p.name}</td><td style={{ padding: "12px" }}><span style={{ fontSize: 10, padding: "3px 10px", borderRadius: 20, background: p.type === "ETF" ? "#60a5fa10" : p.type === "Crypto" ? "#fbbf2410" : "#34d39910", color: p.type === "ETF" ? "#60a5fa" : p.type === "Crypto" ? "#fbbf24" : "#34d399" }}>{p.type}</span></td><td style={{ padding: "12px", fontFamily: "JetBrains Mono, monospace", fontSize: 13, color: "#94a3b8" }}><div style={{ display: "flex", alignItems: "center", gap: 8 }}><div style={{ width: 80, height: 4, background: "#0b1120", borderRadius: 2, overflow: "hidden" }}><div style={{ width: `${p.weight * 3.3}%`, height: "100%", background: "linear-gradient(90deg,#34d399,#60a5fa)", borderRadius: 2 }} /></div>{p.weight}%</div></td></tr>)}</tbody></table></div></div>
       </div>}
 
       {tab === "research" && <ResearchTab />}
@@ -535,7 +579,7 @@ export default function App() {
             </div>
           </div>
         </div>
-        <div style={{ ...S.card, margin: "14px 0", display: "flex", justifyContent: "space-around", padding: "20px 32px" }}>
+        <div className="about-stats" style={{ ...S.card, margin: "14px 0", display: "flex", justifyContent: "space-around", padding: "20px 32px", flexWrap: "wrap", gap: 16 }}>
           {[["Master's GPA", "4.0", "Walton College"], ["Undergrad GPA", "3.62", "Dean's List ×4"], ["Projects", "5", "Academic & Independent"], ["Graduation", "May 2026", "M.S. Finance"]].map(([label, val, sub], i) => (
             <div key={label} style={{ textAlign: "center", position: "relative" }}>
               <div style={{ fontSize: 24, fontWeight: 700, fontFamily: "JetBrains Mono, monospace", color: "#e2e8f0", marginBottom: 4 }}>{val}</div>
@@ -561,7 +605,7 @@ export default function App() {
           <div style={{ marginBottom: 14 }}><div style={{ fontSize: 8, color: "#64748b", textTransform: "uppercase", letterSpacing: 2, marginBottom: 8, fontFamily: "JetBrains Mono, monospace" }}>Core Finance</div><div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{["Financial Modeling", "Valuation (DCF, LBO, Comps)", "Investment Analysis", "Transaction Analysis", "Portfolio Management", "Econometrics"].map(s => <span key={s} style={{ fontSize: 11, padding: "5px 12px", borderRadius: 6, background: "#34d39908", color: "#34d399", border: "1px solid #34d39912" }}>{s}</span>)}</div></div>
           <div><div style={{ fontSize: 8, color: "#64748b", textTransform: "uppercase", letterSpacing: 2, marginBottom: 8, fontFamily: "JetBrains Mono, monospace" }}>Tools</div><div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{["Excel", "Python", "Stata", "RStudio", "SQL", "PowerPoint"].map(s => <span key={s} style={{ fontSize: 11, padding: "5px 12px", borderRadius: 6, background: "#080c16", color: "#94a3b8", border: "1px solid #1e293b" }}>{s}</span>)}</div></div>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
+        <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
           <div style={S.card}>
             <h2 style={S.cardTitle}><span style={{ color: "#fbbf24" }}>◆</span> Reading List</h2>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{READING.map((b, i) => <div key={i} style={{ padding: "10px 12px", borderRadius: 8, background: "#080c16", border: "1px solid #1e293b", display: "flex", justifyContent: "space-between", alignItems: "center" }}><div><div style={{ color: "#e2e8f0", fontSize: 12, fontWeight: 500 }}>{b.title}</div><div style={{ color: "#64748b", fontSize: 10 }}>{b.author}</div></div><span style={{ fontSize: 8, padding: "2px 8px", borderRadius: 10, fontFamily: "JetBrains Mono, monospace", background: b.s === "Reading" ? "#60a5fa08" : b.s === "Done" ? "#34d39908" : "#94a3b808", color: b.s === "Reading" ? "#60a5fa" : b.s === "Done" ? "#34d399" : "#94a3b8" }}>{b.s === "Done" ? "Completed" : b.s === "Ref" ? "Reference" : b.s}</span></div>)}</div>
@@ -601,6 +645,26 @@ export default function App() {
       *{box-sizing:border-box;margin:0;padding:0}
       ::selection{background:#34d39920;color:#e2e8f0}
       ::-webkit-scrollbar{width:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#1e293b;border-radius:3px}
+      @media(max-width:768px){
+        header{flex-wrap:wrap!important;padding:10px 16px!important;gap:8px!important}
+        header nav{order:3;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+        header nav button{white-space:nowrap;font-size:11px!important;padding:6px 10px!important}
+        main{padding:16px!important}
+        .dash-grid-2{grid-template-columns:1fr!important}
+        .about-stats{flex-direction:column!important;gap:16px!important}
+        .about-stats>div>div:last-child{display:none!important}
+        .portfolio-layout{flex-direction:column!important;align-items:center!important}
+        .hero-name{font-size:42px!important}
+        .hero-sub{font-size:13px!important}
+        .status-bar{display:none!important}
+        .cmd-modal{width:92vw!important}
+        .settings-modal{width:92vw!important}
+      }
+      @media(max-width:480px){
+        header nav button span:first-child{display:none!important}
+        main{padding:10px!important}
+        .hero-name{font-size:32px!important}
+      }
     `}</style>
   </div>;
 }
