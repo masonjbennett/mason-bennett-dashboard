@@ -1,0 +1,120 @@
+# ============================================================
+# MASON BENNETT DASHBOARD — CLAUDE CODE SETUP GUIDE
+# ============================================================
+# 
+# Copy and paste the commands below into Claude Code to get
+# your finance dashboard up and running. You can also just
+# tell Claude Code what you want and paste the App.jsx file.
+#
+# ============================================================
+
+# ---- STEP 1: CREATE PROJECT FOLDER ----
+# Run these commands in your terminal BEFORE opening Claude Code,
+# or tell Claude Code to run them for you:
+
+mkdir mason-bennett-dashboard
+cd mason-bennett-dashboard
+npm create vite@latest . -- --template react
+npm install
+
+# ---- STEP 2: REPLACE THE APP FILE ----
+# Delete the default src/App.jsx and src/App.css that Vite created,
+# then replace src/App.jsx with the dashboard code.
+#
+# You can tell Claude Code:
+# "Delete src/App.jsx, src/App.css, and src/index.css. 
+#  Then create a new src/App.jsx with the code from the 
+#  dashboard file I'm about to paste."
+#
+# Then paste the entire contents of App.jsx (included below this guide)
+
+# ---- STEP 3: UPDATE index.html ----
+# Tell Claude Code:
+# "Update index.html to have the title 'Mason Bennett | Finance Dashboard'
+#  and set the body background to #060a14 with margin 0"
+
+# ---- STEP 4: UPDATE src/main.jsx ----
+# Tell Claude Code:
+# "Update src/main.jsx to just import React, ReactDOM, and App,
+#  then render App in StrictMode. Remove any CSS imports."
+
+# ---- STEP 5: RUN IT ----
+npm run dev
+# Open http://localhost:5173
+
+# ---- STEP 6: DEPLOY TO VERCEL ----
+# Option A: GitHub + Vercel (recommended)
+git init
+git add .
+git commit -m "Initial commit - finance dashboard"
+git branch -M main
+# Create a repo on github.com, then:
+git remote add origin https://github.com/YOUR_USERNAME/mason-bennett-dashboard.git
+git push -u origin main
+# Then go to vercel.com, import the repo, click Deploy
+
+# Option B: Direct deploy
+npm install -g vercel
+vercel
+# Follow prompts — live in 60 seconds
+
+
+# ============================================================
+# WHAT TO TELL CLAUDE CODE
+# ============================================================
+#
+# You can literally paste this as your first message in Claude Code:
+#
+# ---START OF PROMPT---
+#
+# I want to set up a React + Vite project for my personal finance
+# dashboard website. Here's what I need:
+#
+# 1. Create a new Vite React project called mason-bennett-dashboard
+# 2. Replace src/App.jsx with the code I'll paste below
+# 3. Clean up main.jsx to remove default CSS imports
+# 4. Update index.html with title "Mason Bennett | Finance Dashboard" 
+#    and body background #060a14
+# 5. Remove default App.css and index.css files
+# 6. Run it locally so I can preview it
+#
+# Here's my App.jsx code:
+# [PASTE THE ENTIRE App.jsx FILE HERE]
+#
+# ---END OF PROMPT---
+#
+# ============================================================
+# MAKING FUTURE CHANGES WITH CLAUDE CODE
+# ============================================================
+#
+# Once the project is set up, you can tell Claude Code things like:
+#
+# "Add SOFI to my watchlist tickers"
+# "Change my portfolio weights — make VOO 25% and add 5% to NVDA"
+# "Add a new project card for my DCF model"
+# "Update my bio to mention my new internship"
+# "Add a new news category for Energy sector"
+# "Change the refresh interval to 15 minutes during market hours"
+# "Add Mandarin to my skills list"
+# "Deploy this to Vercel"
+#
+# Claude Code can edit the files directly and run the deploy
+# commands for you.
+#
+# ============================================================
+# PROJECT STRUCTURE
+# ============================================================
+#
+# mason-bennett-dashboard/
+# ├── index.html            # HTML entry — title, favicon, bg color
+# ├── package.json           # Dependencies (react, react-dom, vite)
+# ├── vite.config.js         # Vite config (just react plugin)
+# ├── .gitignore             # Excludes node_modules, dist
+# └── src/
+#     ├── main.jsx           # React mount point
+#     └── App.jsx            # YOUR ENTIRE DASHBOARD (all ~530 lines)
+#
+# Everything is in ONE file (App.jsx) for simplicity.
+# All config data is at the top of App.jsx in clearly labeled sections.
+#
+# ============================================================
