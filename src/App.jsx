@@ -313,7 +313,7 @@ function Briefings({apiKey}){const[morning,setMorning]=useState(null),[close,set
 const gen=async(type,force=false)=>{if(!apiKey)return;const sL=type==="morning"?setLM:setLC,sD=type==="morning"?setMorning:setClose,sT=type==="morning"?setTM:setTC,sV=type==="morning"?setVM:setVC,sSW=type==="morning"?setSwM:setSwC,sVL=type==="morning"?setVLM:setVLC,sSWL=type==="morning"?setSwLM:setSwLC;sL(true);sV(null);sSW(null);const r=await fetchBriefing(type,apiKey,force);if(r){sD(r);sT(new Date())}sL(false);if(r?.text){sVL(true);const v=await verifyBriefing(r.text,apiKey);if(v)sV(v);sVL(false);sSWL(true);const sw=await fetchSoWhat(r.text,type,apiKey);if(sw)sSW(sw);sSWL(false)}};
 const data=tab==="morning"?morning:close,loading=tab==="morning"?lM:lC,verifying=tab==="morning"?vLM:vLC,verify=tab==="morning"?vM:vC,soWhat=tab==="morning"?swM:swC,swLoad=tab==="morning"?swLM:swLC,time=tab==="morning"?tM:tC;
 const SC={verified:"#34d399",minor_discrepancy:"#fbbf24",unverified:"#f87171"},SI={verified:"✓",minor_discrepancy:"~",unverified:"✗"},SL={verified:"Verified",minor_discrepancy:"Discrepancy",unverified:"Unverified"};
-return <div style={{...S.card,background:"linear-gradient(135deg,#080c16,#0d1425,#0b1120)",border:"1px solid rgba(26,37,64,0.8)",boxShadow:"0 8px 32px rgba(0,0,0,0.35), 0 1px 0 rgba(255,255,255,0.04) inset",position:"relative",overflow:"hidden"}}><div style={{position:"absolute",top:-40,right:-40,width:200,height:200,background:`radial-gradient(circle,${tab==="morning"?"rgba(251,191,36,0.03)":"rgba(99,102,241,0.03)"} 0%,transparent 70%)`,pointerEvents:"none"}}/>
+return <div style={{...S.card,background:"linear-gradient(135deg,#080c16,#0d1828,#0b1120)",border:"1px solid rgba(52,211,153,0.1)",boxShadow:"0 12px 48px rgba(0,0,0,0.5), 0 0 40px rgba(52,211,153,0.03), inset 0 1px 0 rgba(255,255,255,0.06)",position:"relative",overflow:"hidden"}}><div style={{position:"absolute",top:-40,right:-40,width:200,height:200,background:`radial-gradient(circle,${tab==="morning"?"rgba(251,191,36,0.03)":"rgba(99,102,241,0.03)"} 0%,transparent 70%)`,pointerEvents:"none"}}/>
 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18,position:"relative",flexWrap:"wrap",gap:12}}><div><div style={{display:"flex",gap:6,marginBottom:8}}>{["morning","close"].map(t=><button key={t} onClick={()=>setTab(t)} style={{fontSize:12,padding:"6px 16px",borderRadius:8,cursor:"pointer",fontWeight:600,transition:"all 0.25s",border:"1px solid",display:"flex",alignItems:"center",gap:8,background:tab===t?(t==="morning"?"#fbbf2410":"#818cf810"):"transparent",borderColor:tab===t?(t==="morning"?"#fbbf2430":"#818cf830"):"#1e293b",color:tab===t?(t==="morning"?"#fbbf24":"#818cf8"):"#64748b"}}><span style={{fontSize:15}}>{t==="morning"?"☀":"🌙"}</span>{t==="morning"?"Morning":"Close"} Brief{sugg===t&&<span style={{width:5,height:5,borderRadius:3,background:t==="morning"?"#fbbf24":"#818cf8",animation:"pulse 2s infinite"}}/>}</button>)}</div><p style={{color:"#64748b",fontSize:10,fontFamily:"'JetBrains Mono',monospace"}}>AI briefing → fact-check → implications {time?`· ${time.toLocaleTimeString()}`:""}</p></div><button onClick={()=>gen(tab,!!data)} disabled={loading||verifying} style={{...S.btn,opacity:(loading||verifying)?0.5:1}}>{loading?"⟳ Generating...":verifying||swLoad?"⟳ Analyzing...":data?"↻ Regenerate":"Generate Brief"}</button></div>
 {!data&&!loading&&<div style={{textAlign:"center",padding:"36px 0"}}><div style={{fontSize:36,marginBottom:12,opacity:0.15}}>{tab==="morning"?"☀":"🌙"}</div><p style={{color:"#94a3b8",fontSize:13}}>{tab==="morning"?"Pre-market briefing with overnight futures, macro, and what to watch":"End-of-day summary with closes, movers, and tomorrow's catalysts"}</p></div>}
 {loading&&<div style={{padding:"32px 0",textAlign:"center"}}><div style={{display:"inline-flex",gap:8}}>{[0,1,2,3].map(i=><div key={i} style={{width:7,height:7,borderRadius:4,background:tab==="morning"?"#fbbf24":"#818cf8",animation:"pulse 1.2s infinite",animationDelay:`${i*0.2}s`}}/>)}</div><p style={{color:"#64748b",fontSize:12,marginTop:14,fontFamily:"'JetBrains Mono',monospace"}}>Step 1/3 — Searching & drafting...</p></div>}
@@ -485,22 +485,22 @@ export default function App() {
     {showHero && <Hero />}
     <Cmd open={cmd} onClose={() => setCmd(false)} onNav={t => setTab(t)} />
     <SettingsPanel apiKey={apiKey} setApiKey={setApiKey} finnhubKey={finnhubKey} setFinnhubKey={setFinnhubKey} open={showSettings} onClose={() => setShowSettings(false)} />
-    <div style={{ position: "fixed", top: -300, right: -200, width: 800, height: 800, background: "radial-gradient(circle,rgba(52,211,153,0.025) 0%,transparent 60%)", pointerEvents: "none" }} />
-    <div style={{ position: "fixed", bottom: -200, left: -200, width: 600, height: 600, background: "radial-gradient(circle,rgba(96,165,250,0.02) 0%,transparent 60%)", pointerEvents: "none" }} />
-    <div style={{ position: "fixed", top: "40%", right: -150, width: 500, height: 500, background: "radial-gradient(circle,rgba(167,139,250,0.015) 0%,transparent 60%)", pointerEvents: "none" }} />
-    <div style={{ position: "fixed", inset: 0, opacity: 0.018, backgroundImage: "url('data:image/svg+xml,%3Csvg viewBox=%220 0 256 256%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22n%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.9%22 numOctaves=%224%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22/%3E%3C/svg%3E')", pointerEvents: "none" }} />
+    <div style={{ position: "fixed", top: -200, right: -100, width: 900, height: 900, background: "radial-gradient(circle,rgba(52,211,153,0.045) 0%,transparent 55%)", pointerEvents: "none", animation: "breathe 8s ease-in-out infinite" }} />
+    <div style={{ position: "fixed", bottom: -100, left: -100, width: 700, height: 700, background: "radial-gradient(circle,rgba(96,165,250,0.035) 0%,transparent 55%)", pointerEvents: "none", animation: "breathe 10s ease-in-out infinite", animationDelay: "2s" }} />
+    <div style={{ position: "fixed", top: "30%", right: -100, width: 600, height: 600, background: "radial-gradient(circle,rgba(167,139,250,0.025) 0%,transparent 55%)", pointerEvents: "none", animation: "breathe 12s ease-in-out infinite", animationDelay: "4s" }} />
+    <div style={{ position: "fixed", inset: 0, opacity: 0.022, backgroundImage: "url('data:image/svg+xml,%3Csvg viewBox=%220 0 256 256%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22n%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.9%22 numOctaves=%224%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22/%3E%3C/svg%3E')", pointerEvents: "none" }} />
 
-    <div className="status-bar" style={{ background: "#050810", borderBottom: "1px solid #0b1120", padding: "5px 32px", display: "flex", justifyContent: "space-between", fontSize: 9, fontFamily: "JetBrains Mono, monospace", color: "#64748b", position: "relative", zIndex: 2 }}>
+    <div className="status-bar" style={{ background: "linear-gradient(90deg, #040609, #060a14, #040609)", borderBottom: "1px solid #162035", padding: "6px 32px", display: "flex", justifyContent: "space-between", fontSize: 9, fontFamily: "JetBrains Mono, monospace", color: "#64748b", position: "relative", zIndex: 2 }}>
       <span>WALTON COLLEGE OF BUSINESS · UNIVERSITY OF ARKANSAS</span>
       <span><span style={{ color: "#fbbf24" }}>●</span> Working on: LBO Analysis — Jagex & EA</span>
     </div>
 
     <header style={S.header}>
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <div style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 17, fontWeight: 700, color: "#e2e8f0" }}><span style={{ color: "#34d399" }}>$</span> Mason Bennett</div>
+        <div style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 17, fontWeight: 700, color: "#f1f5f9", textShadow: "0 0 20px rgba(52,211,153,0.1)" }}><span style={{ color: "#34d399", textShadow: "0 0 12px rgba(52,211,153,0.4)" }}>$</span> Mason Bennett</div>
         <div style={{ fontSize: 9, padding: "3px 10px", borderRadius: 20, background: "#34d39908", color: "#34d399", border: "1px solid #34d39915", fontFamily: "JetBrains Mono, monospace" }}>MSc Finance '26</div>
       </div>
-      <nav style={{ display: "flex", gap: 1, background: "#080c16", borderRadius: 10, padding: 3, border: "1px solid #1e293b" }}>
+      <nav style={{ display: "flex", gap: 2, background: "rgba(8,12,22,0.8)", borderRadius: 12, padding: 4, border: "1px solid #182240", boxShadow: "inset 0 2px 6px rgba(0,0,0,0.3)" }}>
         {tabs.map((t, i) => <button key={t.id} onClick={() => setTab(t.id)} style={{ ...S.tab, ...(tab === t.id ? S.tabA : {}) }}><span style={{ fontSize: 8, opacity: 0.3, marginRight: 4 }}>{i + 1}</span>{t.l}</button>)}
       </nav>
       <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -560,7 +560,7 @@ export default function App() {
 
       {tab === "projects" && <div style={{ animation: "fadeUp 0.4s ease both" }}>
         <h1 style={S.pageTitle}>Projects</h1><p style={{ color: "#94a3b8", marginBottom: 32, fontSize: 14 }}>Financial modeling, econometrics, and quantitative analysis.</p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(360px,1fr))", gap: 14 }}>{PROJECTS.map((p, i) => <div key={i} style={{ ...S.pCard, ...(hovP === i ? { borderColor: "#34d39940", transform: "translateY(-4px)", boxShadow: "0 14px 40px rgba(52,211,153,0.08), 0 0 0 1px rgba(52,211,153,0.1)" } : {}), animation: "fadeUp 0.5s ease both", animationDelay: `${i * 0.07}s` }} onMouseEnter={() => setHovP(i)} onMouseLeave={() => setHovP(null)}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(360px,1fr))", gap: 14 }}>{PROJECTS.map((p, i) => <div key={i} style={{ ...S.pCard, ...(hovP === i ? { borderColor: "#34d39950", transform: "translateY(-6px) scale(1.01)", boxShadow: "0 20px 50px rgba(52,211,153,0.12), 0 0 0 1px rgba(52,211,153,0.15), 0 0 40px rgba(52,211,153,0.05)" } : {}), animation: "fadeUp 0.5s ease both", animationDelay: `${i * 0.07}s` }} onMouseEnter={() => setHovP(i)} onMouseLeave={() => setHovP(null)}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}><span style={{ fontSize: 9, color: "#64748b", fontFamily: "JetBrains Mono, monospace", letterSpacing: 1 }}>PROJECT_{String(i + 1).padStart(2, "0")}</span><span style={{ fontSize: 9, padding: "3px 10px", borderRadius: 20, background: p.status === "In Progress" ? "#fbbf2408" : "#34d39908", color: p.status === "In Progress" ? "#fbbf24" : "#34d399", fontFamily: "JetBrains Mono, monospace" }}>{p.status}</span></div>
           <h3 style={{ color: "#e2e8f0", fontSize: 17, fontWeight: 600, marginBottom: 10, lineHeight: 1.3 }}>{p.title}</h3>
           <p style={{ color: "#94a3b8", fontSize: 13, lineHeight: 1.65, marginBottom: 16, flex: 1 }}>{p.desc}</p>
@@ -577,18 +577,18 @@ export default function App() {
         <div style={{ ...S.card, background: "linear-gradient(135deg,#080c16,#0d1425,#0b1120)", border: "1px solid #1a2540", position: "relative", overflow: "hidden" }}>
           <div style={{ position: "absolute", top: -60, right: -60, width: 250, height: 250, background: "radial-gradient(circle,rgba(52,211,153,0.04) 0%,transparent 70%)", pointerEvents: "none" }} />
           <div style={{ display: "flex", gap: 28, alignItems: "flex-start", flexWrap: "wrap", position: "relative" }}>
-            <img src="/headshot.png" alt="Mason Bennett" style={{ width: 180, height: 180, borderRadius: 20, objectFit: "cover", objectPosition: "center 15%", imageRendering: "crisp-edges", filter: "contrast(1.04) brightness(1.02)", WebkitBackfaceVisibility: "hidden", transform: "translateZ(0)", flexShrink: 0, boxShadow: "0 12px 40px rgba(52,211,153,0.15), 0 0 0 1px rgba(52,211,153,0.1)", border: "2px solid #34d39940" }} />
+            <img src="/headshot.png" alt="Mason Bennett" style={{ width: 180, height: 180, borderRadius: 20, objectFit: "cover", objectPosition: "center 15%", imageRendering: "crisp-edges", filter: "contrast(1.04) brightness(1.02)", WebkitBackfaceVisibility: "hidden", transform: "translateZ(0)", flexShrink: 0, boxShadow: "0 16px 50px rgba(52,211,153,0.2), 0 0 0 2px rgba(52,211,153,0.15), 0 0 60px rgba(52,211,153,0.08)", border: "2px solid #34d39960" }} />
             <div style={{ flex: 1 }}>
               <h2 style={{ color: "#e2e8f0", fontSize: 30, fontFamily: "Instrument Serif, serif", marginBottom: 4, textShadow: "0 2px 16px rgba(226,232,240,0.06)" }}>Mason Bennett</h2>
               <p style={{ color: "#34d399", fontSize: 12, fontFamily: "JetBrains Mono, monospace", marginBottom: 16 }}>M.S. Finance · University of Arkansas · Class of 2026</p>
               <p style={{ color: "#cbd5e1", fontSize: 14, lineHeight: 1.85, marginBottom: 18 }}>Finance graduate student at the Sam M. Walton College of Business focused on valuation, transaction analysis, portfolio management, and financial modeling. Pursuing investment banking, private equity, and transaction advisory with experience in DCF, LBO, and three-statement modeling.</p>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>{["Investment Banking", "Private Equity", "Transaction Advisory"].map(t => <span key={t} style={{ fontSize: 10, padding: "4px 12px", borderRadius: 20, background: "#34d39908", color: "#34d399", border: "1px solid #34d39915", fontFamily: "JetBrains Mono, monospace" }}>{t}</span>)}</div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{["Investment Banking", "Private Equity", "Transaction Advisory"].map(t => <span key={t} style={{ fontSize: 10, padding: "5px 14px", borderRadius: 20, background: "linear-gradient(135deg, rgba(52,211,153,0.1), rgba(96,165,250,0.06))", color: "#34d399", border: "1px solid rgba(52,211,153,0.2)", fontFamily: "JetBrains Mono, monospace", boxShadow: "0 2px 8px rgba(52,211,153,0.06)" }}>{t}</span>)}</div>
             </div>
           </div>
         </div>
         <div className="about-stats" style={{ ...S.card, margin: "14px 0", display: "flex", justifyContent: "space-around", padding: "20px 32px", flexWrap: "wrap", gap: 16 }}>
           {[["Master's GPA", "4.0", "Walton College"], ["Undergrad GPA", "3.62", "Dean's List ×4"], ["Projects", "6", "Academic & Independent"], ["Graduation", "May 2026", "M.S. Finance"]].map(([label, val, sub], i) => (
-            <div key={label} style={{ textAlign: "center", padding: "18px 24px", borderRadius: 12, background: "#080c16", border: "1px solid #1e293b", flex: "1 1 0", minWidth: 120, boxShadow: "0 2px 8px rgba(0,0,0,0.2) inset" }}>
+            <div key={label} style={{ textAlign: "center", padding: "20px 24px", borderRadius: 14, background: "linear-gradient(145deg, #080c16, #060a12)", border: "1px solid #182240", flex: "1 1 0", minWidth: 120, boxShadow: "inset 0 2px 10px rgba(0,0,0,0.3), 0 1px 0 rgba(255,255,255,0.02)" }}>
               <div style={{ fontSize: 24, fontWeight: 700, fontFamily: "JetBrains Mono, monospace", color: "#e2e8f0", marginBottom: 4 }}>{val}</div>
               <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 500, marginBottom: 2 }}>{label}</div>
               <div style={{ fontSize: 9, color: "#64748b", fontFamily: "JetBrains Mono, monospace" }}>{sub}</div>
@@ -637,7 +637,7 @@ export default function App() {
       </div>}
     </main>
 
-    <footer style={{ padding: "22px 32px", borderTop: "1px solid #1e293b30", color: "#64748b", fontSize: 9, fontFamily: "JetBrains Mono, monospace", display: "flex", justifyContent: "center", gap: 10, boxShadow: "0 -1px 20px rgba(52,211,153,0.02)" }}>
+    <footer style={{ padding: "24px 32px", borderTop: "1px solid #162035", color: "#64748b", fontSize: 9, fontFamily: "JetBrains Mono, monospace", display: "flex", justifyContent: "center", gap: 10, background: "linear-gradient(180deg, transparent, rgba(4,6,9,0.5))", boxShadow: "0 -4px 30px rgba(0,0,0,0.3)" }}>
       <span>Mason Bennett</span><span>·</span><span>Walton College</span><span>·</span><span>© {new Date().getFullYear()}</span><span>·</span><span>⌘K or 1-6</span>
     </footer>
 
@@ -651,10 +651,12 @@ export default function App() {
       @keyframes typewriter{from{width:0}to{width:100%}}
       @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
       *{box-sizing:border-box;margin:0;padding:0}
-      ::selection{background:#34d39920;color:#e2e8f0}
+      html{scroll-behavior:smooth}
+      ::selection{background:rgba(52,211,153,0.2);color:#e2e8f0}
       ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#334155;border-radius:4px}::-webkit-scrollbar-thumb:hover{background:#475569}
-      input:focus,textarea:focus,select:focus{border-color:#34d39950!important;box-shadow:0 0 0 3px rgba(52,211,153,0.1),0 0 12px rgba(52,211,153,0.05)!important}
-      button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #34d39960;outline-offset:2px;border-radius:8px}
+      input:focus,textarea:focus,select:focus{border-color:#34d39960!important;box-shadow:0 0 0 4px rgba(52,211,153,0.12),0 0 20px rgba(52,211,153,0.08)!important}
+      button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #34d39960;outline-offset:2px;border-radius:10px}
+      button:hover{transform:translateY(-1px)}button:active{transform:translateY(0px)}
       @media(max-width:768px){
         header{flex-wrap:wrap!important;padding:10px 16px!important;gap:8px!important}
         header nav{order:3;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -680,15 +682,15 @@ export default function App() {
 }
 
 const S = {
-  root: { background: "#060a14", minHeight: "100vh", color: "#e2e8f0", fontFamily: "'Space Grotesk',sans-serif" },
-  header: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 32px", borderBottom: "1px solid #0b1120", background: "rgba(6,10,20,0.92)", backdropFilter: "blur(24px)", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 1px 24px rgba(0,0,0,0.3), 0 1px 0 #0b1120" },
-  tab: { background: "none", border: "none", color: "#64748b", fontSize: 12, padding: "7px 14px", cursor: "pointer", borderRadius: 8, fontWeight: 500, transition: "all 0.25s", display: "flex", alignItems: "center", gap: 4 },
-  tabA: { color: "#e2e8f0", background: "linear-gradient(135deg, #1e293b60, #1e293b30)", boxShadow: "0 0 12px rgba(52,211,153,0.06), 0 1px 2px rgba(0,0,0,0.3)", borderBottom: "2px solid #34d399" },
-  card: { background: "#0b1120", border: "1px solid rgba(30,41,59,0.6)", borderRadius: 14, padding: 22, boxShadow: "0 4px 24px rgba(0,0,0,0.25), 0 1px 0 rgba(255,255,255,0.02) inset", transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)" },
-  cardTitle: { fontSize: 11, fontWeight: 600, color: "#94a3b8", marginBottom: 14, fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 2, paddingBottom: 10, borderBottom: "1px solid #1e293b25" },
-  pageTitle: { fontSize: 36, fontWeight: 700, fontFamily: "'Instrument Serif',serif", color: "#e2e8f0", marginBottom: 8, letterSpacing: "-0.02em", lineHeight: 1.1, textShadow: "0 2px 20px rgba(226,232,240,0.06)" },
-  chip: { display: "inline-block", padding: "6px 12px", borderRadius: 8, background: "#080c16", color: "#94a3b8", fontSize: 11, fontWeight: 500, textDecoration: "none", border: "1px solid #1e293b", transition: "all 0.25s" },
-  pCard: { display: "flex", flexDirection: "column", background: "#0b1120", border: "1px solid rgba(30,41,59,0.6)", borderRadius: 14, padding: 22, transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)", cursor: "pointer", boxShadow: "0 4px 24px rgba(0,0,0,0.25), 0 1px 0 rgba(255,255,255,0.02) inset" },
-  btn: { background: "#0b1120", color: "#34d399", border: "1px solid #34d39920", borderRadius: 8, padding: "6px 14px", fontSize: 11, cursor: "pointer", fontFamily: "'JetBrains Mono',monospace", fontWeight: 500, transition: "all 0.25s" },
-  input: { background: "#0b1120", border: "1px solid #1e293b", borderRadius: 8, padding: "8px 12px", color: "#e2e8f0", fontSize: 12, fontFamily: "'Space Grotesk',sans-serif", outline: "none", width: "100%", transition: "border-color 0.2s, box-shadow 0.2s" },
+  root: { background: "#040609", minHeight: "100vh", color: "#e2e8f0", fontFamily: "'Space Grotesk',sans-serif" },
+  header: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 32px", borderBottom: "1px solid #162035", background: "rgba(4,6,9,0.85)", backdropFilter: "blur(30px) saturate(1.4)", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 4px 30px rgba(0,0,0,0.5), 0 1px 0 rgba(52,211,153,0.05)" },
+  tab: { background: "none", border: "none", color: "#64748b", fontSize: 12, padding: "8px 16px", cursor: "pointer", borderRadius: 10, fontWeight: 500, transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)", display: "flex", alignItems: "center", gap: 4 },
+  tabA: { color: "#e2e8f0", background: "linear-gradient(135deg, rgba(52,211,153,0.12), rgba(96,165,250,0.08))", boxShadow: "0 0 20px rgba(52,211,153,0.1), inset 0 1px 0 rgba(255,255,255,0.05)", borderBottom: "2px solid #34d399" },
+  card: { background: "linear-gradient(145deg, #0c1222, #0a0f1c)", border: "1px solid #182240", borderRadius: 16, padding: 24, boxShadow: "0 8px 32px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.03) inset", transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)" },
+  cardTitle: { fontSize: 11, fontWeight: 600, color: "#94a3b8", marginBottom: 16, fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 2, paddingBottom: 12, borderBottom: "1px solid rgba(52,211,153,0.08)" },
+  pageTitle: { fontSize: 40, fontWeight: 700, fontFamily: "'Instrument Serif',serif", color: "#f1f5f9", marginBottom: 10, letterSpacing: "-0.03em", lineHeight: 1.1, textShadow: "0 4px 30px rgba(52,211,153,0.08)" },
+  chip: { display: "inline-block", padding: "7px 14px", borderRadius: 10, background: "rgba(8,12,22,0.8)", color: "#94a3b8", fontSize: 11, fontWeight: 500, textDecoration: "none", border: "1px solid #1e293b", transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)", backdropFilter: "blur(8px)" },
+  pCard: { display: "flex", flexDirection: "column", background: "linear-gradient(145deg, #0c1222, #0a0f1c)", border: "1px solid #182240", borderRadius: 16, padding: 24, transition: "all 0.4s cubic-bezier(0.4,0,0.2,1)", cursor: "pointer", boxShadow: "0 8px 32px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.03) inset" },
+  btn: { background: "linear-gradient(135deg, #0c1222, #101828)", color: "#34d399", border: "1px solid #34d39925", borderRadius: 10, padding: "7px 16px", fontSize: 11, cursor: "pointer", fontFamily: "'JetBrains Mono',monospace", fontWeight: 500, transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)", boxShadow: "0 2px 8px rgba(0,0,0,0.2)" },
+  input: { background: "#080c16", border: "1px solid #1e293b", borderRadius: 10, padding: "10px 14px", color: "#e2e8f0", fontSize: 12, fontFamily: "'Space Grotesk',sans-serif", outline: "none", width: "100%", transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)" },
 };
