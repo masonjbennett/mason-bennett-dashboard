@@ -69,12 +69,12 @@ const EXPERIENCE = [
   { role: "Event Manager", org: "Venue on Spring Creek · TX", date: "2016–2020", type: "work", detail: "100+ guest events. Coordinated vendors, supervised staff. 95%+ satisfaction." },
 ];
 const READING = [
-  { title: "Damodaran on Valuation", author: "Aswath Damodaran", s: "Reading" },
-  { title: "The Intelligent Investor", author: "Benjamin Graham", s: "Done" },
-  { title: "Investment Valuation", author: "Aswath Damodaran", s: "Done" },
-  { title: "Barbarians at the Gate", author: "Burrough & Helyar", s: "Done" },
-  { title: "Options, Futures & Derivatives", author: "John Hull", s: "Ref" },
-  { title: "Financial Modeling & Valuation", author: "Paul Pignataro", s: "Reading" },
+  { title: "Damodaran on Valuation", author: "Aswath Damodaran", s: "Reading", note: "Every story has to reconcile to a number eventually." },
+  { title: "The Intelligent Investor", author: "Benjamin Graham", s: "Done", note: "Mr. Market is a counterparty, not a guide." },
+  { title: "Investment Valuation", author: "Aswath Damodaran", s: "Done", note: "The reference shelf — where I sanity-check assumptions." },
+  { title: "Barbarians at the Gate", author: "Burrough & Helyar", s: "Done", note: "Deal fever is a risk factor. Model it." },
+  { title: "Options, Futures & Derivatives", author: "John Hull", s: "Ref", note: "Draw the payoff diagram before touching the Greeks." },
+  { title: "Financial Modeling & Valuation", author: "Paul Pignataro", s: "Reading", note: "A model you can't audit is a model you can't trust." },
 ];
 const LINKS = [
   { label: "LinkedIn", url: "https://linkedin.com/in/bennettmason", ic: "in" },
@@ -318,11 +318,17 @@ function ScrollRule() {
 function Reveal({ children }) {
   const ref = useRef(null);
   const [inV, setInV] = useState(false);
-  useEffect(() => { const el = ref.current; if (!el || !("IntersectionObserver" in window)) { setInV(true); return; } const ob = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setInV(true); ob.disconnect(); } }, { threshold: 0.08, rootMargin: "0px 0px -30px 0px" }); ob.observe(el); return () => ob.disconnect(); }, []);
+  useEffect(() => { const el = ref.current; if (!el || !("IntersectionObserver" in window)) { setInV(true); return; } const ob = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setInV(true); ob.disconnect(); } }, { threshold: 0.08, rootMargin: "0px 0px -30px 0px" }); ob.observe(el); const failsafe = setTimeout(() => setInV(true), 2600); return () => { ob.disconnect(); clearTimeout(failsafe); }; }, []);
   return <div ref={ref} style={{ opacity: inV ? 1 : 0, transform: inV ? "none" : "translateY(18px)", transition: "all 0.7s cubic-bezier(0.4,0,0.2,1)" }}>{children}</div>;
 }
 const Kicker = ({ n, t }) => <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}><span style={{ fontSize: 9, fontFamily: "'JetBrains Mono',monospace", color: "#0d6d56", letterSpacing: 3, textTransform: "uppercase" }}>{n} · {t}</span><div style={{ width: 54, borderTop: "1px solid rgba(13,109,86,0.35)" }} /></div>;
 const Orn = () => <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, margin: "24px 0" }}><div style={{ width: 60, borderTop: "1px solid #ddcfb8" }} /><span style={{ color: "#0d6d56", fontSize: 8 }}>◆</span><div style={{ width: 60, borderTop: "1px solid #ddcfb8" }} /></div>;
+const Slug = ({ icon = "#0d6d56", children, right }) => <div style={{ position: "relative", borderTop: "1px solid #ddcfb8", paddingTop: 13, marginBottom: 14, display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10 }}>
+  <span style={{ position: "absolute", top: -2, left: 0, width: 32, height: 3, background: icon }} />
+  <span style={{ fontSize: 11, fontWeight: 600, color: "#6f675c", fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 2 }}>{children}</span>
+  {right || null}
+</div>;
+const SourceLine = ({ children }) => <div style={{ fontSize: 8.5, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 0.5, marginTop: 12, borderTop: "1px solid #efe4d2", paddingTop: 8 }}>{children}</div>;
 
 // ============ SMALL COMPONENTS ============
 function Spark({ pos, w = 88, h = 28 }) { const id = useRef(`s${Math.random().toString(36).slice(2,6)}`); const glow = useRef(`g${Math.random().toString(36).slice(2,6)}`); const pts = useRef(Array.from({length:22},(_,i)=>{const x=(i/21)*w,y=h/2+(pos?-1:1)*i*0.35+(Math.random()-0.5)*h*0.45;return`${x},${Math.max(2,Math.min(h-2,y))}`;}).join(" ")); return <svg width={w} height={h} style={{display:"block"}}><defs><linearGradient id={id.current} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={pos?"#0d6d56":"#b2342b"} stopOpacity="0.25"/><stop offset="100%" stopColor={pos?"#0d6d56":"#b2342b"} stopOpacity="0"/></linearGradient></defs><polyline points={pts.current+` ${w},${h} 0,${h}`} fill={`url(#${id.current})`}/><polyline points={pts.current} fill="none" stroke={pos?"#0d6d56":"#b2342b"} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>; }
@@ -649,7 +655,7 @@ export default function App() {
 
     <div className="masthead" style={{ background: "rgba(250,244,235,0.95)", padding: "20px 32px 16px", position: "relative", zIndex: 90 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", maxWidth: 1300, margin: "0 auto", gap: 16 }}>
-        <div className="masthead-side" style={{ flex: "1 1 0", fontSize: 9, fontFamily: "'JetBrains Mono',monospace", color: "#8a8072", letterSpacing: 1.5, textTransform: "uppercase" }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</div>
+        <div className="masthead-side" style={{ flex: "1 1 0", fontSize: 9, fontFamily: "'JetBrains Mono',monospace", color: "#8a8072", letterSpacing: 1.5, textTransform: "uppercase" }}>{(() => { const d = new Date(), day = d.getDay(), mins = d.getHours() * 60 + d.getMinutes(); const ed = (day === 0 || day === 6) ? "Weekend Edition" : mins < 570 ? "Morning Edition" : mins < 960 ? "Midday Edition" : "Evening Edition"; return `${d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })} — ${ed}`; })()}</div>
         <div style={{ textAlign: "center" }}>
           <div className="masthead-name" style={{ fontFamily: "'Instrument Serif',serif", fontSize: 36, fontWeight: 400, color: "#262421", letterSpacing: "-0.015em", lineHeight: 1 }}>Mason J. Bennett</div>
           <div className="masthead-tag" style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#0d6d56", letterSpacing: 3, textTransform: "uppercase", marginTop: 7 }}>Investment Banking · Private Equity · Wealth Management · Corporate Finance</div>
@@ -683,10 +689,12 @@ export default function App() {
           <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.08s both" }}>
             <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> Watchlist<Info text="Live market prices grouped by signal: indices (SPY, QQQ, IWM), mega-cap movers (NVDA, AAPL, MSFT, JPM, TSLA), and macro indicators (TLT for rates, GLD for risk-off, UUP for dollar). Click any ticker for TradingView. Source: Finnhub.io" />{apiKey && <Info text={"Signal cheat sheet: TLT drops + SPY flat \u2192 rates rising, deal flow slows. GLD + TLT both spike \u2192 risk-off, market scared. IWM diverges from SPY \u2192 small-cap sentiment shifting (PE pipeline signal). QQQ outpaces SPY \u2192 growth/tech rotation. JPM moves on earnings \u2192 read-through on credit conditions and IB deal activity. UUP rising \u2192 dollar strengthening, pressure on international deals and EM. NVDA guidance \u2192 AI capex cycle indicator, affects entire tech sector. TLT rising + SPY rising \u2192 goldilocks (rates falling, equities up)."} linkLabel="TradingView" link="https://www.tradingview.com" />}{!pricesLive && <span style={{ marginLeft: "auto", fontSize: 8, padding: "3px 8px", borderRadius: 8, background: "rgba(176,116,30,0.08)", color: "#b0741e", border: "1px solid rgba(176,116,30,0.25)", letterSpacing: 1 }}>DEMO DATA</span>}</h2>
             <p style={{ fontSize: 11, color: "#8a8072", fontStyle: "italic", margin: "-6px 0 10px" }}>The names I track daily.</p>
+            {prices.every(p => p.price === "—") && <div style={{ fontSize: 10, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, padding: "8px 0" }}>AWAITING WIRE <span style={{ animation: "blink 1s step-end infinite", color: "#0d6d56" }}>▮</span></div>}
             {prices.map(t => <a key={t.symbol} href={`https://www.tradingview.com/symbols/${t.symbol}/`} target="_blank" rel="noopener noreferrer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 12px", borderRadius: 10, transition: "all 0.2s", cursor: "pointer", borderLeft: "2px solid transparent", textDecoration: "none" }} onMouseEnter={e => {e.currentTarget.style.background = "rgba(13,109,86,0.04)"; e.currentTarget.style.borderLeftColor = "#0d6d5650";}} onMouseLeave={e => {e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderLeftColor = "transparent";}}>
               <div><span style={{ color: "#33302c", fontWeight: 600, fontSize: 13 }}>{t.symbol}</span><span style={{ color: "#8a8072", fontSize: 11, marginLeft: 8 }}>{t.name}</span></div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}><Spark pos={parseFloat(t.change) >= 0} /><span style={{ color: "#33302c", fontFamily: "JetBrains Mono, monospace", fontSize: 13, minWidth: 60, textAlign: "right" }}>${t.price}</span><span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, minWidth: 58, textAlign: "right", color: parseFloat(t.change) >= 0 ? "#0d6d56" : "#b2342b", fontWeight: 600 }}>{parseFloat(t.change) >= 0 ? "▲" : "▼"} {Math.abs(parseFloat(t.change)).toFixed(2)}%</span></div>
             </a>)}
+            <SourceLine>Source: Finnhub · 5-min cache{pricesLive ? "" : " · simulated demo data"}</SourceLine>
           </section>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.12s both" }}>
@@ -697,7 +705,7 @@ export default function App() {
           </div>
         </div>
         <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
-          <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.2s both" }}><h2 style={S.cardTitle}><span style={{ color: "#b0741e" }}>◆</span> Sector Heatmap<Info text="Visual map of sector performance by GICS sector. Size reflects relative market cap weight. Green = positive, red = negative, yellow = flat. Click any ticker to open TradingView. Source: Finnhub.io real-time quotes (5-min cache)." link="https://www.investopedia.com/terms/s/sector-analysis.asp" linkLabel="Sector rotation & analysis" />{!pricesLive && <span style={{ marginLeft: "auto", fontSize: 8, padding: "3px 8px", borderRadius: 8, background: "rgba(176,116,30,0.08)", color: "#b0741e", border: "1px solid rgba(176,116,30,0.25)", letterSpacing: 1 }}>DEMO DATA</span>}</h2><HeatMap finnhubKey={finnhubKey} /></section>
+          <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.2s both" }}><h2 style={S.cardTitle}><span style={{ color: "#b0741e" }}>◆</span> Sector Heatmap<Info text="Visual map of sector performance by GICS sector. Size reflects relative market cap weight. Green = positive, red = negative, yellow = flat. Click any ticker to open TradingView. Source: Finnhub.io real-time quotes (5-min cache)." link="https://www.investopedia.com/terms/s/sector-analysis.asp" linkLabel="Sector rotation & analysis" />{!pricesLive && <span style={{ marginLeft: "auto", fontSize: 8, padding: "3px 8px", borderRadius: 8, background: "rgba(176,116,30,0.08)", color: "#b0741e", border: "1px solid rgba(176,116,30,0.25)", letterSpacing: 1 }}>DEMO DATA</span>}</h2><HeatMap finnhubKey={finnhubKey} /><SourceLine>Source: Finnhub · cells sized by market-cap weight · 5-min cache</SourceLine></section>
           <RegimeIndicator apiKey={apiKey} />
         </div>
         <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
@@ -706,7 +714,7 @@ export default function App() {
         </div>
         <div style={{ ...S.card, animation: "fadeUp 0.5s ease 0.4s both" }}>
           <h2 style={S.cardTitle}><span style={{ color: "#6d549e" }}>◆</span> Portfolio Allocation<Info text="Sample asset allocation by weight — illustrative, not investment advice. Hover the donut to see individual holdings." link="https://www.investopedia.com/terms/a/assetallocation.asp" linkLabel="Asset allocation basics" /><span style={{ marginLeft: "auto", fontSize: 8, padding: "3px 8px", borderRadius: 8, background: "rgba(176,116,30,0.08)", color: "#b0741e", border: "1px solid rgba(176,116,30,0.25)", letterSpacing: 1 }}>SAMPLE</span></h2>
-          <div className="portfolio-layout" style={{ display: "flex", gap: 40, alignItems: "center", flexWrap: "wrap" }}><Donut data={PORTFOLIO} size={200} /><div style={{ flex: 1, minWidth: 300 }}><table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr>{["Ticker", "Name", "Type", "Weight"].map(h => <th key={h} style={{ textAlign: "left", padding: "10px 12px", fontSize: 9, textTransform: "uppercase", letterSpacing: 2, color: "#8a8072", fontFamily: "JetBrains Mono, monospace", borderBottom: "1px solid #e9ddc9" }}>{h}</th>)}</tr></thead><tbody>{PORTFOLIO.map(p => <tr key={p.ticker} style={{ borderBottom: "1px solid #e9ddc910" }} onMouseEnter={e => e.currentTarget.style.background = "#e9ddc910"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}><td style={{ padding: "12px", fontSize: 13, color: "#0d6d56", fontWeight: 700, fontFamily: "JetBrains Mono, monospace" }}>{p.ticker}</td><td style={{ padding: "12px", fontSize: 13, color: "#6f675c" }}>{p.name}</td><td style={{ padding: "12px" }}><span style={{ fontSize: 10, padding: "3px 10px", borderRadius: 20, background: p.type === "ETF" ? "#1f5a9e10" : p.type === "Crypto" ? "#b0741e10" : "#0d6d5610", color: p.type === "ETF" ? "#1f5a9e" : p.type === "Crypto" ? "#b0741e" : "#0d6d56" }}>{p.type}</span></td><td style={{ padding: "12px", fontFamily: "JetBrains Mono, monospace", fontSize: 13, color: "#6f675c" }}><div style={{ display: "flex", alignItems: "center", gap: 8 }}><div style={{ width: 80, height: 4, background: "#f6eee1", borderRadius: 2, overflow: "hidden" }}><div style={{ width: `${p.weight * 3.3}%`, height: "100%", background: "linear-gradient(90deg,#0d6d56,#1f5a9e)", borderRadius: 2 }} /></div>{p.weight}%</div></td></tr>)}</tbody></table></div></div>
+          <div className="portfolio-layout" style={{ display: "flex", gap: 40, alignItems: "center", flexWrap: "wrap" }}><Donut data={PORTFOLIO} size={200} /><div style={{ flex: 1, minWidth: 300 }}><table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr>{["Ticker", "Name", "Type", "Weight"].map(h => <th key={h} style={{ textAlign: h === "Weight" ? "right" : "left", padding: "10px 12px", fontSize: 9, textTransform: "uppercase", letterSpacing: 2, color: "#8a8072", fontFamily: "JetBrains Mono, monospace", borderBottom: "1px solid #e9ddc9" }}>{h}</th>)}</tr></thead><tbody>{PORTFOLIO.map(p => <tr key={p.ticker} style={{ borderBottom: "1px solid #e9ddc910" }} onMouseEnter={e => e.currentTarget.style.background = "#e9ddc910"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}><td style={{ padding: "12px", fontSize: 13, color: "#0d6d56", fontWeight: 700, fontFamily: "JetBrains Mono, monospace" }}>{p.ticker}</td><td style={{ padding: "12px", fontSize: 13, color: "#6f675c" }}>{p.name}</td><td style={{ padding: "12px" }}><span style={{ fontSize: 10, padding: "3px 10px", borderRadius: 20, background: p.type === "ETF" ? "#1f5a9e10" : p.type === "Crypto" ? "#b0741e10" : "#0d6d5610", color: p.type === "ETF" ? "#1f5a9e" : p.type === "Crypto" ? "#b0741e" : "#0d6d56" }}>{p.type}</span></td><td style={{ padding: "12px", fontFamily: "JetBrains Mono, monospace", fontSize: 13, color: "#6f675c" }}><div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}><div style={{ width: 80, height: 4, background: "#f6eee1", borderRadius: 2, overflow: "hidden" }}><div style={{ width: `${p.weight * 3.3}%`, height: "100%", background: "linear-gradient(90deg,#0d6d56,#1f5a9e)", borderRadius: 2 }} /></div>{p.weight}%</div></td></tr>)}</tbody></table></div></div>
         </div>
       </div>}
 
@@ -718,7 +726,7 @@ export default function App() {
         <div style={{ ...S.card, marginBottom: 16 }}>
           <h2 style={S.cardTitle}><span style={{ color: "#33302c" }}>◆</span> Deal Sheet<span style={{ marginLeft: "auto", fontSize: 8, color: "#a2977f", letterSpacing: 1 }}>STUDENT RECONSTRUCTIONS OF REAL TRANSACTIONS</span></h2>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(230px,100%),1fr))", gap: 14 }}>
-            {DEALS.map(d => <div key={d.co} id={d.id} style={{ border: "1px solid #33302c", outline: "1px solid #33302c", outlineOffset: -5, borderRadius: 2, padding: "30px 18px 20px", textAlign: "center", background: "#fffdf9", display: "flex", flexDirection: "column" }}>
+            {DEALS.map(d => <div key={d.co} id={d.id} className="tombstone" style={{ border: "1px solid #33302c", outline: "1px solid #33302c", outlineOffset: -5, borderRadius: 2, padding: "30px 18px 20px", textAlign: "center", background: "#fffdf9", display: "flex", flexDirection: "column" }}>
               <div style={{ fontSize: 30, fontFamily: "'Instrument Serif',serif", color: "#262421", lineHeight: 1 }}>{d.value}</div>
               <div style={{ fontSize: 8, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 2, marginTop: 8 }}>{d.type}</div>
               <div style={{ width: 36, borderTop: "1px solid #0d6d56", margin: "14px auto" }} />
@@ -788,6 +796,16 @@ export default function App() {
           </div>
         </div>
         </div>
+        <div style={{ padding: "24px 4px 8px", maxWidth: 620, margin: "0 auto" }}>
+          <p style={{ fontSize: 14, lineHeight: 1.9, color: "#4a443c" }}>
+            <span style={{ float: "left", fontFamily: "'Instrument Serif',serif", fontSize: 50, lineHeight: 0.82, color: "#0d6d56", paddingRight: 9, paddingTop: 5 }}>W</span>
+            elcome. This site is part resume, part working tool — a small financial newspaper I built, edit, and use every day: live market prices, deal reconstructions with the models attached, and the occasional experiment. If you're a recruiter, the Work Index below collects everything in one list. If you're friends or family — this is what I do all day, on one page. The presses run continuously.
+          </p>
+          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "baseline", gap: 8, marginTop: 8 }}>
+            <span style={{ fontFamily: "'Instrument Serif',serif", fontStyle: "italic", fontSize: 20, color: "#262421" }}>— Mason</span>
+            <span style={{ color: "#0d6d56", fontSize: 10 }}>∎</span>
+          </div>
+        </div>
         <div className="about-stats" style={{ ...S.card, margin: "14px 0", display: "flex", justifyContent: "space-around", padding: "20px 32px", flexWrap: "wrap", gap: 16 }}>
           {[["Master's GPA", "4.0", "Walton College"], ["Undergrad GPA", "3.62", "Dean's List ×5"], ["Self-Funded", "100%", "of undergrad education"], ["Graduated", "May 2026", "M.S. Finance"]].map(([label, val, sub], i) => (
             <div key={label} style={{ textAlign: "center", padding: "20px 24px", borderRadius: 14, background: "linear-gradient(145deg, #f6eee1, #f6eee1)", border: "1px solid #e3d5bf", flex: "1 1 0", minWidth: 120, boxShadow: "inset 0 2px 10px rgba(64,52,32,0.07), 0 1px 0 rgba(255,255,255,0.4)" }}>
@@ -797,12 +815,8 @@ export default function App() {
             </div>
           ))}
         </div>
-        <Orn />
-        <Reveal><div style={{ ...S.card, marginBottom: 14 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-            <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> Featured Work</h2>
-            <button onClick={() => setTab("projects")} style={{ ...S.btn, fontSize: 10, padding: "5px 14px" }}>All projects →</button>
-          </div>
+        <Reveal><div style={{ padding: "8px 0 22px" }}>
+          <Slug right={<button onClick={() => setTab("projects")} style={{ ...S.btn, fontSize: 10, padding: "5px 14px" }}>All projects →</button>}>Featured Work</Slug>
           <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
             {PROJECTS.filter(p => p.img).map(p => <div key={p.title} style={{ borderRadius: 12, border: "1px solid #e9ddc9", overflow: "hidden", background: "#fffdf9", transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)", cursor: "pointer" }} onClick={() => setTab("projects")} onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "0 12px 32px rgba(13,109,86,0.1)"; }} onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; }}>
               <img src={p.img} alt={p.title} loading="lazy" style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", objectPosition: "top", display: "block", borderBottom: "1px solid #e9ddc9", background: "#f6eee1" }} />
@@ -814,8 +828,8 @@ export default function App() {
           </div>
         </div>
         </Reveal>
-        <Reveal><div style={{ ...S.card, marginBottom: 14 }}>
-          <h2 style={S.cardTitle}><span style={{ color: "#b0741e" }}>◆</span> Now<span style={{ marginLeft: "auto", fontSize: 8, color: "#a2977f", letterSpacing: 1 }}>UPDATED JUL 2026</span></h2>
+        <Reveal><div style={{ padding: "8px 0 22px" }}>
+          <Slug icon="#b0741e" right={<span style={{ fontSize: 8, color: "#a2977f", letterSpacing: 1, fontFamily: "'JetBrains Mono',monospace" }}>UPDATED JUL 2026</span>}>Now</Slug>
           <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
             {["Interviewing for analyst roles across investment banking, private equity, wealth management, and corporate finance",
               "Extending the EA / Jagex LBO framework to new hypothetical buyout targets",
@@ -824,9 +838,8 @@ export default function App() {
           </div>
         </div>
         </Reveal>
-        <Orn />
-        <Reveal><div style={{ ...S.card, marginBottom: 14 }}>
-          <h2 style={S.cardTitle}><span style={{ color: "#1f5a9e" }}>◆</span> Timeline</h2>
+        <Reveal><div style={{ padding: "8px 0 22px" }}>
+          <Slug icon="#1f5a9e">Timeline</Slug>
           <div style={{ position: "relative", paddingLeft: 22 }}><div style={{ position: "absolute", left: 5, top: 5, bottom: 5, width: 2, background: "linear-gradient(180deg,#0d6d56,#1f5a9e,#e9ddc9)", borderRadius: 1 }} />
             {EXPERIENCE.map((e, i) => <div key={i} style={{ position: "relative", marginBottom: i < EXPERIENCE.length - 1 ? 18 : 0 }}>
               <div style={{ position: "absolute", left: -19, top: 4, width: 9, height: 9, borderRadius: 5, background: e.type === "edu" ? "#0d6d56" : "#1f5a9e", border: "2px solid #f6eee1" }} />
@@ -837,8 +850,8 @@ export default function App() {
           </div>
         </div>
         </Reveal>
-        <Reveal><div style={{ ...S.card, marginBottom: 14 }}>
-          <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> Skills & Tools</h2>
+        <Reveal><div style={{ padding: "8px 0 22px" }}>
+          <Slug>Skills & Tools</Slug>
           <div style={{ marginBottom: 14 }}><div style={{ fontSize: 8, color: "#8a8072", textTransform: "uppercase", letterSpacing: 2, marginBottom: 8, fontFamily: "JetBrains Mono, monospace" }}>Core Finance</div><div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{["Financial Modeling", "Valuation (DCF, LBO, Comps)", "Quality of Earnings (QoE)", "Investment Analysis", "Transaction Analysis", "Portfolio Management", "Monte Carlo Simulation", "Econometrics", "Quantitative Research"].map(s => <span key={s} style={{ fontSize: 11, padding: "6px 14px", borderRadius: 8, background: "linear-gradient(135deg, rgba(13,109,86,0.08), rgba(13,109,86,0.04))", color: "#0d6d56", border: "1px solid rgba(13,109,86,0.15)", transition: "all 0.25s", cursor: "default", boxShadow: "0 2px 6px rgba(13,109,86,0.04)" }} onMouseEnter={e=>{e.currentTarget.style.background="rgba(13,109,86,0.12)";e.currentTarget.style.boxShadow="0 4px 12px rgba(13,109,86,0.1)";e.currentTarget.style.transform="translateY(-1px)"}} onMouseLeave={e=>{e.currentTarget.style.background="linear-gradient(135deg, rgba(13,109,86,0.08), rgba(13,109,86,0.04))";e.currentTarget.style.boxShadow="0 2px 6px rgba(13,109,86,0.04)";e.currentTarget.style.transform="none"}}>{s}</span>)}</div></div>
           <div style={{ marginBottom: 14 }}><div style={{ fontSize: 8, color: "#8a8072", textTransform: "uppercase", letterSpacing: 2, marginBottom: 8, fontFamily: "JetBrains Mono, monospace" }}>Tools</div><div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{["Excel", "Python", "Bloomberg", "PitchBook", "Stata", "RStudio", "SQL", "PowerPoint", "Streamlit"].map(s => <span key={s} style={{ fontSize: 11, padding: "6px 14px", borderRadius: 8, background: "linear-gradient(145deg, #fffdf9, #f6eee1)", color: "#6f675c", border: "1px solid #e3d5bf", transition: "all 0.25s", cursor: "default", boxShadow: "0 2px 6px rgba(64,52,32,0.05)" }} onMouseEnter={e=>{e.currentTarget.style.borderColor="#1f5a9e40";e.currentTarget.style.color="#1f5a9e";e.currentTarget.style.boxShadow="0 4px 12px rgba(31,90,158,0.08)";e.currentTarget.style.transform="translateY(-1px)"}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#e3d5bf";e.currentTarget.style.color="#6f675c";e.currentTarget.style.boxShadow="0 2px 6px rgba(64,52,32,0.05)";e.currentTarget.style.transform="none"}}>{s}</span>)}</div></div>
           <div><div style={{ fontSize: 8, color: "#8a8072", textTransform: "uppercase", letterSpacing: 2, marginBottom: 8, fontFamily: "JetBrains Mono, monospace" }}>Certifications & Licenses</div><div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
@@ -846,14 +859,13 @@ export default function App() {
           </div></div>
         </div>
         </Reveal>
-        <Orn />
-        <Reveal><div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
-          <div style={S.card}>
-            <h2 style={S.cardTitle}><span style={{ color: "#b0741e" }}>◆</span> Reading List</h2>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{READING.map((b, i) => <div key={i} style={{ padding: "12px 14px", borderRadius: 10, background: "linear-gradient(145deg, #fffdf9, #f6eee1)", border: "1px solid #e3d5bf", display: "flex", justifyContent: "space-between", alignItems: "center", transition: "all 0.25s" }} onMouseEnter={e=>{e.currentTarget.style.borderColor="#b0741e30";e.currentTarget.style.transform="translateX(4px)"}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#e3d5bf";e.currentTarget.style.transform="none"}}><div><div style={{ color: "#33302c", fontSize: 12, fontWeight: 500 }}>{b.title}</div><div style={{ color: "#8a8072", fontSize: 10 }}>{b.author}</div></div><span style={{ fontSize: 8, padding: "3px 10px", borderRadius: 10, fontFamily: "JetBrains Mono, monospace", background: b.s === "Reading" ? "rgba(31,90,158,0.1)" : b.s === "Done" ? "rgba(13,109,86,0.1)" : "rgba(111,103,92,0.08)", color: b.s === "Reading" ? "#1f5a9e" : b.s === "Done" ? "#0d6d56" : "#6f675c", border: `1px solid ${b.s === "Reading" ? "rgba(31,90,158,0.2)" : b.s === "Done" ? "rgba(13,109,86,0.2)" : "rgba(111,103,92,0.15)"}` }}>{b.s === "Done" ? "Completed" : b.s === "Ref" ? "Reference" : b.s}</span></div>)}</div>
+        <Reveal><div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 28, marginBottom: 4, padding: "8px 0 22px" }}>
+          <div>
+            <Slug icon="#b0741e">Reading List</Slug>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{READING.map((b, i) => <div key={i} style={{ padding: "12px 14px", borderRadius: 10, background: "linear-gradient(145deg, #fffdf9, #f6eee1)", border: "1px solid #e3d5bf", display: "flex", justifyContent: "space-between", alignItems: "center", transition: "all 0.25s" }} onMouseEnter={e=>{e.currentTarget.style.borderColor="#b0741e30";e.currentTarget.style.transform="translateX(4px)"}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#e3d5bf";e.currentTarget.style.transform="none"}} className="mrow"><div><div style={{ color: "#33302c", fontSize: 12, fontWeight: 500 }}>{b.title}</div><div style={{ color: "#8a8072", fontSize: 10 }}>{b.author}</div>{b.note && <div className="mnote" style={{ fontFamily: "'Instrument Serif',serif", fontStyle: "italic", fontSize: 12, color: "#6d549e", marginTop: 4 }}>“{b.note}” <span style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#a2977f", fontStyle: "normal", letterSpacing: 1 }}>— THE IDEA I USE</span></div>}</div><span style={{ fontSize: 8, padding: "3px 10px", borderRadius: 10, fontFamily: "JetBrains Mono, monospace", background: b.s === "Reading" ? "rgba(31,90,158,0.1)" : b.s === "Done" ? "rgba(13,109,86,0.1)" : "rgba(111,103,92,0.08)", color: b.s === "Reading" ? "#1f5a9e" : b.s === "Done" ? "#0d6d56" : "#6f675c", border: `1px solid ${b.s === "Reading" ? "rgba(31,90,158,0.2)" : b.s === "Done" ? "rgba(13,109,86,0.2)" : "rgba(111,103,92,0.15)"}` }}>{b.s === "Done" ? "Completed" : b.s === "Ref" ? "Reference" : b.s}</span></div>)}</div>
           </div>
-          <div style={S.card}>
-            <h2 style={S.cardTitle}><span style={{ color: "#b3551d" }}>◆</span> Currently Exploring</h2>
+          <div>
+            <Slug icon="#b3551d">Currently Exploring</Slug>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {[{ topic: "LBO Modeling & PE Deal Structuring", desc: "Completed full LBO models and IC pitch decks for EA and Jagex as graduate coursework — now extending the framework to new hypothetical buyout targets." },
                 { topic: "Python for Equity Research Automation", desc: "Scripting DCF templates and data pipelines to streamline financial analysis workflows." },
@@ -867,8 +879,8 @@ export default function App() {
           </div>
         </div>
         </Reveal>
-        <Reveal><div style={{ ...S.card, marginBottom: 14 }}>
-          <h2 style={S.cardTitle}><span style={{ color: "#33302c" }}>◆</span> Work Index<span style={{ marginLeft: "auto", fontSize: 8, color: "#a2977f", letterSpacing: 1 }}>EVERYTHING, ONE LIST</span></h2>
+        <Reveal><div style={{ padding: "8px 0 22px" }}>
+          <Slug icon="#33302c" right={<span style={{ fontSize: 8, color: "#a2977f", letterSpacing: 1, fontFamily: "'JetBrains Mono',monospace" }}>EVERYTHING, ONE LIST</span>}>Work Index</Slug>
           <div style={{ display: "flex", flexDirection: "column" }}>
             {ARTIFACTS.map((a, i) => <div key={a.label} style={{ borderTop: i === 0 ? "none" : "1px solid #efe4d2" }}>
               {a.href
@@ -877,8 +889,8 @@ export default function App() {
             </div>)}
           </div>
         </div></Reveal>
-        <Reveal><div style={S.card}>
-          <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> Connect</h2>
+        <Reveal><div style={{ padding: "8px 0 10px" }}>
+          <Slug icon="#990f3d">Connect</Slug>
           <div className="connect-links" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>{LINKS.map(l => <a key={l.label} href={l.url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 24px", borderRadius: 12, background: "linear-gradient(145deg, #fffdf9, #fbf5ec)", color: "#33302c", textDecoration: "none", fontSize: 13, fontWeight: 500, border: "1px solid #e3d5bf", transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)", boxShadow: "0 4px 12px rgba(64,52,32,0.07)", flex: "1 1 0", justifyContent: "center", minWidth: 140 }} onMouseEnter={e => { e.currentTarget.style.borderColor = "#0d6d5650"; e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(13,109,86,0.12), 0 0 0 1px rgba(13,109,86,0.1)"; }} onMouseLeave={e => { e.currentTarget.style.borderColor = "#e3d5bf"; e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(64,52,32,0.07)"; }}><span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 12, fontWeight: 700, color: "#0d6d56" }}>{l.ic}</span>{l.label}</a>)}</div>
         </div></Reveal>
       </div>}
@@ -916,6 +928,7 @@ export default function App() {
       <div style={{ color: "#a2977f", fontSize: 9, fontFamily: "JetBrains Mono, monospace", display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
         <span>Mason J. Bennett</span><span>·</span><span>M.S. Finance, Walton College</span><span>·</span><span>© {new Date().getFullYear()}</span><span>·</span><span>⌘K or 1-4</span>
       </div>
+      <div style={{ color: "#b8ab97", fontSize: 8, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 0.5, textAlign: "center", maxWidth: 640 }}>Set in Instrument Serif, Space Grotesk & JetBrains Mono · Composed in React, printed by Vercel · Market data by Finnhub · Written, designed & typeset by the editor</div>
     </footer>
 
     <style>{`
@@ -932,7 +945,13 @@ export default function App() {
       @keyframes borderGlow{0%{border-color:rgba(13,109,86,0.2)}50%{border-color:rgba(13,109,86,0.4)}100%{border-color:rgba(13,109,86,0.2)}}
       *{box-sizing:border-box;margin:0;padding:0}
       html{scroll-behavior:smooth;overflow-anchor:none}
-      body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;font-variant-numeric:tabular-nums}
+      body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;font-variant-numeric:tabular-nums lining-nums}
+      .mnote{display:none}
+      .mrow:hover .mnote,.mrow:focus-within .mnote{display:block}
+      @media (prefers-reduced-motion: no-preference){
+        .tombstone{transition:transform 160ms ease-out, box-shadow 160ms ease-out}
+        .tombstone:hover{transform:translateY(-4px) rotate(-0.35deg);box-shadow:0 16px 30px rgba(64,52,32,0.16)}
+      }
       input[type=range]{accent-color:#0d6d56}
       @media print{
         .status-bar,header nav,header>div:last-child,.tape,footer,.bg-fx{display:none!important}

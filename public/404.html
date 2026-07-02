@@ -3,30 +3,36 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>404 — Mason J. Bennett</title>
+  <title>Corrections — Mason J. Bennett</title>
   <meta name="robots" content="noindex" />
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { background: #faf3ea; color: #262421; font-family: Georgia, 'Times New Roman', serif; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; }
+    body { background: #faf3ea; color: #262421; font-family: Georgia, 'Times New Roman', serif; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
     .bar { position: fixed; top: 0; left: 0; right: 0; height: 10px; background: #2b2825; }
     .rule { position: fixed; top: 10px; left: 0; right: 0; height: 2px; background: #0d6d56; }
-    .kicker { font-family: Consolas, monospace; font-size: 11px; letter-spacing: 6px; color: #0d6d56; text-transform: uppercase; margin-bottom: 24px; }
-    h1 { font-size: 96px; font-weight: 400; letter-spacing: -3px; line-height: 1; }
-    .rules { width: 300px; max-width: 70vw; height: 5px; border-top: 1px solid #33302c; border-bottom: 1px solid #33302c; margin: 28px auto; }
-    p { font-family: 'Segoe UI', sans-serif; color: #6f675c; font-size: 15px; margin-bottom: 32px; }
-    a { display: inline-block; padding: 12px 28px; border-radius: 10px; background: #0d6d56; color: #fdf8f0; text-decoration: none; font-family: 'Segoe UI', sans-serif; font-size: 13px; font-weight: 600; }
-    .domain { position: fixed; bottom: 28px; font-family: Consolas, monospace; font-size: 11px; letter-spacing: 3px; color: #a2977f; }
+    .box { max-width: 460px; border-top: 1px solid #262421; border-bottom: 1px solid #262421; padding: 26px 8px 22px; position: relative; }
+    .box::before { content: ""; position: absolute; top: 3px; left: 0; right: 0; border-top: 1px solid #262421; }
+    .kicker { font-family: Consolas, monospace; font-size: 10px; letter-spacing: 5px; color: #0d6d56; text-transform: uppercase; margin-bottom: 18px; text-align: center; }
+    p { font-size: 16px; line-height: 1.75; color: #4a443c; text-align: center; }
+    .err { font-family: Consolas, monospace; font-size: 11px; color: #8a8072; text-align: center; margin-top: 14px; letter-spacing: 2px; }
+    .links { display: flex; gap: 18px; justify-content: center; margin-top: 26px; flex-wrap: wrap; }
+    .links a { font-family: Consolas, monospace; font-size: 11px; letter-spacing: 1px; color: #0d6d56; text-decoration: none; border-bottom: 1px dotted #0d6d56; padding-bottom: 1px; }
+    .domain { position: fixed; bottom: 26px; font-family: Consolas, monospace; font-size: 10px; letter-spacing: 3px; color: #a2977f; }
   </style>
 </head>
 <body>
   <div class="bar"></div>
   <div class="rule"></div>
-  <div>
-    <div class="kicker">Page Not Found</div>
-    <h1>404</h1>
-    <div class="rules"></div>
-    <p>This page doesn't exist — but the markets are still open.</p>
-    <a href="/">Back to the dashboard</a>
+  <div class="box">
+    <div class="kicker">Corrections &amp; Amplifications</div>
+    <p>The page you requested could not be found. It may have been retired in a previous edition, or the address may contain a typographical error.<br /><em>The Bulletin regrets the error.</em></p>
+    <div class="err">ERROR 404 — NOT FOUND</div>
+    <div class="links">
+      <a href="/">Front Page</a>
+      <a href="/?tab=projects">Projects</a>
+      <a href="/?tab=markets">Markets</a>
+      <a href="/resume.pdf">Resume</a>
+    </div>
   </div>
   <div class="domain">masonjbennett.com</div>
 </body>
