@@ -62,7 +62,7 @@ const LINKS = [
   { label: "LinkedIn", url: "https://linkedin.com/in/bennettmason", ic: "in" },
   { label: "GitHub", url: "https://github.com/masonjbennett", ic: "gh" },
   { label: "Resume", url: "/resume.pdf", ic: "cv" },
-  { label: "Email", url: "mailto:bennettmasonj@gmail.com", ic: "✉" },
+  { label: "Email", url: "mailto:bennettmasonj@gmail.com", ic: "@" },
 ];
 const NEWS_CATS = [
   { id: "markets", label: "Markets", q: "stock market news today", color: "#0d6d56", count: 15 },
@@ -272,9 +272,37 @@ function CopyEmail({ style }) {
   return <a href={`mailto:${EMAIL}`} onClick={() => { try { navigator.clipboard.writeText(EMAIL); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch {} }} style={style} title="Click to copy">{copied ? "✓ Copied to clipboard" : EMAIL}</a>;
 }
 
+// ============ VISUAL PRIMITIVES ============
+const SunIc = ({ size = 14 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="12" cy="12" r="4.2" /><path d="M12 2.5v2.4M12 19.1v2.4M2.5 12h2.4M19.1 12h2.4M5 5l1.7 1.7M17.3 17.3L19 19M19 5l-1.7 1.7M6.7 17.3L5 19" /></svg>;
+const MoonIc = ({ size = 14 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" /></svg>;
+const GearIc = ({ size = 12 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3.2" /><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.55-1 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.09a1.7 1.7 0 0 0 1-1.55V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.09a1.7 1.7 0 0 0 1.55 1H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.55 1Z" /></svg>;
+function MktBadge() {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => { const iv = setInterval(() => setNow(new Date()), 60000); return () => clearInterval(iv); }, []);
+  const h = now.getHours(), m = now.getMinutes(), d = now.getDay(), wd = d > 0 && d < 6;
+  const open = wd && ((h === 9 && m >= 30) || (h > 9 && h < 16));
+  const pre = wd && h >= 4 && (h < 9 || (h === 9 && m < 30)), after = wd && h >= 16 && h < 20;
+  const label = open ? "MARKET OPEN" : pre ? "PRE-MARKET" : after ? "AFTER HOURS" : "MARKET CLOSED";
+  const c = open ? "#0d6d56" : pre || after ? "#b0741e" : "#b2342b";
+  return <span style={{ fontSize: 9, fontFamily: "'JetBrains Mono',monospace", color: c, letterSpacing: 1.5, display: "inline-flex", alignItems: "center", gap: 6 }}><span style={{ width: 6, height: 6, borderRadius: 3, background: c, animation: open ? "pulse 2s infinite" : "none" }} />{label}</span>;
+}
+function ScrollRule() {
+  const [p, setP] = useState(0);
+  useEffect(() => { const on = () => { const h = document.documentElement; setP(h.scrollHeight > h.clientHeight ? (h.scrollTop / (h.scrollHeight - h.clientHeight)) * 100 : 0); }; window.addEventListener("scroll", on, { passive: true }); on(); return () => window.removeEventListener("scroll", on); }, []);
+  return <div style={{ position: "absolute", left: 0, right: 0, bottom: -2, height: 2, background: "#ece1cd" }}><div style={{ width: `${p}%`, height: "100%", background: "linear-gradient(90deg,#0d6d56,#1f5a9e)", transition: "width 0.1s linear" }} /></div>;
+}
+function Reveal({ children }) {
+  const ref = useRef(null);
+  const [inV, setInV] = useState(false);
+  useEffect(() => { const el = ref.current; if (!el || !("IntersectionObserver" in window)) { setInV(true); return; } const ob = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setInV(true); ob.disconnect(); } }, { threshold: 0.08, rootMargin: "0px 0px -30px 0px" }); ob.observe(el); return () => ob.disconnect(); }, []);
+  return <div ref={ref} style={{ opacity: inV ? 1 : 0, transform: inV ? "none" : "translateY(18px)", transition: "all 0.7s cubic-bezier(0.4,0,0.2,1)" }}>{children}</div>;
+}
+const Kicker = ({ n, t }) => <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}><span style={{ fontSize: 9, fontFamily: "'JetBrains Mono',monospace", color: "#0d6d56", letterSpacing: 3, textTransform: "uppercase" }}>{n} · {t}</span><div style={{ width: 54, borderTop: "1px solid rgba(13,109,86,0.35)" }} /></div>;
+const Orn = () => <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 12, margin: "24px 0" }}><div style={{ width: 60, borderTop: "1px solid #ddcfb8" }} /><span style={{ color: "#0d6d56", fontSize: 8 }}>◆</span><div style={{ width: 60, borderTop: "1px solid #ddcfb8" }} /></div>;
+
 // ============ SMALL COMPONENTS ============
-function Spark({ pos, w = 88, h = 28 }) { const id = useRef(`s${Math.random().toString(36).slice(2,6)}`); const glow = useRef(`g${Math.random().toString(36).slice(2,6)}`); const pts = useRef(Array.from({length:22},(_,i)=>{const x=(i/21)*w,y=h/2+(pos?-1:1)*i*0.35+(Math.random()-0.5)*h*0.45;return`${x},${Math.max(2,Math.min(h-2,y))}`;}).join(" ")); return <svg width={w} height={h} style={{display:"block",filter:`drop-shadow(0 0 4px ${pos?"rgba(13,109,86,0.3)":"rgba(178,52,43,0.3)"})`}}><defs><linearGradient id={id.current} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={pos?"#0d6d56":"#b2342b"} stopOpacity="0.25"/><stop offset="100%" stopColor={pos?"#0d6d56":"#b2342b"} stopOpacity="0"/></linearGradient></defs><polyline points={pts.current+` ${w},${h} 0,${h}`} fill={`url(#${id.current})`}/><polyline points={pts.current} fill="none" stroke={pos?"#0d6d56":"#b2342b"} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>; }
-function Donut({ data, size = 200 }) { const [hov,setHov]=useState(null); const total=data.reduce((s,d)=>s+d.weight,0),C=["#0d6d56","#1f5a9e","#6d549e","#990f3d","#b0741e","#b3551d","#6f675c"]; let cum=-90; return <svg viewBox="0 0 200 200" width={size} height={size} style={{filter:"drop-shadow(0 4px 24px rgba(13,109,86,0.12)) drop-shadow(0 0 40px rgba(13,109,86,0.04))"}}>{data.map((d,i)=>{const a=(d.weight/total)*360,s=cum;cum+=a;const r=hov===i?84:80,rd=v=>(v*Math.PI)/180;const x1=100+r*Math.cos(rd(s)),y1=100+r*Math.sin(rd(s)),x2=100+r*Math.cos(rd(cum)),y2=100+r*Math.sin(rd(cum));return <path key={i} d={`M100,100 L${x1},${y1} A${r},${r} 0 ${a>180?1:0},1 ${x2},${y2} Z`} fill={C[i%C.length]} stroke="#f6eee1" strokeWidth="2.5" style={{transition:"all 0.25s",cursor:"pointer",filter:hov===i?`drop-shadow(0 0 8px ${C[i%C.length]}50)`:"none"}} onMouseEnter={()=>setHov(i)} onMouseLeave={()=>setHov(null)}/>})}<circle cx="100" cy="100" r="50" fill="#f6eee1"/>{hov!==null?<><text x="100" y="95" textAnchor="middle" fill={C[hov%C.length]} fontSize="14" fontWeight="700" fontFamily="JetBrains Mono">{data[hov].ticker}</text><text x="100" y="113" textAnchor="middle" fill="#6f675c" fontSize="10" fontFamily="JetBrains Mono">{data[hov].weight}%</text></>:<><text x="100" y="95" textAnchor="middle" fill="#33302c" fontSize="12" fontFamily="JetBrains Mono">Portfolio</text><text x="100" y="113" textAnchor="middle" fill="#8a8072" fontSize="9" fontFamily="JetBrains Mono">{data.length} holdings</text></>}</svg>; }
+function Spark({ pos, w = 88, h = 28 }) { const id = useRef(`s${Math.random().toString(36).slice(2,6)}`); const glow = useRef(`g${Math.random().toString(36).slice(2,6)}`); const pts = useRef(Array.from({length:22},(_,i)=>{const x=(i/21)*w,y=h/2+(pos?-1:1)*i*0.35+(Math.random()-0.5)*h*0.45;return`${x},${Math.max(2,Math.min(h-2,y))}`;}).join(" ")); return <svg width={w} height={h} style={{display:"block"}}><defs><linearGradient id={id.current} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={pos?"#0d6d56":"#b2342b"} stopOpacity="0.25"/><stop offset="100%" stopColor={pos?"#0d6d56":"#b2342b"} stopOpacity="0"/></linearGradient></defs><polyline points={pts.current+` ${w},${h} 0,${h}`} fill={`url(#${id.current})`}/><polyline points={pts.current} fill="none" stroke={pos?"#0d6d56":"#b2342b"} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>; }
+function Donut({ data, size = 200 }) { const [hov,setHov]=useState(null); const total=data.reduce((s,d)=>s+d.weight,0),C=["#0d6d56","#1f5a9e","#6d549e","#990f3d","#b0741e","#b3551d","#6f675c"]; let cum=-90; return <svg viewBox="0 0 200 200" width={size} height={size} style={{filter:"drop-shadow(0 4px 24px rgba(13,109,86,0.12)) drop-shadow(0 0 40px rgba(13,109,86,0.04))"}}>{data.map((d,i)=>{const a=(d.weight/total)*360,s=cum;cum+=a;const r=hov===i?84:80,rd=v=>(v*Math.PI)/180;const x1=100+r*Math.cos(rd(s)),y1=100+r*Math.sin(rd(s)),x2=100+r*Math.cos(rd(cum)),y2=100+r*Math.sin(rd(cum));return <path key={i} d={`M100,100 L${x1},${y1} A${r},${r} 0 ${a>180?1:0},1 ${x2},${y2} Z`} fill={C[i%C.length]} stroke="#f6eee1" strokeWidth="2.5" style={{transition:"all 0.25s",cursor:"pointer",filter:hov===i?`drop-shadow(0 0 8px ${C[i%C.length]}50)`:"none"}} onMouseEnter={()=>setHov(i)} onMouseLeave={()=>setHov(null)}/>})}<circle cx="100" cy="100" r="62" fill="#fffdf9" stroke="#e9ddc9" strokeWidth="1"/>{hov!==null?<><text x="100" y="97" textAnchor="middle" fill={C[hov%C.length]} fontSize="15" fontWeight="700" fontFamily="JetBrains Mono">{data[hov].ticker}</text><text x="100" y="114" textAnchor="middle" fill="#6f675c" fontSize="10" fontFamily="JetBrains Mono">{data[hov].weight}%</text></>:<><text x="100" y="99" textAnchor="middle" fill="#262421" fontSize="17" fontFamily="Instrument Serif, serif">Portfolio</text><text x="100" y="115" textAnchor="middle" fill="#8a8072" fontSize="9" fontFamily="JetBrains Mono">{data.length} holdings</text></>}</svg>; }
 function HeatMap({ finnhubKey }){
   const [cells, setCells] = useState(() => HEATMAP.map(h => ({ ...h, change: (Math.random() * 9 - 4.5).toFixed(2) })));
   const fetchedRef = useRef(false);
@@ -317,7 +345,7 @@ function HeatMap({ finnhubKey }){
     return () => { cancelled = true; };
   }, [finnhubKey]);
   const gc=c=>{const v=parseFloat(c);return v>3?"#15803d":v>1?"#1a9464":v>-1?"#6f675c":v>-3?"#b2342b":"#992d25"};
-  return <div style={{display:"flex",flexWrap:"wrap",gap:5}}>{cells.map(c=><a key={c.ticker} href={`https://www.tradingview.com/symbols/${c.ticker}/`} target="_blank" rel="noopener noreferrer" style={{background:gc(c.change)+"15",border:`1px solid ${gc(c.change)}30`,borderRadius:10,padding:"12px 0",flex:`${c.w} 1 0`,minWidth:70,textAlign:"center",cursor:"pointer",transition:"all 0.3s cubic-bezier(0.4,0,0.2,1)",boxShadow:`0 2px 8px ${gc(c.change)}08`,textDecoration:"none"}} onMouseEnter={e=>{e.currentTarget.style.background=gc(c.change)+"30";e.currentTarget.style.transform="scale(1.05) translateY(-2px)";e.currentTarget.style.boxShadow=`0 8px 20px ${gc(c.change)}15`}} onMouseLeave={e=>{e.currentTarget.style.background=gc(c.change)+"15";e.currentTarget.style.transform="scale(1)";e.currentTarget.style.boxShadow=`0 2px 8px ${gc(c.change)}08`}}><div style={{fontSize:12,fontWeight:700,color:"#33302c",fontFamily:"'JetBrains Mono',monospace"}}>{c.ticker}</div><div style={{fontSize:11,color:gc(c.change),fontFamily:"'JetBrains Mono',monospace",marginTop:2,fontWeight:600}}>{parseFloat(c.change)>0?"+":""}{c.change}%</div><div style={{fontSize:8,color:"#8a8072",marginTop:3}}>{c.sector}</div></a>)}</div>;
+  return <div style={{display:"flex",flexWrap:"wrap",gap:5}}>{cells.map(c=><a key={c.ticker} href={`https://www.tradingview.com/symbols/${c.ticker}/`} target="_blank" rel="noopener noreferrer" style={{background:gc(c.change)+"15",border:`1px solid ${gc(c.change)}30`,borderRadius:4,padding:"12px 0",flex:`${c.w} 1 0`,minWidth:70,textAlign:"center",cursor:"pointer",transition:"all 0.3s cubic-bezier(0.4,0,0.2,1)",boxShadow:`0 2px 8px ${gc(c.change)}08`,textDecoration:"none"}} onMouseEnter={e=>{e.currentTarget.style.background=gc(c.change)+"30";e.currentTarget.style.transform="scale(1.05) translateY(-2px)";e.currentTarget.style.boxShadow=`0 8px 20px ${gc(c.change)}15`}} onMouseLeave={e=>{e.currentTarget.style.background=gc(c.change)+"15";e.currentTarget.style.transform="scale(1)";e.currentTarget.style.boxShadow=`0 2px 8px ${gc(c.change)}08`}}><div style={{fontSize:12,fontWeight:700,color:"#33302c",fontFamily:"'JetBrains Mono',monospace"}}>{c.ticker}</div><div style={{fontSize:11,color:gc(c.change),fontFamily:"'JetBrains Mono',monospace",marginTop:2,fontWeight:600}}>{parseFloat(c.change)>0?"+":""}{c.change}%</div><div style={{fontSize:8,color:"#8a8072",marginTop:3}}>{c.sector}</div></a>)}</div>;
 }
 function SourceChips({sources}){if(!sources||!sources.length)return null;return <div style={{borderTop:"1px solid #e9ddc920",paddingTop:14,marginTop:6}}><div style={{fontSize:9,color:"#8a8072",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:2,marginBottom:8}}>Sources Cited</div><div style={{display:"flex",flexWrap:"wrap",gap:6}}>{sources.map((s,i)=><a key={i} href={s.url||"#"} target="_blank" rel="noopener noreferrer" style={{display:"inline-flex",alignItems:"center",gap:6,padding:"5px 12px",borderRadius:8,background:"#f6eee1",border:"1px solid #e9ddc9",color:"#6f675c",fontSize:11,textDecoration:"none",fontFamily:"'JetBrains Mono',monospace",transition:"all 0.2s"}} onMouseEnter={e=>{e.currentTarget.style.borderColor="#0d6d5640";e.currentTarget.style.color="#0d6d56"}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#e9ddc9";e.currentTarget.style.color="#6f675c"}}><span style={{fontSize:9,opacity:0.4}}>{String(i+1).padStart(2,"0")}</span>{s.name}<span style={{fontSize:9,opacity:0.3}}>↗</span></a>)}</div></div>;}
 
@@ -446,8 +474,8 @@ const gen=async(type,force=false)=>{if(!apiKey)return;const sL=type==="morning"?
 const data=tab==="morning"?morning:close,loading=tab==="morning"?lM:lC,verifying=tab==="morning"?vLM:vLC,verify=tab==="morning"?vM:vC,soWhat=tab==="morning"?swM:swC,swLoad=tab==="morning"?swLM:swLC,time=tab==="morning"?tM:tC;
 const SC={verified:"#0d6d56",minor_discrepancy:"#b0741e",unverified:"#b2342b"},SI={verified:"✓",minor_discrepancy:"~",unverified:"✗"},SL={verified:"Verified",minor_discrepancy:"Discrepancy",unverified:"Unverified"};
 return <div style={{...S.card,background:"linear-gradient(135deg,#f6eee1,#fdf8f0,#f6eee1)",border:"1px solid rgba(13,109,86,0.1)",boxShadow:"0 12px 48px rgba(64,52,32,0.1), 0 0 40px rgba(13,109,86,0.03), inset 0 1px 0 rgba(255,255,255,0.6)",position:"relative",overflow:"hidden"}}><div style={{position:"absolute",top:-40,right:-40,width:200,height:200,background:`radial-gradient(circle,${tab==="morning"?"rgba(176,116,30,0.03)":"rgba(90,95,184,0.05)"} 0%,transparent 70%)`,pointerEvents:"none"}}/>
-<div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18,position:"relative",flexWrap:"wrap",gap:12}}><div><div style={{display:"flex",gap:6,marginBottom:8}}>{["morning","close"].map(t=><button key={t} onClick={()=>setTab(t)} style={{fontSize:12,padding:"6px 16px",borderRadius:8,cursor:"pointer",fontWeight:600,transition:"all 0.25s",border:"1px solid",display:"flex",alignItems:"center",gap:8,background:tab===t?(t==="morning"?"#b0741e10":"#56599e10"):"transparent",borderColor:tab===t?(t==="morning"?"#b0741e30":"#56599e30"):"#e9ddc9",color:tab===t?(t==="morning"?"#b0741e":"#56599e"):"#8a8072"}}><span style={{fontSize:15}}>{t==="morning"?"☀":"🌙"}</span>{t==="morning"?"Morning":"Close"} Brief{sugg===t&&<span style={{width:5,height:5,borderRadius:3,background:t==="morning"?"#b0741e":"#56599e",animation:"pulse 2s infinite"}}/>}</button>)}</div><p style={{color:"#8a8072",fontSize:10,fontFamily:"'JetBrains Mono',monospace"}}>AI briefing → fact-check → implications {time?`· ${time.toLocaleTimeString()}`:""}</p></div><button onClick={()=>gen(tab,!!data)} disabled={loading||verifying} style={{...S.btn,opacity:(loading||verifying)?0.5:1}}>{loading?"⟳ Generating...":verifying||swLoad?"⟳ Analyzing...":data?"↻ Regenerate":"Generate Brief"}</button></div>
-{!data&&!loading&&<div style={{textAlign:"center",padding:"36px 0"}}><div style={{fontSize:36,marginBottom:12,opacity:0.15}}>{tab==="morning"?"☀":"🌙"}</div><p style={{color:"#6f675c",fontSize:13}}>{tab==="morning"?"Pre-market briefing with overnight futures, macro, and what to watch":"End-of-day summary with closes, movers, and tomorrow's catalysts"}</p></div>}
+<div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18,position:"relative",flexWrap:"wrap",gap:12}}><div><div style={{display:"flex",gap:6,marginBottom:8}}>{["morning","close"].map(t=><button key={t} onClick={()=>setTab(t)} style={{fontSize:12,padding:"6px 16px",borderRadius:8,cursor:"pointer",fontWeight:600,transition:"all 0.25s",border:"1px solid",display:"flex",alignItems:"center",gap:8,background:tab===t?(t==="morning"?"#b0741e10":"#56599e10"):"transparent",borderColor:tab===t?(t==="morning"?"#b0741e30":"#56599e30"):"#e9ddc9",color:tab===t?(t==="morning"?"#b0741e":"#56599e"):"#8a8072"}}><span style={{display:"inline-flex"}}>{t==="morning"?<SunIc/>:<MoonIc/>}</span>{t==="morning"?"Morning":"Close"} Brief{sugg===t&&<span style={{width:5,height:5,borderRadius:3,background:t==="morning"?"#b0741e":"#56599e",animation:"pulse 2s infinite"}}/>}</button>)}</div><p style={{color:"#8a8072",fontSize:10,fontFamily:"'JetBrains Mono',monospace"}}>AI briefing → fact-check → implications {time?`· ${time.toLocaleTimeString()}`:""}</p></div><button onClick={()=>gen(tab,!!data)} disabled={loading||verifying} style={{...S.btn,opacity:(loading||verifying)?0.5:1}}>{loading?"⟳ Generating...":verifying||swLoad?"⟳ Analyzing...":data?"↻ Regenerate":"Generate Brief"}</button></div>
+{!data&&!loading&&<div style={{textAlign:"center",padding:"36px 0"}}><div style={{marginBottom:12,opacity:0.2,display:"flex",justifyContent:"center",color:"#8a8072"}}>{tab==="morning"?<SunIc size={40}/>:<MoonIc size={40}/>}</div><p style={{color:"#6f675c",fontSize:13}}>{tab==="morning"?"Pre-market briefing with overnight futures, macro, and what to watch":"End-of-day summary with closes, movers, and tomorrow's catalysts"}</p></div>}
 {loading&&<div style={{padding:"32px 0",textAlign:"center"}}><div style={{display:"inline-flex",gap:8}}>{[0,1,2,3].map(i=><div key={i} style={{width:7,height:7,borderRadius:4,background:tab==="morning"?"#b0741e":"#56599e",animation:"pulse 1.2s infinite",animationDelay:`${i*0.2}s`}}/>)}</div><p style={{color:"#8a8072",fontSize:12,marginTop:14,fontFamily:"'JetBrains Mono',monospace"}}>Step 1/3 — Searching & drafting...</p></div>}
 {data&&<div>
 {verifying&&!verify&&<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:8,background:"#b0741e06",border:"1px solid #b0741e12",marginBottom:12}}><div style={{display:"flex",gap:4}}>{[0,1,2].map(i=><div key={i} style={{width:5,height:5,borderRadius:3,background:"#b0741e",animation:"pulse 1s infinite",animationDelay:`${i*0.2}s`}}/>)}</div><span style={{color:"#b0741e",fontSize:11,fontFamily:"'JetBrains Mono',monospace"}}>Step 2/3 — Fact-checking...</span></div>}
@@ -572,7 +600,7 @@ export default function App() {
   const [finnhubKey, setFinnhubKey] = useState(() => localStorage.getItem("mb_finnhub_key") || "");
   const [showSettings, setShowSettings] = useState(false);
   const { prices, live: pricesLive } = usePrices(TICKERS, finnhubKey);
-  const [tab, setTabRaw] = useState("home"), [hovP, setHovP] = useState(null), [cmd, setCmd] = useState(false), [showHero, setShowHero] = useState(() => { try { return !sessionStorage.getItem("mb_intro"); } catch { return true; } }), [mounted, setMounted] = useState(false);
+  const [tab, setTabRaw] = useState(() => { try { const q = new URLSearchParams(window.location.search).get("tab"); return ["home", "projects", "markets", "news"].includes(q) ? q : "home"; } catch { return "home"; } }), [hovP, setHovP] = useState(null), [cmd, setCmd] = useState(false), [showHero, setShowHero] = useState(() => { try { return !sessionStorage.getItem("mb_intro"); } catch { return true; } }), [mounted, setMounted] = useState(false);
   const setTab = (t) => { setTabRaw(t); window.scrollTo(0, 0); };
   useEffect(() => { window.scrollTo(0, 0); if (!showHero) { setMounted(true); return; } try { sessionStorage.setItem("mb_intro", "1"); } catch {} const t = setTimeout(() => { setShowHero(false); setMounted(true); }, 2900); return () => clearTimeout(t); }, []);
   useEffect(() => { const h = e => { if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setCmd(true); } if (e.key === "Escape") setCmd(false); if (!e.metaKey && !e.ctrlKey && !e.altKey && ["1", "2", "3", "4"].includes(e.key) && !e.target.closest("input") && !e.target.closest("textarea")) setTab(["home", "projects", "markets", "news"][+e.key - 1]); }; window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, []);
@@ -593,36 +621,44 @@ export default function App() {
       <span><span style={{ color: "#3ecf8e" }}>●</span> OPEN TO OPPORTUNITIES · IB / PE / WEALTH MANAGEMENT / CORPORATE FINANCE</span>
     </div>
 
-    <header style={S.header}>
-      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <div style={{ fontFamily: "'Instrument Serif',serif", fontSize: 23, fontWeight: 400, color: "#262421", letterSpacing: "-0.01em" }}>Mason J. Bennett</div>
-        <div style={{ fontSize: 9, padding: "4px 12px", borderRadius: 20, background: "linear-gradient(135deg, rgba(13,109,86,0.12), rgba(13,109,86,0.06))", color: "#0d6d56", border: "1px solid #0d6d5625", fontFamily: "JetBrains Mono, monospace", boxShadow: "0 0 12px rgba(13,109,86,0.08)" }}>M.S. Finance '26</div>
+    <div className="masthead" style={{ background: "rgba(250,244,235,0.95)", padding: "20px 32px 16px", position: "relative", zIndex: 90 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", maxWidth: 1300, margin: "0 auto", gap: 16 }}>
+        <div className="masthead-side" style={{ flex: "1 1 0", fontSize: 9, fontFamily: "'JetBrains Mono',monospace", color: "#8a8072", letterSpacing: 1.5, textTransform: "uppercase" }}>{new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}</div>
+        <div style={{ textAlign: "center" }}>
+          <div className="masthead-name" style={{ fontFamily: "'Instrument Serif',serif", fontSize: 36, fontWeight: 400, color: "#262421", letterSpacing: "-0.015em", lineHeight: 1 }}>Mason J. Bennett</div>
+          <div className="masthead-tag" style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#0d6d56", letterSpacing: 3, textTransform: "uppercase", marginTop: 7 }}>Investment Banking · Private Equity · Wealth Management · Corporate Finance</div>
+        </div>
+        <div className="masthead-side" style={{ flex: "1 1 0", display: "flex", justifyContent: "flex-end" }}><MktBadge /></div>
       </div>
-      <nav style={{ display: "flex", gap: 2, background: "rgba(255,253,249,0.85)", borderRadius: 12, padding: 4, border: "1px solid #e3d5bf", boxShadow: "inset 0 2px 6px rgba(64,52,32,0.07)" }}>
+    </div>
+
+    <header style={S.header}>
+      <div className="mjb-mark" style={{ fontFamily: "'Instrument Serif',serif", fontSize: 16, color: "#262421", minWidth: 44 }}>MJB</div>
+      <nav style={{ display: "flex", gap: 2, background: "rgba(255,253,249,0.85)", borderRadius: 10, padding: 4, border: "1px solid #e3d5bf", boxShadow: "inset 0 2px 6px rgba(64,52,32,0.07)" }}>
         {tabs.map((t, i) => <button key={t.id} onClick={() => setTab(t.id)} style={{ ...S.tab, ...(tab === t.id ? S.tabA : {}) }}><span style={{ fontSize: 8, opacity: 0.3, marginRight: 4 }}>{i + 1}</span>{t.l}</button>)}
       </nav>
       <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-        <a href="/resume.pdf" target="_blank" rel="noopener noreferrer" style={{ ...S.btn, textDecoration: "none", display: "flex", alignItems: "center", gap: 5, fontSize: 10, padding: "5px 12px" }} title="Download Resume">📄 Resume</a>
-        <button onClick={() => setShowSettings(true)} style={{ display: "flex", alignItems: "center", gap: 5, background: apiKey ? "#0d6d5608" : "rgba(255,253,249,0.85)", border: `1px solid ${apiKey ? "#0d6d5620" : "#e9ddc9"}`, borderRadius: 8, padding: "5px 10px", color: apiKey ? "#0d6d56" : "#8a8072", fontSize: 10, cursor: "pointer", fontFamily: "JetBrains Mono, monospace" }} title={apiKey ? "API Connected" : "Settings"}>{apiKey ? "⚡ API" : "⚙"}</button>
+        <a href="/resume.pdf" target="_blank" rel="noopener noreferrer" style={{ ...S.btn, textDecoration: "none", display: "flex", alignItems: "center", gap: 5, fontSize: 10, padding: "5px 12px" }} title="Download Resume">Resume</a>
+        <button onClick={() => setShowSettings(true)} style={{ display: "flex", alignItems: "center", gap: 5, background: apiKey ? "#0d6d5608" : "rgba(255,253,249,0.85)", border: `1px solid ${apiKey ? "#0d6d5620" : "#e9ddc9"}`, borderRadius: 8, padding: "5px 10px", color: apiKey ? "#0d6d56" : "#8a8072", fontSize: 10, cursor: "pointer", fontFamily: "JetBrains Mono, monospace" }} title={apiKey ? "API Connected" : "Settings"}>{apiKey ? <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 5, height: 5, borderRadius: 3, background: "#0d6d56" }} />API</span> : <GearIc />}</button>
         <button onClick={() => setCmd(true)} style={{ display: "flex", alignItems: "center", gap: 5, background: "#f6eee1", border: "1px solid #e9ddc9", borderRadius: 8, padding: "5px 10px", color: "#8a8072", fontSize: 10, cursor: "pointer", fontFamily: "JetBrains Mono, monospace" }}>⌘K</button>
         {LINKS.slice(0, 2).map(l => <a key={l.label} href={l.url} target="_blank" rel="noopener noreferrer" style={{ color: "#8a8072", textDecoration: "none", width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 7, border: "1px solid #e9ddc9", transition: "all 0.25s" }}><span style={{ fontSize: 9, fontWeight: 700, fontFamily: "JetBrains Mono, monospace" }}>{l.ic}</span></a>)}
       </div>
+      <ScrollRule />
     </header>
 
-    <div style={{ height: 2, background: "linear-gradient(90deg, transparent, #0d6d56, #1f5a9e, transparent)", backgroundSize: "200% 100%", animation: "gradientShift 10s ease infinite", opacity: 0.5 }} />
-
-    <div className="tape" style={{ overflow: "hidden", borderBottom: "1px solid #e9ddc930", background: "rgba(253,248,240,0.92)", padding: "7px 0", position: "relative", maskImage: "linear-gradient(90deg, transparent, black 60px, black calc(100% - 60px), transparent)", WebkitMaskImage: "linear-gradient(90deg, transparent, black 60px, black calc(100% - 60px), transparent)" }}><div style={{ display: "flex", gap: 0, animation: "scroll 55s linear infinite", width: "max-content", fontFamily: "JetBrains Mono, monospace", fontSize: 11 }}>{[...prices, ...prices].map((t, i) => <a key={i} href={`https://www.tradingview.com/symbols/${t.symbol}/`} target="_blank" rel="noopener noreferrer" style={{ display: "flex", gap: 8, whiteSpace: "nowrap", paddingRight: 18, marginRight: 18, borderRight: "1px solid #e9ddc930", textDecoration: "none", transition: "opacity 0.2s" }} onMouseEnter={e=>e.currentTarget.style.opacity="0.7"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}><span style={{ color: "#8a8072", fontWeight: 600 }}>{t.symbol}</span><span style={{ color: "#6f675c" }}>${t.price}</span><span style={{ color: parseFloat(t.change) >= 0 ? "#0d6d56" : "#b2342b", fontWeight: 600 }}>{parseFloat(t.change) >= 0 ? "+" : ""}{t.change}%</span></a>)}</div></div>
+    <div className="tape" style={{ overflow: "hidden", borderBottom: "1px solid #e9ddc930", background: "rgba(253,248,240,0.92)", padding: "7px 0", position: "relative", maskImage: "linear-gradient(90deg, transparent, black 60px, black calc(100% - 60px), transparent)", WebkitMaskImage: "linear-gradient(90deg, transparent, black 60px, black calc(100% - 60px), transparent)" }}><div style={{ display: "flex", gap: 0, animation: "scroll 55s linear infinite", width: "max-content", fontFamily: "JetBrains Mono, monospace", fontSize: 11 }}>{[...prices, ...prices].map((t, i) => <a key={i} href={`https://www.tradingview.com/symbols/${t.symbol}/`} target="_blank" rel="noopener noreferrer" style={{ display: "flex", gap: 8, whiteSpace: "nowrap", paddingRight: 18, marginRight: 18, borderRight: "1px solid #e9ddc930", textDecoration: "none", transition: "opacity 0.2s" }} onMouseEnter={e=>e.currentTarget.style.opacity="0.7"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}><span style={{ color: "#8a8072", fontWeight: 600 }}>{t.symbol}</span><span style={{ color: "#6f675c" }}>${t.price}</span><span style={{ color: parseFloat(t.change) >= 0 ? "#0d6d56" : "#b2342b", fontWeight: 600 }}>{parseFloat(t.change) >= 0 ? "▲" : "▼"} {Math.abs(parseFloat(t.change)).toFixed(2)}%</span></a>)}</div></div>
 
     <main style={{ padding: 32, maxWidth: 1300, margin: "0 auto", position: "relative", zIndex: 1, opacity: mounted ? 1 : 0, transform: mounted ? "none" : "translateY(16px)", transition: "all 0.6s ease 0.3s" }}>
 
       {tab === "markets" && <div>
-        <div style={{ marginBottom: 24, animation: "fadeUp 0.5s ease both", padding: "20px 24px", background: "linear-gradient(135deg, rgba(255,253,249,0.9), rgba(251,245,236,0.7))", borderRadius: 16, border: "1px solid #e3d5bf", boxShadow: "0 4px 20px rgba(64,52,32,0.07)" }}><Clock /></div>
+        <Kicker n="03" t="Markets & Data" />
+        <div style={{ marginBottom: 24, animation: "fadeUp 0.5s ease both", padding: "20px 24px", background: "linear-gradient(135deg, rgba(255,253,249,0.9), rgba(251,245,236,0.7))", borderRadius: 10, border: "1px solid #e3d5bf", boxShadow: "0 4px 20px rgba(64,52,32,0.07)" }}><Clock /></div>
         <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
           <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.08s both" }}>
             <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> Watchlist<Info text="Live market prices grouped by signal: indices (SPY, QQQ, IWM), mega-cap movers (NVDA, AAPL, MSFT, JPM, TSLA), and macro indicators (TLT for rates, GLD for risk-off, UUP for dollar). Click any ticker for TradingView. Source: Finnhub.io" />{apiKey && <Info text={"Signal cheat sheet: TLT drops + SPY flat \u2192 rates rising, deal flow slows. GLD + TLT both spike \u2192 risk-off, market scared. IWM diverges from SPY \u2192 small-cap sentiment shifting (PE pipeline signal). QQQ outpaces SPY \u2192 growth/tech rotation. JPM moves on earnings \u2192 read-through on credit conditions and IB deal activity. UUP rising \u2192 dollar strengthening, pressure on international deals and EM. NVDA guidance \u2192 AI capex cycle indicator, affects entire tech sector. TLT rising + SPY rising \u2192 goldilocks (rates falling, equities up)."} linkLabel="TradingView" link="https://www.tradingview.com" />}{!pricesLive && <span style={{ marginLeft: "auto", fontSize: 8, padding: "3px 8px", borderRadius: 8, background: "rgba(176,116,30,0.08)", color: "#b0741e", border: "1px solid rgba(176,116,30,0.25)", letterSpacing: 1 }}>DEMO DATA</span>}</h2>
             {prices.map(t => <a key={t.symbol} href={`https://www.tradingview.com/symbols/${t.symbol}/`} target="_blank" rel="noopener noreferrer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 12px", borderRadius: 10, transition: "all 0.2s", cursor: "pointer", borderLeft: "2px solid transparent", textDecoration: "none" }} onMouseEnter={e => {e.currentTarget.style.background = "rgba(13,109,86,0.04)"; e.currentTarget.style.borderLeftColor = "#0d6d5650";}} onMouseLeave={e => {e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderLeftColor = "transparent";}}>
               <div><span style={{ color: "#33302c", fontWeight: 600, fontSize: 13 }}>{t.symbol}</span><span style={{ color: "#8a8072", fontSize: 11, marginLeft: 8 }}>{t.name}</span></div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}><Spark pos={parseFloat(t.change) >= 0} /><span style={{ color: "#33302c", fontFamily: "JetBrains Mono, monospace", fontSize: 13, minWidth: 60, textAlign: "right" }}>${t.price}</span><span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, minWidth: 52, textAlign: "right", color: parseFloat(t.change) >= 0 ? "#0d6d56" : "#b2342b", fontWeight: 600 }}>{parseFloat(t.change) >= 0 ? "+" : ""}{t.change}%</span></div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}><Spark pos={parseFloat(t.change) >= 0} /><span style={{ color: "#33302c", fontFamily: "JetBrains Mono, monospace", fontSize: 13, minWidth: 60, textAlign: "right" }}>${t.price}</span><span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, minWidth: 58, textAlign: "right", color: parseFloat(t.change) >= 0 ? "#0d6d56" : "#b2342b", fontWeight: 600 }}>{parseFloat(t.change) >= 0 ? "▲" : "▼"} {Math.abs(parseFloat(t.change)).toFixed(2)}%</span></div>
             </a>)}
           </section>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -647,9 +683,10 @@ export default function App() {
         </div>
       </div>}
 
-      {tab === "news" && <div style={{ animation: "fadeUp 0.4s ease both" }}><NewsFeed apiKey={apiKey} /></div>}
+      {tab === "news" && <div style={{ animation: "fadeUp 0.4s ease both" }}><Kicker n="04" t="News & Briefings" /><NewsFeed apiKey={apiKey} /></div>}
 
       {tab === "projects" && <div style={{ animation: "fadeUp 0.4s ease both" }}>
+        <Kicker n="02" t="Selected Work" />
         <h1 style={S.pageTitle}>Projects</h1><p style={{ color: "#6f675c", marginBottom: 32, fontSize: 14 }}>Graduate coursework and independent builds — financial modeling, econometrics, and quantitative analysis.</p>
         <div style={{ ...S.card, marginBottom: 16 }}>
           <h2 style={S.cardTitle}><span style={{ color: "#33302c" }}>◆</span> Deal Sheet<span style={{ marginLeft: "auto", fontSize: 8, color: "#a2977f", letterSpacing: 1 }}>STUDENT RECONSTRUCTIONS OF REAL TRANSACTIONS</span></h2>
@@ -682,14 +719,15 @@ export default function App() {
         </div>)}</div>
       </div>}
 
-      {tab === "home" && <div style={{ animation: "fadeUp 0.4s ease both", maxWidth: 860 }}>
-        <div style={{ background: "linear-gradient(135deg, rgba(13,109,86,0.5), rgba(224,209,186,0.9), rgba(31,90,158,0.35))", borderRadius: 18, padding: 1, boxShadow: "0 12px 48px rgba(13,109,86,0.08)" }}>
-        <div style={{ ...S.card, background: "linear-gradient(135deg,#f6eee1,#fdf8f0,#f6eee1)", border: "none", borderRadius: 16, position: "relative", overflow: "hidden" }}>
+      {tab === "home" && <div style={{ animation: "fadeUp 0.4s ease both", maxWidth: 860, margin: "0 auto" }}>
+        <Kicker n="01" t="Profile" />
+        <div style={{ background: "linear-gradient(135deg, rgba(13,109,86,0.5), rgba(224,209,186,0.9), rgba(31,90,158,0.35))", borderRadius: 11, padding: 1, boxShadow: "0 12px 48px rgba(13,109,86,0.08)" }}>
+        <div style={{ ...S.card, background: "linear-gradient(135deg,#f6eee1,#fdf8f0,#f6eee1)", border: "none", borderRadius: 10, position: "relative", overflow: "hidden" }}>
           <div style={{ position: "absolute", top: -60, right: -60, width: 300, height: 300, background: "radial-gradient(circle,rgba(13,109,86,0.06) 0%,transparent 70%)", pointerEvents: "none" }} />
           <div style={{ position: "absolute", bottom: -40, left: -40, width: 200, height: 200, background: "radial-gradient(circle,rgba(31,90,158,0.04) 0%,transparent 70%)", pointerEvents: "none" }} />
           <div className="bio-layout" style={{ display: "flex", gap: 28, alignItems: "flex-start", flexWrap: "wrap", position: "relative" }}>
-            <div style={{ flexShrink: 0, borderRadius: 22, padding: 2, background: "linear-gradient(135deg, #0d6d56, #1f5a9e)", boxShadow: "0 12px 40px rgba(13,109,86,0.15)" }}>
-              <img src="/headshot.png" alt="Mason J. Bennett" className="bio-headshot" style={{ width: 180, height: 180, borderRadius: 20, objectFit: "cover", objectPosition: "center 15%", imageRendering: "crisp-edges", filter: "contrast(1.04) brightness(1.02)", display: "block" }} />
+            <div style={{ flexShrink: 0, borderRadius: 10, padding: 6, border: "1px solid #33302c", outline: "1px solid #33302c", outlineOffset: -4, background: "#fffdf9", boxShadow: "0 12px 40px rgba(64,52,32,0.12)" }}>
+              <img src="/headshot.png" alt="Mason J. Bennett" className="bio-headshot" style={{ width: 176, height: 176, borderRadius: 5, objectFit: "cover", objectPosition: "center 15%", filter: "grayscale(0.18) sepia(0.1) contrast(1.05) brightness(1.01)", display: "block" }} />
             </div>
             <div style={{ flex: 1 }}>
               <h2 style={{ color: "#33302c", fontSize: 30, fontFamily: "Instrument Serif, serif", marginBottom: 4, textShadow: "0 2px 16px rgba(0,0,0,0)" }}>Mason J. Bennett</h2>
@@ -714,7 +752,8 @@ export default function App() {
             </div>
           ))}
         </div>
-        <div style={{ ...S.card, marginBottom: 14 }}>
+        <Orn />
+        <Reveal><div style={{ ...S.card, marginBottom: 14 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
             <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> Featured Work</h2>
             <button onClick={() => setTab("projects")} style={{ ...S.btn, fontSize: 10, padding: "5px 14px" }}>All projects →</button>
@@ -729,7 +768,8 @@ export default function App() {
             </div>)}
           </div>
         </div>
-        <div style={{ ...S.card, marginBottom: 14 }}>
+        </Reveal>
+        <Reveal><div style={{ ...S.card, marginBottom: 14 }}>
           <h2 style={S.cardTitle}><span style={{ color: "#b0741e" }}>◆</span> Now<span style={{ marginLeft: "auto", fontSize: 8, color: "#a2977f", letterSpacing: 1 }}>UPDATED JUL 2026</span></h2>
           <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
             {["Interviewing for analyst roles across investment banking, private equity, wealth management, and corporate finance",
@@ -738,7 +778,9 @@ export default function App() {
               "Reading Damodaran on Valuation and Pignataro's Financial Modeling & Valuation"].map((t, i) => <div key={i} style={{ display: "flex", gap: 10, alignItems: "baseline" }}><span style={{ color: "#0d6d56", fontSize: 11, fontFamily: "'JetBrains Mono',monospace" }}>→</span><span style={{ color: "#4a443c", fontSize: 13, lineHeight: 1.6 }}>{t}</span></div>)}
           </div>
         </div>
-        <div style={{ ...S.card, marginBottom: 14 }}>
+        </Reveal>
+        <Orn />
+        <Reveal><div style={{ ...S.card, marginBottom: 14 }}>
           <h2 style={S.cardTitle}><span style={{ color: "#1f5a9e" }}>◆</span> Timeline</h2>
           <div style={{ position: "relative", paddingLeft: 22 }}><div style={{ position: "absolute", left: 5, top: 5, bottom: 5, width: 2, background: "linear-gradient(180deg,#0d6d56,#1f5a9e,#e9ddc9)", borderRadius: 1 }} />
             {EXPERIENCE.map((e, i) => <div key={i} style={{ position: "relative", marginBottom: i < EXPERIENCE.length - 1 ? 18 : 0 }}>
@@ -749,7 +791,8 @@ export default function App() {
             </div>)}
           </div>
         </div>
-        <div style={{ ...S.card, marginBottom: 14 }}>
+        </Reveal>
+        <Reveal><div style={{ ...S.card, marginBottom: 14 }}>
           <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> Skills & Tools</h2>
           <div style={{ marginBottom: 14 }}><div style={{ fontSize: 8, color: "#8a8072", textTransform: "uppercase", letterSpacing: 2, marginBottom: 8, fontFamily: "JetBrains Mono, monospace" }}>Core Finance</div><div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{["Financial Modeling", "Valuation (DCF, LBO, Comps)", "Quality of Earnings (QoE)", "Investment Analysis", "Transaction Analysis", "Portfolio Management", "Monte Carlo Simulation", "Econometrics", "Quantitative Research"].map(s => <span key={s} style={{ fontSize: 11, padding: "6px 14px", borderRadius: 8, background: "linear-gradient(135deg, rgba(13,109,86,0.08), rgba(13,109,86,0.04))", color: "#0d6d56", border: "1px solid rgba(13,109,86,0.15)", transition: "all 0.25s", cursor: "default", boxShadow: "0 2px 6px rgba(13,109,86,0.04)" }} onMouseEnter={e=>{e.currentTarget.style.background="rgba(13,109,86,0.12)";e.currentTarget.style.boxShadow="0 4px 12px rgba(13,109,86,0.1)";e.currentTarget.style.transform="translateY(-1px)"}} onMouseLeave={e=>{e.currentTarget.style.background="linear-gradient(135deg, rgba(13,109,86,0.08), rgba(13,109,86,0.04))";e.currentTarget.style.boxShadow="0 2px 6px rgba(13,109,86,0.04)";e.currentTarget.style.transform="none"}}>{s}</span>)}</div></div>
           <div style={{ marginBottom: 14 }}><div style={{ fontSize: 8, color: "#8a8072", textTransform: "uppercase", letterSpacing: 2, marginBottom: 8, fontFamily: "JetBrains Mono, monospace" }}>Tools</div><div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{["Excel", "Python", "Bloomberg", "PitchBook", "Stata", "RStudio", "SQL", "PowerPoint", "Streamlit"].map(s => <span key={s} style={{ fontSize: 11, padding: "6px 14px", borderRadius: 8, background: "linear-gradient(145deg, #fffdf9, #f6eee1)", color: "#6f675c", border: "1px solid #e3d5bf", transition: "all 0.25s", cursor: "default", boxShadow: "0 2px 6px rgba(64,52,32,0.05)" }} onMouseEnter={e=>{e.currentTarget.style.borderColor="#1f5a9e40";e.currentTarget.style.color="#1f5a9e";e.currentTarget.style.boxShadow="0 4px 12px rgba(31,90,158,0.08)";e.currentTarget.style.transform="translateY(-1px)"}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#e3d5bf";e.currentTarget.style.color="#6f675c";e.currentTarget.style.boxShadow="0 2px 6px rgba(64,52,32,0.05)";e.currentTarget.style.transform="none"}}>{s}</span>)}</div></div>
@@ -757,7 +800,9 @@ export default function App() {
             {[["Bloomberg Market Concepts", "Certified · Apr 2026", "#0d6d56"], ["FINRA SIE", "In Progress", "#b0741e"], ["CFA Level I", "Planned", "#8a8072"]].map(([name, status, c]) => <span key={name} style={{ fontSize: 11, padding: "6px 14px", borderRadius: 8, background: `${c}0a`, color: c, border: `1px solid ${c}30`, cursor: "default", display: "inline-flex", alignItems: "center", gap: 8 }}>{name}<span style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 1, opacity: 0.75 }}>{status}</span></span>)}
           </div></div>
         </div>
-        <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
+        </Reveal>
+        <Orn />
+        <Reveal><div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
           <div style={S.card}>
             <h2 style={S.cardTitle}><span style={{ color: "#b0741e" }}>◆</span> Reading List</h2>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{READING.map((b, i) => <div key={i} style={{ padding: "12px 14px", borderRadius: 10, background: "linear-gradient(145deg, #fffdf9, #f6eee1)", border: "1px solid #e3d5bf", display: "flex", justifyContent: "space-between", alignItems: "center", transition: "all 0.25s" }} onMouseEnter={e=>{e.currentTarget.style.borderColor="#b0741e30";e.currentTarget.style.transform="translateX(4px)"}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#e3d5bf";e.currentTarget.style.transform="none"}}><div><div style={{ color: "#33302c", fontSize: 12, fontWeight: 500 }}>{b.title}</div><div style={{ color: "#8a8072", fontSize: 10 }}>{b.author}</div></div><span style={{ fontSize: 8, padding: "3px 10px", borderRadius: 10, fontFamily: "JetBrains Mono, monospace", background: b.s === "Reading" ? "rgba(31,90,158,0.1)" : b.s === "Done" ? "rgba(13,109,86,0.1)" : "rgba(111,103,92,0.08)", color: b.s === "Reading" ? "#1f5a9e" : b.s === "Done" ? "#0d6d56" : "#6f675c", border: `1px solid ${b.s === "Reading" ? "rgba(31,90,158,0.2)" : b.s === "Done" ? "rgba(13,109,86,0.2)" : "rgba(111,103,92,0.15)"}` }}>{b.s === "Done" ? "Completed" : b.s === "Ref" ? "Reference" : b.s}</span></div>)}</div>
@@ -776,10 +821,11 @@ export default function App() {
             </div>
           </div>
         </div>
-        <div style={S.card}>
+        </Reveal>
+        <Reveal><div style={S.card}>
           <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> Connect</h2>
           <div className="connect-links" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>{LINKS.map(l => <a key={l.label} href={l.url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 24px", borderRadius: 12, background: "linear-gradient(145deg, #fffdf9, #fbf5ec)", color: "#33302c", textDecoration: "none", fontSize: 13, fontWeight: 500, border: "1px solid #e3d5bf", transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)", boxShadow: "0 4px 12px rgba(64,52,32,0.07)", flex: "1 1 0", justifyContent: "center", minWidth: 140 }} onMouseEnter={e => { e.currentTarget.style.borderColor = "#0d6d5650"; e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(13,109,86,0.12), 0 0 0 1px rgba(13,109,86,0.1)"; }} onMouseLeave={e => { e.currentTarget.style.borderColor = "#e3d5bf"; e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(64,52,32,0.07)"; }}><span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 12, fontWeight: 700, color: "#0d6d56" }}>{l.ic}</span>{l.label}</a>)}</div>
-        </div>
+        </div></Reveal>
       </div>}
     </main>
 
@@ -806,7 +852,7 @@ export default function App() {
       @keyframes borderGlow{0%{border-color:rgba(13,109,86,0.2)}50%{border-color:rgba(13,109,86,0.4)}100%{border-color:rgba(13,109,86,0.2)}}
       *{box-sizing:border-box;margin:0;padding:0}
       html{scroll-behavior:smooth}
-      body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}
+      body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;font-variant-numeric:tabular-nums}
       input[type=range]{accent-color:#0d6d56}
       @media print{
         .status-bar,header nav,header>div:last-child,.tape,footer,.bg-fx{display:none!important}
@@ -820,6 +866,11 @@ export default function App() {
       button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #0d6d5660;outline-offset:2px;border-radius:10px}
       button:hover{transform:translateY(-1px)}button:active{transform:translateY(0px)}
       @media(max-width:768px){
+        .masthead{padding:12px 14px 10px!important}
+        .masthead-side{display:none!important}
+        .masthead-name{font-size:26px!important}
+        .masthead-tag{font-size:6.5px!important;letter-spacing:2px!important}
+        .mjb-mark{display:none!important}
         header{flex-wrap:wrap!important;padding:10px 14px!important;gap:8px!important}
         header nav{order:3;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
         header nav button{white-space:nowrap;font-size:11px!important;padding:6px 10px!important}
@@ -855,11 +906,11 @@ const S = {
   header: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 32px", borderBottom: "1px solid #e0d1ba", background: "rgba(250,244,235,0.92)", backdropFilter: "blur(30px) saturate(1.4)", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 4px 30px rgba(64,52,32,0.06)" },
   tab: { background: "none", border: "none", color: "#8a8072", fontSize: 12, padding: "8px 16px", cursor: "pointer", borderRadius: 10, fontWeight: 500, transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)", display: "flex", alignItems: "center", gap: 4 },
   tabA: { color: "#262421", background: "linear-gradient(135deg, rgba(13,109,86,0.15), rgba(31,90,158,0.1))", boxShadow: "0 0 20px rgba(13,109,86,0.15), 0 2px 8px rgba(64,52,32,0.07), inset 0 1px 0 rgba(255,255,255,0.7), inset 0 -2px 0 #0d6d56", fontWeight: 600 },
-  card: { background: "linear-gradient(145deg, #fffdf9, #fbf5ec)", border: "1px solid #e3d5bf", borderRadius: 16, padding: 24, boxShadow: "0 8px 32px rgba(64,52,32,0.08), 0 1px 0 rgba(255,255,255,0.6) inset", transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)" },
+  card: { background: "linear-gradient(145deg, #fffdf9, #fbf5ec)", border: "1px solid #e3d5bf", borderRadius: 10, padding: 24, boxShadow: "0 8px 32px rgba(64,52,32,0.08), 0 1px 0 rgba(255,255,255,0.6) inset", transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)" },
   cardTitle: { fontSize: 11, fontWeight: 600, color: "#6f675c", marginBottom: 16, fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 2, paddingBottom: 12, borderBottom: "1px solid rgba(13,109,86,0.12)", display: "flex", alignItems: "center", gap: 8 },
   pageTitle: { fontSize: 44, fontWeight: 400, fontFamily: "'Instrument Serif',serif", marginBottom: 10, letterSpacing: "-0.02em", lineHeight: 1.1, color: "#262421" },
   chip: { display: "inline-block", padding: "7px 14px", borderRadius: 10, background: "rgba(255,253,249,0.85)", color: "#6f675c", fontSize: 11, fontWeight: 500, textDecoration: "none", border: "1px solid #e9ddc9", transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)", backdropFilter: "blur(8px)" },
-  pCard: { display: "flex", flexDirection: "column", background: "linear-gradient(145deg, #fffdf9, #fbf5ec)", border: "1px solid #e3d5bf", borderRadius: 16, padding: 24, transition: "all 0.4s cubic-bezier(0.4,0,0.2,1)", cursor: "pointer", boxShadow: "0 8px 32px rgba(64,52,32,0.08), 0 1px 0 rgba(255,255,255,0.6) inset, inset 3px 0 0 #0d6d5630" },
+  pCard: { display: "flex", flexDirection: "column", background: "linear-gradient(145deg, #fffdf9, #fbf5ec)", border: "1px solid #e3d5bf", borderRadius: 10, padding: 24, transition: "all 0.4s cubic-bezier(0.4,0,0.2,1)", cursor: "pointer", boxShadow: "0 8px 32px rgba(64,52,32,0.08), 0 1px 0 rgba(255,255,255,0.6) inset, inset 3px 0 0 #0d6d5630" },
   btn: { background: "linear-gradient(135deg, #fffdf9, #fbf5ec)", color: "#0d6d56", border: "1px solid #0d6d5625", borderRadius: 10, padding: "7px 16px", fontSize: 11, cursor: "pointer", fontFamily: "'JetBrains Mono',monospace", fontWeight: 500, transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)", boxShadow: "0 2px 8px rgba(64,52,32,0.05)" },
   input: { background: "#f6eee1", border: "1px solid #e9ddc9", borderRadius: 10, padding: "10px 14px", color: "#33302c", fontSize: 12, fontFamily: "'Space Grotesk',sans-serif", outline: "none", width: "100%", transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)" },
 };
