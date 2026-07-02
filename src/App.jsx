@@ -851,7 +851,7 @@ export default function App() {
       @keyframes glowPulse{0%,100%{opacity:0.4}50%{opacity:1}}
       @keyframes borderGlow{0%{border-color:rgba(13,109,86,0.2)}50%{border-color:rgba(13,109,86,0.4)}100%{border-color:rgba(13,109,86,0.2)}}
       *{box-sizing:border-box;margin:0;padding:0}
-      html{scroll-behavior:smooth}
+      html{scroll-behavior:smooth;overflow-anchor:none}
       body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility;font-variant-numeric:tabular-nums}
       input[type=range]{accent-color:#0d6d56}
       @media print{
