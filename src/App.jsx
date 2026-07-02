@@ -727,7 +727,7 @@ export default function App() {
           <div style={{ position: "absolute", bottom: -40, left: -40, width: 200, height: 200, background: "radial-gradient(circle,rgba(31,90,158,0.04) 0%,transparent 70%)", pointerEvents: "none" }} />
           <div className="bio-layout" style={{ display: "flex", gap: 28, alignItems: "flex-start", flexWrap: "wrap", position: "relative" }}>
             <div style={{ flexShrink: 0, borderRadius: 10, padding: 6, border: "1px solid #33302c", outline: "1px solid #33302c", outlineOffset: -4, background: "#fffdf9", boxShadow: "0 12px 40px rgba(64,52,32,0.12)" }}>
-              <img src="/headshot.png" alt="Mason J. Bennett" className="bio-headshot" style={{ width: 176, height: 176, borderRadius: 5, objectFit: "cover", objectPosition: "center 15%", filter: "grayscale(0.18) sepia(0.1) contrast(1.05) brightness(1.01)", display: "block" }} />
+              <img src="/headshot.jpg" alt="Mason J. Bennett" className="bio-headshot" style={{ width: 176, height: 176, borderRadius: 5, objectFit: "cover", objectPosition: "center 15%", filter: "grayscale(0.18) sepia(0.1) contrast(1.05) brightness(1.01)", display: "block" }} />
             </div>
             <div style={{ flex: 1 }}>
               <h2 style={{ color: "#33302c", fontSize: 30, fontFamily: "Instrument Serif, serif", marginBottom: 4, textShadow: "0 2px 16px rgba(0,0,0,0)" }}>Mason J. Bennett</h2>
