@@ -38,6 +38,11 @@ const PROJECTS = [
   { title: "Stock Pitch — HCA Healthcare (GFI Competition)", desc: "One of only four graduate teams invited to present a buy recommendation on HCA Healthcare (NYSE: HCA) to the Garrison Financial Institute Advisory Board of industry practitioners. Built the financial projections and pitch deck, and defended the thesis in live Q&A.", tags: ["Equity Research", "Valuation", "Pitch Deck"], status: "Completed", completed: "Oct 2025" },
   { title: "Applied Econometrics — Hurricane Michael", desc: "Regression analysis studying Hurricane Michael's impact on Florida housing prices across 67 counties. Built MLR and Difference-in-Difference models achieving R² of 0.59, identifying a $36,631 median price decline in affected counties. Analyzed median income, unemployment, elevation, FEMA risk indices, and population density as determinants.", tags: ["Stata", "Econometrics", "Regression Analysis", "Diff-in-Diff"], status: "Completed", completed: "Apr 2024", url: "/hurricane-paper.docx" },
 ];
+const DEALS = [
+  { value: "$55B", type: "Take-Private LBO", co: "Electronic Arts Inc.", sub: "NASDAQ: EA", detail: "38-page IM · 24-slide IC deck · 12-tab LBO model", date: "Apr 2026" },
+  { value: "£900M", type: "Sponsor-to-Sponsor LBO", co: "Jagex Limited", sub: "CVC & Haveli ← The Carlyle Group", detail: "10-tab LBO model · 26-page IM · QoE bridge", date: "Apr 2026" },
+  { value: "NYSE: HCA", type: "Buy Recommendation", co: "HCA Healthcare", sub: "GFI Stock Pitch Competition", detail: "1 of 4 graduate teams · live Q&A defense", date: "Oct 2025" },
+];
 const EXPERIENCE = [
   { role: "M.S. Finance", org: "Walton College of Business", date: "2025–2026", type: "edu", detail: "4.0 GPA · Advanced Financial Modeling, Advanced Corporate Finance, Alternative Investments, New Venture (Private Equity), Financial Data Analytics II" },
   { role: "Analyst — Shollmier Investment Fund", org: "Walton College · Student-managed fund", date: "2025–2026", type: "work", detail: "Sector analysis for a live $700K+ fixed-income portfolio managed by graduate students." },
@@ -77,17 +82,6 @@ const QLINKS = [
   { n: "PitchBook", u: "https://pitchbook.com" },
 ];
 const SRC_URLS = { "Reuters": "https://reuters.com", "Bloomberg": "https://bloomberg.com", "CNBC": "https://cnbc.com", "Wall Street Journal": "https://wsj.com", "WSJ": "https://wsj.com", "Financial Times": "https://ft.com", "FT": "https://ft.com", "MarketWatch": "https://marketwatch.com", "AP": "https://apnews.com", "Yahoo Finance": "https://finance.yahoo.com", "Barron's": "https://barrons.com", "Seeking Alpha": "https://seekingalpha.com" };
-
-// Sample investment theses (user editable)
-const INIT_THESES = [
-  { id: 1, company: "NVDA", name: "NVIDIA Corp.", stance: "Bull", thesis: "AI infrastructure spending is in early innings. Data center revenue is accelerating with hyperscaler capex cycles, and NVIDIA maintains 80%+ GPU market share for AI training workloads.", catalyst: "Upcoming earnings beat driven by Blackwell architecture ramp", risk: "Customer concentration in top 4 hyperscalers; potential ASP compression from AMD MI300X competition", timeframe: "12–18 months", date: "Apr 2026" },
-  { id: 2, company: "JPM", name: "JP Morgan Chase", stance: "Bull", thesis: "Best-positioned money center bank for a higher-for-longer rate environment. Net interest income benefits from steeper curve, trading revenues resilient, and investment banking pipeline recovering.", catalyst: "IB revenue recovery as M&A cycle picks up in 2026", risk: "Credit quality deterioration in commercial real estate; regulatory capital requirements", timeframe: "6–12 months", date: "Apr 2026" },
-];
-
-const INIT_COMMENTARY = [
-  { id: 1, date: "Apr 7, 2026", title: "Tariff Uncertainty Weighing on Multiples", content: "Markets continue to price in policy uncertainty as trade rhetoric escalates. The VIX has stayed elevated above 20 for two consecutive weeks — unusual for a period without an earnings shock. I'm watching the 10Y closely as a signal: if yields break below 4.0%, it likely means the bond market is pricing recession risk over inflation, which would be a regime shift worth repositioning for. Staying overweight quality names with pricing power (MSFT, AAPL) and underweight cyclicals until clarity emerges." },
-  { id: 2, date: "Mar 31, 2026", title: "Q1 Earnings Preview — Tech Will Set the Tone", content: "Heading into Q1 earnings with elevated expectations for Big Tech. The Mag 7 are expected to grow earnings ~18% YoY on average, but the bar has been raised. Key question: are hyperscaler capex plans for AI infrastructure sustainable at current run rates, or do we see a deceleration signal? NVDA guidance will be the most important single data point of earnings season. If Blackwell ramp disappoints, expect a broad AI trade unwind." },
-];
 
 // ============ SMART REFRESH ============
 function getSmartInterval() {
@@ -231,14 +225,32 @@ function usePrices(tickers, finnhubKey) {
     const iv = setInterval(() => { fetchedRef.current = false; }, 60000);
     return () => clearInterval(iv);
   }, [finnhubKey]);
-  // Fallback: simulated if no key
+  // Fallback: server-side proxy (real data, key stays on Vercel), then simulated
+  const [live, setLive] = useState(false);
   useEffect(() => {
     if (finnhubKey) return;
-    setP(tickers.map(t => ({ ...t, price: (80 + Math.random() * 450).toFixed(2), change: (Math.random() * 7 - 3.5).toFixed(2) })));
-    const iv = setInterval(() => setP(prev => prev.map(t => { const d = (Math.random() - 0.47) * 1.8; return { ...t, price: Math.max(1, parseFloat(t.price) + d).toFixed(2), change: (parseFloat(t.change) + d * 0.08).toFixed(2) }; })), 3000);
-    return () => clearInterval(iv);
+    let cancelled = false, iv = null;
+    const startSim = () => {
+      if (cancelled) return;
+      setP(tickers.map(t => ({ ...t, price: (80 + Math.random() * 450).toFixed(2), change: (Math.random() * 7 - 3.5).toFixed(2) })));
+      iv = setInterval(() => setP(prev => prev.map(t => { const d = (Math.random() - 0.47) * 1.8; return { ...t, price: Math.max(1, parseFloat(t.price) + d).toFixed(2), change: (parseFloat(t.change) + d * 0.08).toFixed(2) }; })), 3000);
+    };
+    (async () => {
+      try {
+        const cached = cacheGet("mb_prices_proxy", 5);
+        if (cached) { if (!cancelled) { setP(cached); setLive(true); } return; }
+        const r = await fetch(`/api/quotes?symbols=${tickers.map(t => t.symbol).join(",")}`);
+        if (!r.ok) throw 0;
+        const d = await r.json();
+        const mapped = tickers.map(t => d[t.symbol] && d[t.symbol].c ? { ...t, price: d[t.symbol].c.toFixed(2), change: (d[t.symbol].dp || 0).toFixed(2) } : null);
+        if (mapped.filter(Boolean).length < tickers.length / 2) throw 0;
+        const filled = mapped.map((m, i) => m || { ...tickers[i], price: "—", change: "0.00" });
+        if (!cancelled) { setP(filled); setLive(true); cacheSet("mb_prices_proxy", filled); }
+      } catch { startSim(); }
+    })();
+    return () => { cancelled = true; if (iv) clearInterval(iv); };
   }, [finnhubKey]);
-  return p;
+  return { prices: p, live: !!finnhubKey || live };
 }
 
 // ============ INFO TOOLTIP ============
@@ -285,6 +297,24 @@ function HeatMap({ finnhubKey }){
       cacheSet("mb_heatmap", results);
     }
     load();
+  }, [finnhubKey]);
+  // No personal key: try the server-side proxy for real sector data
+  useEffect(() => {
+    if (finnhubKey) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const cached = cacheGet("mb_heatmap_proxy", 5);
+        if (cached) { if (!cancelled) setCells(cached); return; }
+        const r = await fetch(`/api/quotes?symbols=${HEATMAP.map(h => h.ticker).join(",")}`);
+        if (!r.ok) return;
+        const d = await r.json();
+        if (!Object.keys(d).length) return;
+        const results = HEATMAP.map(h => ({ ...h, change: d[h.ticker] && d[h.ticker].dp !== undefined ? d[h.ticker].dp.toFixed(2) : "0.00" }));
+        if (!cancelled) { setCells(results); cacheSet("mb_heatmap_proxy", results); }
+      } catch {}
+    })();
+    return () => { cancelled = true; };
   }, [finnhubKey]);
   const gc=c=>{const v=parseFloat(c);return v>3?"#15803d":v>1?"#1a9464":v>-1?"#6f675c":v>-3?"#b2342b":"#992d25"};
   return <div style={{display:"flex",flexWrap:"wrap",gap:5}}>{cells.map(c=><a key={c.ticker} href={`https://www.tradingview.com/symbols/${c.ticker}/`} target="_blank" rel="noopener noreferrer" style={{background:gc(c.change)+"15",border:`1px solid ${gc(c.change)}30`,borderRadius:10,padding:"12px 0",flex:`${c.w} 1 0`,minWidth:70,textAlign:"center",cursor:"pointer",transition:"all 0.3s cubic-bezier(0.4,0,0.2,1)",boxShadow:`0 2px 8px ${gc(c.change)}08`,textDecoration:"none"}} onMouseEnter={e=>{e.currentTarget.style.background=gc(c.change)+"30";e.currentTarget.style.transform="scale(1.05) translateY(-2px)";e.currentTarget.style.boxShadow=`0 8px 20px ${gc(c.change)}15`}} onMouseLeave={e=>{e.currentTarget.style.background=gc(c.change)+"15";e.currentTarget.style.transform="scale(1)";e.currentTarget.style.boxShadow=`0 2px 8px ${gc(c.change)}08`}}><div style={{fontSize:12,fontWeight:700,color:"#33302c",fontFamily:"'JetBrains Mono',monospace"}}>{c.ticker}</div><div style={{fontSize:11,color:gc(c.change),fontFamily:"'JetBrains Mono',monospace",marginTop:2,fontWeight:600}}>{parseFloat(c.change)>0?"+":""}{c.change}%</div><div style={{fontSize:8,color:"#8a8072",marginTop:3}}>{c.sector}</div></a>)}</div>;
@@ -408,7 +438,7 @@ function Notes(){const[notes,setNotes]=useState(()=>{try{const s=localStorage.ge
 
 // ============ HERO + CMD ============
 function Hero(){const[ph,setPh]=useState(0);useEffect(()=>{const timers=[setTimeout(()=>setPh(1),350),setTimeout(()=>setPh(2),1000),setTimeout(()=>setPh(3),1800),setTimeout(()=>setPh(4),2600)];return()=>timers.forEach(clearTimeout)},[]);return <div style={{position:"fixed",inset:0,background:"#faf3ea",zIndex:9999,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",transition:"opacity 1s ease",opacity:ph>=4?0:1,pointerEvents:ph>=4?"none":"all"}} onClick={()=>setPh(4)}><div style={{position:"absolute",width:600,height:600,borderRadius:"50%",background:"radial-gradient(circle,rgba(13,109,86,0.06) 0%,transparent 70%)",animation:"breathe 4s ease-in-out infinite"}}/><div style={{position:"absolute",width:400,height:400,borderRadius:"50%",background:"radial-gradient(circle,rgba(31,90,158,0.04) 0%,transparent 70%)",animation:"breathe 5s ease-in-out infinite",animationDelay:"1s",left:"35%",top:"55%"}}/><div style={{position:"absolute",top:0,left:0,right:0,height:10,background:"#2b2825"}}/><div style={{position:"absolute",top:10,left:0,right:0,height:2,background:"#0d6d56",transform:ph>=1?"scaleX(1)":"scaleX(0)",transition:"transform 1.2s cubic-bezier(0.4,0,0.2,1)"}}/><div style={{position:"relative",textAlign:"center"}}><div style={{fontSize:12,fontFamily:"'JetBrains Mono',monospace",color:"#0d6d56",letterSpacing:8,textTransform:"uppercase",marginBottom:28,opacity:ph>=1?1:0,transform:`translateY(${ph>=1?0:10}px)`,transition:"all 0.8s cubic-bezier(0.4,0,0.2,1)"}}>masonjbennett.com</div><div style={{width:360,maxWidth:"72vw",margin:"0 auto 26px",borderTop:"1px solid #33302c",borderBottom:"1px solid #33302c",height:5,transform:ph>=2?"scaleX(1)":"scaleX(0)",transition:"transform 0.9s cubic-bezier(0.4,0,0.2,1)"}}/><h1 className="hero-name" style={{fontSize:72,fontWeight:400,fontFamily:"'Instrument Serif',serif",color:"#262421",lineHeight:1,marginBottom:18,opacity:ph>=2?1:0,transform:`translateY(${ph>=2?0:20}px) scale(${ph>=2?1:0.95})`,transition:"all 1s cubic-bezier(0.4,0,0.2,1)",letterSpacing:"-0.02em"}}>Mason J. Bennett</h1><p className="hero-sub" style={{fontSize:15,color:"#6f675c",letterSpacing:2,opacity:ph>=3?1:0,transform:`translateY(${ph>=3?0:10}px)`,transition:"all 0.8s cubic-bezier(0.4,0,0.2,1)",fontFamily:"'Space Grotesk',sans-serif"}}>M.S. Finance '26 · University of Arkansas · Dallas–Fort Worth, TX</p><div style={{width:60,margin:"26px auto 0",borderTop:"1px solid #0d6d56",transform:ph>=3?"scaleX(1)":"scaleX(0)",transition:"transform 0.8s cubic-bezier(0.4,0,0.2,1)"}}/><div style={{display:"flex",gap:16,marginTop:24,justifyContent:"center",opacity:ph>=3?1:0,transform:`translateY(${ph>=3?0:10}px)`,transition:"all 0.8s cubic-bezier(0.4,0,0.2,1) 0.2s"}}>{["IB","PE","WM","CF"].map(t=><span key={t} style={{fontSize:10,padding:"4px 14px",borderRadius:20,border:"1px solid rgba(13,109,86,0.2)",color:"#0d6d56",fontFamily:"'JetBrains Mono',monospace",letterSpacing:2,background:"rgba(13,109,86,0.05)"}}>{t}</span>)}</div></div><div style={{position:"absolute",bottom:36,fontSize:9,color:"#a2977f",fontFamily:"'JetBrains Mono',monospace",letterSpacing:3,textTransform:"uppercase",opacity:ph>=1&&ph<4?0.8:0,transition:"opacity 1.2s"}}>click anywhere to skip</div></div>;}
-function Cmd({open,onClose,onNav}){const[q,setQ]=useState("");const ref=useRef();const items=[{l:"Home",t:"home"},{l:"Projects",t:"projects"},{l:"Research",t:"research"},{l:"Markets",t:"markets"},{l:"News",t:"news"},...QLINKS.map(l=>({l:l.n,u:l.u}))];const f=items.filter(i=>i.l.toLowerCase().includes(q.toLowerCase()));useEffect(()=>{if(open&&ref.current){ref.current.focus();setQ("")}},[open]);if(!open)return null;return <div style={{position:"fixed",inset:0,background:"rgba(51,48,46,0.45)",backdropFilter:"blur(12px)",zIndex:1000,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:100,animation:"fadeIn 0.15s"}} onClick={onClose}><div style={{background:"#fffdf9",border:"1px solid #d8c8b0",borderRadius:16,width:520,overflow:"hidden",boxShadow:"0 32px 80px rgba(64,52,32,0.14)"}} onClick={e=>e.stopPropagation()} className="cmd-modal"><div style={{padding:"16px 20px",borderBottom:"1px solid #e9ddc9",display:"flex",alignItems:"center",gap:12}}><span style={{color:"#0d6d56"}}>⌘</span><input ref={ref} value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..." style={{flex:1,background:"none",border:"none",outline:"none",color:"#33302c",fontSize:15}}/><kbd style={{fontSize:9,padding:"2px 7px",borderRadius:4,background:"#e9ddc9",color:"#8a8072",border:"1px solid #d8c8b0",fontFamily:"'JetBrains Mono',monospace"}}>ESC</kbd></div><div style={{maxHeight:320,overflowY:"auto",padding:6}}>{f.map((item,i)=><button key={i} onClick={()=>{if(item.t)onNav(item.t);else window.open(item.u,"_blank");onClose()}} style={{display:"flex",alignItems:"center",gap:12,width:"100%",padding:"11px 14px",background:"none",border:"none",color:"#33302c",fontSize:14,cursor:"pointer",borderRadius:10,textAlign:"left",transition:"background 0.1s"}} onMouseEnter={e=>e.currentTarget.style.background="#e9ddc9"} onMouseLeave={e=>e.currentTarget.style.background="none"}><span style={{color:"#0d6d56",width:20,textAlign:"center"}}>→</span><span>{item.l}</span>{item.u&&<span style={{marginLeft:"auto",fontSize:10,color:"#8a8072"}}>↗</span>}</button>)}</div></div></div>;}
+function Cmd({open,onClose,onNav}){const[q,setQ]=useState("");const ref=useRef();const items=[{l:"Home",t:"home"},{l:"Projects",t:"projects"},{l:"Markets",t:"markets"},{l:"News",t:"news"},...QLINKS.map(l=>({l:l.n,u:l.u}))];const f=items.filter(i=>i.l.toLowerCase().includes(q.toLowerCase()));useEffect(()=>{if(open&&ref.current){ref.current.focus();setQ("")}},[open]);if(!open)return null;return <div style={{position:"fixed",inset:0,background:"rgba(51,48,46,0.45)",backdropFilter:"blur(12px)",zIndex:1000,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:100,animation:"fadeIn 0.15s"}} onClick={onClose}><div style={{background:"#fffdf9",border:"1px solid #d8c8b0",borderRadius:16,width:520,overflow:"hidden",boxShadow:"0 32px 80px rgba(64,52,32,0.14)"}} onClick={e=>e.stopPropagation()} className="cmd-modal"><div style={{padding:"16px 20px",borderBottom:"1px solid #e9ddc9",display:"flex",alignItems:"center",gap:12}}><span style={{color:"#0d6d56"}}>⌘</span><input ref={ref} value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..." style={{flex:1,background:"none",border:"none",outline:"none",color:"#33302c",fontSize:15}}/><kbd style={{fontSize:9,padding:"2px 7px",borderRadius:4,background:"#e9ddc9",color:"#8a8072",border:"1px solid #d8c8b0",fontFamily:"'JetBrains Mono',monospace"}}>ESC</kbd></div><div style={{maxHeight:320,overflowY:"auto",padding:6}}>{f.map((item,i)=><button key={i} onClick={()=>{if(item.t)onNav(item.t);else window.open(item.u,"_blank");onClose()}} style={{display:"flex",alignItems:"center",gap:12,width:"100%",padding:"11px 14px",background:"none",border:"none",color:"#33302c",fontSize:14,cursor:"pointer",borderRadius:10,textAlign:"left",transition:"background 0.1s"}} onMouseEnter={e=>e.currentTarget.style.background="#e9ddc9"} onMouseLeave={e=>e.currentTarget.style.background="none"}><span style={{color:"#0d6d56",width:20,textAlign:"center"}}>→</span><span>{item.l}</span>{item.u&&<span style={{marginLeft:"auto",fontSize:10,color:"#8a8072"}}>↗</span>}</button>)}</div></div></div>;}
 
 // ============ BRIEFINGS (compact) ============
 function Briefings({apiKey}){const[morning,setMorning]=useState(null),[close,setClose]=useState(null),[vM,setVM]=useState(null),[vC,setVC]=useState(null),[swM,setSwM]=useState(null),[swC,setSwC]=useState(null),[lM,setLM]=useState(false),[lC,setLC]=useState(false),[vLM,setVLM]=useState(false),[vLC,setVLC]=useState(false),[swLM,setSwLM]=useState(false),[swLC,setSwLC]=useState(false),[tM,setTM]=useState(null),[tC,setTC]=useState(null),[showCl,setShowCl]=useState(false),[showSW,setShowSW]=useState(true),[tab,setTab]=useState(()=>new Date().getHours()>=16?"close":"morning");const sugg=new Date().getHours()>=16?"close":"morning";
@@ -439,99 +469,65 @@ return <div><Briefings apiKey={apiKey}/><div style={{height:16}}/>
 <div style={S.card}>{!arts&&!loading[activeCat]&&<div style={{textAlign:"center",padding:"50px 20px"}}><p style={{color:"#6f675c",marginBottom:14}}>No {cat.label} articles yet</p><button onClick={()=>fetchCat(cat)} style={{...S.btn,padding:"10px 24px"}}>Fetch {cat.label}</button></div>}{loading[activeCat]&&!arts&&<div style={{display:"flex",flexDirection:"column",gap:14,padding:8}}>{[1,2,3,4,5].map(i=><div key={i} style={{padding:"10px 0",animation:"shimmer 1.5s infinite",animationDelay:`${i*0.12}s`}}><div style={{height:13,width:`${55+Math.random()*35}%`,background:"#e9ddc9",borderRadius:5,marginBottom:8}}/><div style={{height:10,width:`${30+Math.random()*40}%`,background:"#efe4d2",borderRadius:5}}/></div>)}</div>}{arts&&<div><div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><span style={{fontSize:10,color:cat.color,fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:2}}>{cat.label} · {arts.length}</span><button onClick={()=>fetchCat(cat)} style={{background:"none",border:"none",color:"#8a8072",fontSize:10,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>↻</button></div>{arts.map((a,i)=><a key={i} href={a.url||"#"} target="_blank" rel="noopener noreferrer" style={{display:"block",padding:"10px 10px",borderRadius:8,textDecoration:"none",transition:"all 0.15s",borderLeft:"2px solid transparent"}} onMouseEnter={e=>{e.currentTarget.style.background="#e9ddc918";e.currentTarget.style.borderLeftColor=cat.color+"50"}} onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderLeftColor="transparent"}}><div style={{display:"flex",gap:10,alignItems:"baseline"}}><span style={{color:`${cat.color}35`,fontSize:9,fontFamily:"'JetBrains Mono',monospace",minWidth:16}}>{String(i+1).padStart(2,"0")}</span><div style={{flex:1}}><h3 style={{color:"#33302c",fontSize:13,fontWeight:500,lineHeight:1.5,marginBottom:4}}>{a.title}</h3><p style={{color:"#6f675c",fontSize:11,lineHeight:1.4,marginBottom:4}}>{a.summary}</p><div style={{display:"flex",gap:14,fontSize:9,fontFamily:"'JetBrains Mono',monospace"}}><span style={{color:cat.color}}>{a.source}</span><span style={{color:"#8a8072"}}>{a.time}</span></div></div></div></a>)}</div>}</div>
 </div>;}
 
-// ============ RESEARCH TAB ============
-function ResearchTab() {
-  const [theses, setTheses] = useState(() => { try { const s = localStorage.getItem("mb_theses"); return s ? JSON.parse(s) : INIT_THESES; } catch { return INIT_THESES; } });
-  const [commentary, setCommentary] = useState(() => { try { const s = localStorage.getItem("mb_commentary"); return s ? JSON.parse(s) : INIT_COMMENTARY; } catch { return INIT_COMMENTARY; } });
-  useEffect(() => { localStorage.setItem("mb_theses", JSON.stringify(theses)); }, [theses]);
-  useEffect(() => { localStorage.setItem("mb_commentary", JSON.stringify(commentary)); }, [commentary]);
-  const [showThesisForm, setShowThesisForm] = useState(false);
-  const [showCommentForm, setShowCommentForm] = useState(false);
-  const [newThesis, setNewThesis] = useState({ company: "", name: "", stance: "Bull", thesis: "", catalyst: "", risk: "", timeframe: "" });
-  const [newComment, setNewComment] = useState({ title: "", content: "" });
-  const [expandedThesis, setExpandedThesis] = useState(null);
-
-  const addThesis = () => { if (!newThesis.company || !newThesis.thesis) return; setTheses(p => [{ ...newThesis, id: Date.now(), date: new Date().toLocaleDateString("en-US", { month: "short", year: "numeric" }) }, ...p]); setNewThesis({ company: "", name: "", stance: "Bull", thesis: "", catalyst: "", risk: "", timeframe: "" }); setShowThesisForm(false); };
-  const addComment = () => { if (!newComment.title || !newComment.content) return; setCommentary(p => [{ ...newComment, id: Date.now(), date: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) }, ...p]); setNewComment({ title: "", content: "" }); setShowCommentForm(false); };
-
-  return <div style={{ animation: "fadeUp 0.4s ease both" }}>
-    <h1 style={S.pageTitle}>Research</h1>
-    <p style={{ color: "#6f675c", marginBottom: 28, fontSize: 14 }}>Investment theses, market views, and ongoing analysis.</p>
-
-    {/* Investment Thesis Board */}
-    <div style={{ ...S.card, marginBottom: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> Investment Thesis Board<Info text="Structured investment write-ups with bull/bear stance, catalysts, and risks. Click any thesis to expand details. Add new theses with the + button." /></h2>
-        <button onClick={() => setShowThesisForm(!showThesisForm)} style={{ ...S.btn, fontSize: 11 }}>{showThesisForm ? "Cancel" : "+ New Thesis"}</button>
+// ============ LBO SANDBOX ============
+function LBOSandbox() {
+  const [inp, setInp] = useState({ entry: 10, debt: 60, growth: 6, exit: 10, years: 5 });
+  const set = k => e => setInp(p => ({ ...p, [k]: parseFloat(e.target.value) }));
+  const E0 = 100, EV0 = inp.entry * E0, D0 = EV0 * inp.debt / 100, Q0 = EV0 - D0;
+  const EN = E0 * Math.pow(1 + inp.growth / 100, inp.years);
+  let debt = D0;
+  for (let y = 1; y <= inp.years; y++) debt = Math.max(0, debt - 0.45 * E0 * Math.pow(1 + inp.growth / 100, y));
+  const EVN = inp.exit * EN, QN = EVN - debt;
+  const mom = QN / Q0, irr = mom > 0 ? (Math.pow(mom, 1 / inp.years) - 1) * 100 : -100;
+  const bridge = [
+    ["EBITDA growth", inp.entry * (EN - E0), "#0d6d56"],
+    ["Multiple expansion", (inp.exit - inp.entry) * EN, "#1f5a9e"],
+    ["Deleveraging", D0 - debt, "#b0741e"],
+  ];
+  const maxAbs = Math.max(...bridge.map(([, v]) => Math.abs(v)), 1);
+  const sliders = [
+    ["Entry multiple", "entry", 6, 16, 0.5, v => `${v.toFixed(1)}x EBITDA`],
+    ["Debt financing", "debt", 30, 80, 5, v => `${v}% of EV`],
+    ["EBITDA growth", "growth", 0, 15, 0.5, v => `${v.toFixed(1)}% / yr`],
+    ["Exit multiple", "exit", 6, 16, 0.5, v => `${v.toFixed(1)}x EBITDA`],
+    ["Hold period", "years", 3, 7, 1, v => `${v} years`],
+  ];
+  return <div>
+    <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 28, alignItems: "start" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {sliders.map(([label, k, min, max, step, fmt]) => <div key={k}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+            <span style={{ fontSize: 11, color: "#6f675c", fontWeight: 500 }}>{label}</span>
+            <span style={{ fontSize: 11, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", fontWeight: 600 }}>{fmt(inp[k])}</span>
+          </div>
+          <input type="range" min={min} max={max} step={step} value={inp[k]} onChange={set(k)} style={{ width: "100%", cursor: "pointer" }} />
+        </div>)}
       </div>
-
-      {showThesisForm && <div style={{ padding: 16, borderRadius: 10, background: "#f6eee1", border: "1px solid #e9ddc9", marginBottom: 16, display: "flex", flexDirection: "column", gap: 10 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8 }}>
-          <input value={newThesis.company} onChange={e => setNewThesis(p => ({ ...p, company: e.target.value }))} placeholder="Ticker (e.g. AAPL)" style={S.input} />
-          <input value={newThesis.name} onChange={e => setNewThesis(p => ({ ...p, name: e.target.value }))} placeholder="Company Name" style={S.input} />
-          <select value={newThesis.stance} onChange={e => setNewThesis(p => ({ ...p, stance: e.target.value }))} style={{ ...S.input, cursor: "pointer" }}><option>Bull</option><option>Bear</option><option>Neutral</option></select>
-          <input value={newThesis.timeframe} onChange={e => setNewThesis(p => ({ ...p, timeframe: e.target.value }))} placeholder="Timeframe" style={S.input} />
-        </div>
-        <textarea value={newThesis.thesis} onChange={e => setNewThesis(p => ({ ...p, thesis: e.target.value }))} placeholder="Core thesis — why are you bullish or bearish?" style={{ ...S.input, minHeight: 70, resize: "vertical" }} />
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          <input value={newThesis.catalyst} onChange={e => setNewThesis(p => ({ ...p, catalyst: e.target.value }))} placeholder="Key catalyst" style={S.input} />
-          <input value={newThesis.risk} onChange={e => setNewThesis(p => ({ ...p, risk: e.target.value }))} placeholder="Primary risk" style={S.input} />
-        </div>
-        <button onClick={addThesis} style={{ ...S.btn, alignSelf: "flex-end", padding: "8px 24px" }}>Save Thesis</button>
-      </div>}
-
-      {theses.map((t, i) => <div key={t.id} style={{ padding: "16px 18px", borderRadius: 10, background: "#f6eee1", border: "1px solid #e9ddc9", marginBottom: 8, cursor: "pointer", transition: "all 0.2s" }} onClick={() => setExpandedThesis(expandedThesis === t.id ? null : t.id)}
-        onMouseEnter={e => e.currentTarget.style.borderColor = "#e9ddc980"} onMouseLeave={e => e.currentTarget.style.borderColor = "#e9ddc9"}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: expandedThesis === t.id ? 12 : 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontFamily: "JetBrains Mono, monospace", fontWeight: 700, fontSize: 16, color: "#33302c" }}>{t.company}</span>
-            <span style={{ color: "#6f675c", fontSize: 13 }}>{t.name}</span>
-            <span style={{ fontSize: 10, padding: "3px 10px", borderRadius: 20, fontFamily: "JetBrains Mono, monospace", fontWeight: 600, background: t.stance === "Bull" ? "#0d6d5610" : t.stance === "Bear" ? "#b2342b10" : "#b0741e10", color: t.stance === "Bull" ? "#0d6d56" : t.stance === "Bear" ? "#b2342b" : "#b0741e", border: `1px solid ${t.stance === "Bull" ? "#0d6d5620" : t.stance === "Bear" ? "#b2342b20" : "#b0741e20"}` }}>{t.stance}</span>
+      <div>
+        <div style={{ display: "flex", gap: 28, marginBottom: 18 }}>
+          <div>
+            <div style={{ fontSize: 36, fontFamily: "'Instrument Serif',serif", color: irr >= 0 ? "#0d6d56" : "#b2342b", lineHeight: 1 }}>{irr.toFixed(1)}%</div>
+            <div style={{ fontSize: 9, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 1.5, marginTop: 4 }}>Gross IRR</div>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {t.timeframe && <span style={{ fontSize: 10, color: "#8a8072", fontFamily: "JetBrains Mono, monospace" }}>{t.timeframe}</span>}
-            <span style={{ fontSize: 10, color: "#8a8072", fontFamily: "JetBrains Mono, monospace" }}>{t.date}</span>
-            <span style={{ color: "#8a8072", fontSize: 12 }}>{expandedThesis === t.id ? "▾" : "▸"}</span>
+          <div>
+            <div style={{ fontSize: 36, fontFamily: "'Instrument Serif',serif", color: "#262421", lineHeight: 1 }}>{mom.toFixed(2)}x</div>
+            <div style={{ fontSize: 9, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 1.5, marginTop: 4 }}>MoM</div>
           </div>
         </div>
-        {expandedThesis === t.id && <div style={{ animation: "fadeUp 0.2s ease" }}>
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 9, color: "#8a8072", fontFamily: "JetBrains Mono, monospace", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>Thesis</div>
-            <p style={{ color: "#4a443c", fontSize: 13, lineHeight: 1.7 }}>{t.thesis}</p>
-          </div>
-          {t.catalyst && <div style={{ marginBottom: 8 }}>
-            <div style={{ fontSize: 9, color: "#0d6d56", fontFamily: "JetBrains Mono, monospace", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 3 }}>Catalyst</div>
-            <p style={{ color: "#4a443c", fontSize: 12, lineHeight: 1.5 }}>{t.catalyst}</p>
-          </div>}
-          {t.risk && <div>
-            <div style={{ fontSize: 9, color: "#b2342b", fontFamily: "JetBrains Mono, monospace", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 3 }}>Risk</div>
-            <p style={{ color: "#4a443c", fontSize: 12, lineHeight: 1.5 }}>{t.risk}</p>
-          </div>}
-        </div>}
-      </div>)}
-    </div>
-
-    {/* Weekly Commentary */}
-    <div style={S.card}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-        <h2 style={S.cardTitle}><span style={{ color: "#6d549e" }}>◆</span> Weekly Market Commentary<Info text="Personal market journal — macro views, sector analysis, and trade ideas. Entries are date-stamped and persist in browser storage." /></h2>
-        <button onClick={() => setShowCommentForm(!showCommentForm)} style={{ ...S.btn, fontSize: 11 }}>{showCommentForm ? "Cancel" : "+ New Entry"}</button>
+        <div style={{ fontSize: 11, color: "#6f675c", marginBottom: 14, fontFamily: "'JetBrains Mono',monospace" }}>Sponsor equity: ${Q0.toFixed(0)}M → ${QN.toFixed(0)}M</div>
+        <div style={{ fontSize: 9, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 8 }}>Value-Creation Bridge</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {bridge.map(([label, v, c]) => <div key={label} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ fontSize: 10, color: "#6f675c", minWidth: 118 }}>{label}</span>
+            <div style={{ flex: 1, height: 10, background: "#f6eee1", borderRadius: 5, overflow: "hidden" }}>
+              <div style={{ width: `${Math.min(100, Math.abs(v) / maxAbs * 100)}%`, height: "100%", background: v >= 0 ? c : "#b2342b", borderRadius: 5, transition: "width 0.3s ease" }} />
+            </div>
+            <span style={{ fontSize: 10, fontFamily: "'JetBrains Mono',monospace", color: v >= 0 ? c : "#b2342b", minWidth: 58, textAlign: "right", fontWeight: 600 }}>{v >= 0 ? "+" : "−"}${Math.abs(v).toFixed(0)}M</span>
+          </div>)}
+        </div>
       </div>
-
-      {showCommentForm && <div style={{ padding: 16, borderRadius: 10, background: "#f6eee1", border: "1px solid #e9ddc9", marginBottom: 16, display: "flex", flexDirection: "column", gap: 10 }}>
-        <input value={newComment.title} onChange={e => setNewComment(p => ({ ...p, title: e.target.value }))} placeholder="Commentary title (e.g. 'Fed Pause Creates Opportunity in Duration')" style={S.input} />
-        <textarea value={newComment.content} onChange={e => setNewComment(p => ({ ...p, content: e.target.value }))} placeholder="Write your market view, thesis, analysis..." style={{ ...S.input, minHeight: 120, resize: "vertical", lineHeight: 1.7 }} />
-        <button onClick={addComment} style={{ ...S.btn, alignSelf: "flex-end", padding: "8px 24px" }}>Publish</button>
-      </div>}
-
-      {commentary.map(c => <div key={c.id} style={{ padding: "16px 18px", borderRadius: 10, background: "#f6eee1", border: "1px solid #e9ddc9", marginBottom: 8 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
-          <h3 style={{ color: "#33302c", fontSize: 15, fontWeight: 600 }}>{c.title}</h3>
-          <span style={{ color: "#8a8072", fontSize: 10, fontFamily: "JetBrains Mono, monospace", flexShrink: 0, marginLeft: 12 }}>{c.date}</span>
-        </div>
-        <p style={{ color: "#4a443c", fontSize: 13, lineHeight: 1.8 }}>{c.content}</p>
-      </div>)}
     </div>
+    <p style={{ fontSize: 9, color: "#a2977f", marginTop: 16, lineHeight: 1.6 }}>Simplified and illustrative — $100M entry EBITDA (indexed), 45% of EBITDA converts to debt paydown annually, no fees or taxes. Built to demonstrate LBO mechanics, not investment advice.</p>
   </div>;
 }
 
@@ -575,23 +571,22 @@ export default function App() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem("mb_api_key") || "");
   const [finnhubKey, setFinnhubKey] = useState(() => localStorage.getItem("mb_finnhub_key") || "");
   const [showSettings, setShowSettings] = useState(false);
-  const prices = usePrices(TICKERS, finnhubKey);
+  const { prices, live: pricesLive } = usePrices(TICKERS, finnhubKey);
   const [tab, setTabRaw] = useState("home"), [hovP, setHovP] = useState(null), [cmd, setCmd] = useState(false), [showHero, setShowHero] = useState(() => { try { return !sessionStorage.getItem("mb_intro"); } catch { return true; } }), [mounted, setMounted] = useState(false);
   const setTab = (t) => { setTabRaw(t); window.scrollTo(0, 0); };
   useEffect(() => { window.scrollTo(0, 0); if (!showHero) { setMounted(true); return; } try { sessionStorage.setItem("mb_intro", "1"); } catch {} const t = setTimeout(() => { setShowHero(false); setMounted(true); }, 2900); return () => clearTimeout(t); }, []);
-  useEffect(() => { const h = e => { if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setCmd(true); } if (e.key === "Escape") setCmd(false); if (!e.metaKey && !e.ctrlKey && !e.altKey && ["1", "2", "3", "4", "5"].includes(e.key) && !e.target.closest("input") && !e.target.closest("textarea")) setTab(["home", "projects", "research", "markets", "news"][+e.key - 1]); }; window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, []);
+  useEffect(() => { const h = e => { if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setCmd(true); } if (e.key === "Escape") setCmd(false); if (!e.metaKey && !e.ctrlKey && !e.altKey && ["1", "2", "3", "4"].includes(e.key) && !e.target.closest("input") && !e.target.closest("textarea")) setTab(["home", "projects", "markets", "news"][+e.key - 1]); }; window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, []);
 
-  const tabs = [{ id: "home", l: "Home" }, { id: "projects", l: "Projects" }, { id: "research", l: "Research" }, { id: "markets", l: "Markets" }, { id: "news", l: "News" }];
+  const tabs = [{ id: "home", l: "Home" }, { id: "projects", l: "Projects" }, { id: "markets", l: "Markets" }, { id: "news", l: "News" }];
 
   return <div style={S.root}>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@300;400;500;600;700&family=Instrument+Serif&display=swap" rel="stylesheet" />
     {showHero && <Hero />}
     <Cmd open={cmd} onClose={() => setCmd(false)} onNav={t => setTab(t)} />
     <SettingsPanel apiKey={apiKey} setApiKey={setApiKey} finnhubKey={finnhubKey} setFinnhubKey={setFinnhubKey} open={showSettings} onClose={() => setShowSettings(false)} />
-    <div style={{ position: "fixed", top: -200, right: -100, width: 900, height: 900, background: "radial-gradient(circle,rgba(13,109,86,0.045) 0%,transparent 55%)", pointerEvents: "none", animation: "breathe 8s ease-in-out infinite" }} />
-    <div style={{ position: "fixed", bottom: -100, left: -100, width: 700, height: 700, background: "radial-gradient(circle,rgba(31,90,158,0.035) 0%,transparent 55%)", pointerEvents: "none", animation: "breathe 10s ease-in-out infinite", animationDelay: "2s" }} />
-    <div style={{ position: "fixed", top: "30%", right: -100, width: 600, height: 600, background: "radial-gradient(circle,rgba(109,84,158,0.025) 0%,transparent 55%)", pointerEvents: "none", animation: "breathe 12s ease-in-out infinite", animationDelay: "4s" }} />
-    <div style={{ position: "fixed", inset: 0, opacity: 0.045, backgroundImage: "url('data:image/svg+xml,%3Csvg viewBox=%220 0 256 256%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22n%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.9%22 numOctaves=%224%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22/%3E%3C/svg%3E')", pointerEvents: "none" }} />
+    <div className="bg-fx" style={{ position: "fixed", top: -200, right: -100, width: 900, height: 900, background: "radial-gradient(circle,rgba(13,109,86,0.045) 0%,transparent 55%)", pointerEvents: "none", animation: "breathe 8s ease-in-out infinite" }} />
+    <div className="bg-fx" style={{ position: "fixed", bottom: -100, left: -100, width: 700, height: 700, background: "radial-gradient(circle,rgba(31,90,158,0.035) 0%,transparent 55%)", pointerEvents: "none", animation: "breathe 10s ease-in-out infinite", animationDelay: "2s" }} />
+    <div className="bg-fx" style={{ position: "fixed", top: "30%", right: -100, width: 600, height: 600, background: "radial-gradient(circle,rgba(109,84,158,0.025) 0%,transparent 55%)", pointerEvents: "none", animation: "breathe 12s ease-in-out infinite", animationDelay: "4s" }} />
+    <div className="bg-fx" style={{ position: "fixed", inset: 0, opacity: 0.045, backgroundImage: "url('data:image/svg+xml,%3Csvg viewBox=%220 0 256 256%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22n%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.9%22 numOctaves=%224%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22/%3E%3C/svg%3E')", pointerEvents: "none" }} />
 
     <div className="status-bar" style={{ background: "#2b2825", padding: "7px 32px", display: "flex", justifyContent: "space-between", fontSize: 9, fontFamily: "JetBrains Mono, monospace", color: "#cfc5b4", letterSpacing: 1, position: "relative", zIndex: 2 }}>
       <span>WALTON COLLEGE OF BUSINESS · UNIVERSITY OF ARKANSAS · DALLAS–FORT WORTH, TX</span>
@@ -616,7 +611,7 @@ export default function App() {
 
     <div style={{ height: 2, background: "linear-gradient(90deg, transparent, #0d6d56, #1f5a9e, transparent)", backgroundSize: "200% 100%", animation: "gradientShift 10s ease infinite", opacity: 0.5 }} />
 
-    <div style={{ overflow: "hidden", borderBottom: "1px solid #e9ddc930", background: "rgba(253,248,240,0.92)", padding: "7px 0", position: "relative", maskImage: "linear-gradient(90deg, transparent, black 60px, black calc(100% - 60px), transparent)", WebkitMaskImage: "linear-gradient(90deg, transparent, black 60px, black calc(100% - 60px), transparent)" }}><div style={{ display: "flex", gap: 0, animation: "scroll 55s linear infinite", width: "max-content", fontFamily: "JetBrains Mono, monospace", fontSize: 11 }}>{[...prices, ...prices].map((t, i) => <a key={i} href={`https://www.tradingview.com/symbols/${t.symbol}/`} target="_blank" rel="noopener noreferrer" style={{ display: "flex", gap: 8, whiteSpace: "nowrap", paddingRight: 18, marginRight: 18, borderRight: "1px solid #e9ddc930", textDecoration: "none", transition: "opacity 0.2s" }} onMouseEnter={e=>e.currentTarget.style.opacity="0.7"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}><span style={{ color: "#8a8072", fontWeight: 600 }}>{t.symbol}</span><span style={{ color: "#6f675c" }}>${t.price}</span><span style={{ color: parseFloat(t.change) >= 0 ? "#0d6d56" : "#b2342b", fontWeight: 600 }}>{parseFloat(t.change) >= 0 ? "+" : ""}{t.change}%</span></a>)}</div></div>
+    <div className="tape" style={{ overflow: "hidden", borderBottom: "1px solid #e9ddc930", background: "rgba(253,248,240,0.92)", padding: "7px 0", position: "relative", maskImage: "linear-gradient(90deg, transparent, black 60px, black calc(100% - 60px), transparent)", WebkitMaskImage: "linear-gradient(90deg, transparent, black 60px, black calc(100% - 60px), transparent)" }}><div style={{ display: "flex", gap: 0, animation: "scroll 55s linear infinite", width: "max-content", fontFamily: "JetBrains Mono, monospace", fontSize: 11 }}>{[...prices, ...prices].map((t, i) => <a key={i} href={`https://www.tradingview.com/symbols/${t.symbol}/`} target="_blank" rel="noopener noreferrer" style={{ display: "flex", gap: 8, whiteSpace: "nowrap", paddingRight: 18, marginRight: 18, borderRight: "1px solid #e9ddc930", textDecoration: "none", transition: "opacity 0.2s" }} onMouseEnter={e=>e.currentTarget.style.opacity="0.7"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}><span style={{ color: "#8a8072", fontWeight: 600 }}>{t.symbol}</span><span style={{ color: "#6f675c" }}>${t.price}</span><span style={{ color: parseFloat(t.change) >= 0 ? "#0d6d56" : "#b2342b", fontWeight: 600 }}>{parseFloat(t.change) >= 0 ? "+" : ""}{t.change}%</span></a>)}</div></div>
 
     <main style={{ padding: 32, maxWidth: 1300, margin: "0 auto", position: "relative", zIndex: 1, opacity: mounted ? 1 : 0, transform: mounted ? "none" : "translateY(16px)", transition: "all 0.6s ease 0.3s" }}>
 
@@ -624,7 +619,7 @@ export default function App() {
         <div style={{ marginBottom: 24, animation: "fadeUp 0.5s ease both", padding: "20px 24px", background: "linear-gradient(135deg, rgba(255,253,249,0.9), rgba(251,245,236,0.7))", borderRadius: 16, border: "1px solid #e3d5bf", boxShadow: "0 4px 20px rgba(64,52,32,0.07)" }}><Clock /></div>
         <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
           <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.08s both" }}>
-            <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> Watchlist<Info text="Live market prices grouped by signal: indices (SPY, QQQ, IWM), mega-cap movers (NVDA, AAPL, MSFT, JPM, TSLA), and macro indicators (TLT for rates, GLD for risk-off, UUP for dollar). Click any ticker for TradingView. Source: Finnhub.io" />{apiKey && <Info text={"Signal cheat sheet: TLT drops + SPY flat \u2192 rates rising, deal flow slows. GLD + TLT both spike \u2192 risk-off, market scared. IWM diverges from SPY \u2192 small-cap sentiment shifting (PE pipeline signal). QQQ outpaces SPY \u2192 growth/tech rotation. JPM moves on earnings \u2192 read-through on credit conditions and IB deal activity. UUP rising \u2192 dollar strengthening, pressure on international deals and EM. NVDA guidance \u2192 AI capex cycle indicator, affects entire tech sector. TLT rising + SPY rising \u2192 goldilocks (rates falling, equities up)."} linkLabel="TradingView" link="https://www.tradingview.com" />}{!finnhubKey && <span style={{ marginLeft: "auto", fontSize: 8, padding: "3px 8px", borderRadius: 8, background: "rgba(176,116,30,0.08)", color: "#b0741e", border: "1px solid rgba(176,116,30,0.25)", letterSpacing: 1 }}>DEMO DATA</span>}</h2>
+            <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> Watchlist<Info text="Live market prices grouped by signal: indices (SPY, QQQ, IWM), mega-cap movers (NVDA, AAPL, MSFT, JPM, TSLA), and macro indicators (TLT for rates, GLD for risk-off, UUP for dollar). Click any ticker for TradingView. Source: Finnhub.io" />{apiKey && <Info text={"Signal cheat sheet: TLT drops + SPY flat \u2192 rates rising, deal flow slows. GLD + TLT both spike \u2192 risk-off, market scared. IWM diverges from SPY \u2192 small-cap sentiment shifting (PE pipeline signal). QQQ outpaces SPY \u2192 growth/tech rotation. JPM moves on earnings \u2192 read-through on credit conditions and IB deal activity. UUP rising \u2192 dollar strengthening, pressure on international deals and EM. NVDA guidance \u2192 AI capex cycle indicator, affects entire tech sector. TLT rising + SPY rising \u2192 goldilocks (rates falling, equities up)."} linkLabel="TradingView" link="https://www.tradingview.com" />}{!pricesLive && <span style={{ marginLeft: "auto", fontSize: 8, padding: "3px 8px", borderRadius: 8, background: "rgba(176,116,30,0.08)", color: "#b0741e", border: "1px solid rgba(176,116,30,0.25)", letterSpacing: 1 }}>DEMO DATA</span>}</h2>
             {prices.map(t => <a key={t.symbol} href={`https://www.tradingview.com/symbols/${t.symbol}/`} target="_blank" rel="noopener noreferrer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 12px", borderRadius: 10, transition: "all 0.2s", cursor: "pointer", borderLeft: "2px solid transparent", textDecoration: "none" }} onMouseEnter={e => {e.currentTarget.style.background = "rgba(13,109,86,0.04)"; e.currentTarget.style.borderLeftColor = "#0d6d5650";}} onMouseLeave={e => {e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderLeftColor = "transparent";}}>
               <div><span style={{ color: "#33302c", fontWeight: 600, fontSize: 13 }}>{t.symbol}</span><span style={{ color: "#8a8072", fontSize: 11, marginLeft: 8 }}>{t.name}</span></div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}><Spark pos={parseFloat(t.change) >= 0} /><span style={{ color: "#33302c", fontFamily: "JetBrains Mono, monospace", fontSize: 13, minWidth: 60, textAlign: "right" }}>${t.price}</span><span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, minWidth: 52, textAlign: "right", color: parseFloat(t.change) >= 0 ? "#0d6d56" : "#b2342b", fontWeight: 600 }}>{parseFloat(t.change) >= 0 ? "+" : ""}{t.change}%</span></div>
@@ -639,7 +634,7 @@ export default function App() {
           </div>
         </div>
         <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
-          <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.2s both" }}><h2 style={S.cardTitle}><span style={{ color: "#b0741e" }}>◆</span> Sector Heatmap<Info text="Visual map of sector performance by GICS sector. Size reflects relative market cap weight. Green = positive, red = negative, yellow = flat. Click any ticker to open TradingView. Source: Finnhub.io real-time quotes (5-min cache)." link="https://www.investopedia.com/terms/s/sector-analysis.asp" linkLabel="Sector rotation & analysis" />{!finnhubKey && <span style={{ marginLeft: "auto", fontSize: 8, padding: "3px 8px", borderRadius: 8, background: "rgba(176,116,30,0.08)", color: "#b0741e", border: "1px solid rgba(176,116,30,0.25)", letterSpacing: 1 }}>DEMO DATA</span>}</h2><HeatMap finnhubKey={finnhubKey} /></section>
+          <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.2s both" }}><h2 style={S.cardTitle}><span style={{ color: "#b0741e" }}>◆</span> Sector Heatmap<Info text="Visual map of sector performance by GICS sector. Size reflects relative market cap weight. Green = positive, red = negative, yellow = flat. Click any ticker to open TradingView. Source: Finnhub.io real-time quotes (5-min cache)." link="https://www.investopedia.com/terms/s/sector-analysis.asp" linkLabel="Sector rotation & analysis" />{!pricesLive && <span style={{ marginLeft: "auto", fontSize: 8, padding: "3px 8px", borderRadius: 8, background: "rgba(176,116,30,0.08)", color: "#b0741e", border: "1px solid rgba(176,116,30,0.25)", letterSpacing: 1 }}>DEMO DATA</span>}</h2><HeatMap finnhubKey={finnhubKey} /></section>
           <RegimeIndicator apiKey={apiKey} />
         </div>
         <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
@@ -654,11 +649,27 @@ export default function App() {
 
       {tab === "news" && <div style={{ animation: "fadeUp 0.4s ease both" }}><NewsFeed apiKey={apiKey} /></div>}
 
-      {tab === "research" && <ResearchTab />}
-
       {tab === "projects" && <div style={{ animation: "fadeUp 0.4s ease both" }}>
         <h1 style={S.pageTitle}>Projects</h1><p style={{ color: "#6f675c", marginBottom: 32, fontSize: 14 }}>Graduate coursework and independent builds — financial modeling, econometrics, and quantitative analysis.</p>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(min(360px,100%),1fr))", gap: 14 }}>{PROJECTS.map((p, i) => <div key={i} style={{ ...S.pCard, ...(hovP === i ? { borderColor: "#0d6d5650", transform: "translateY(-6px) scale(1.01)", boxShadow: "0 20px 50px rgba(13,109,86,0.12), 0 0 0 1px rgba(13,109,86,0.15), 0 0 40px rgba(13,109,86,0.05)" } : {}), animation: "fadeUp 0.5s ease both", animationDelay: `${i * 0.07}s` }} onMouseEnter={() => setHovP(i)} onMouseLeave={() => setHovP(null)}>
+        <div style={{ ...S.card, marginBottom: 16 }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#33302c" }}>◆</span> Deal Sheet<span style={{ marginLeft: "auto", fontSize: 8, color: "#a2977f", letterSpacing: 1 }}>STUDENT RECONSTRUCTIONS OF REAL TRANSACTIONS</span></h2>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(230px,100%),1fr))", gap: 14 }}>
+            {DEALS.map(d => <div key={d.co} style={{ border: "1px solid #33302c", outline: "1px solid #33302c", outlineOffset: -5, borderRadius: 2, padding: "30px 18px 20px", textAlign: "center", background: "#fffdf9" }}>
+              <div style={{ fontSize: 30, fontFamily: "'Instrument Serif',serif", color: "#262421", lineHeight: 1 }}>{d.value}</div>
+              <div style={{ fontSize: 8, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 2, marginTop: 8 }}>{d.type}</div>
+              <div style={{ width: 36, borderTop: "1px solid #0d6d56", margin: "14px auto" }} />
+              <div style={{ fontSize: 14, fontWeight: 600, color: "#33302c" }}>{d.co}</div>
+              <div style={{ fontSize: 10, color: "#6f675c", marginTop: 3 }}>{d.sub}</div>
+              <div style={{ fontSize: 9, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", marginTop: 12, lineHeight: 1.6 }}>{d.detail}</div>
+              <div style={{ fontSize: 8, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, marginTop: 12, textTransform: "uppercase" }}>{d.date} · Student Reconstruction</div>
+            </div>)}
+          </div>
+        </div>
+        <div style={{ ...S.card, marginBottom: 16 }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> Interactive — Mini LBO Model<Info text="A simplified leveraged-buyout model you can play with. Set the entry price, leverage, growth, and exit assumptions — the sponsor returns and value-creation bridge update live. Built in React to demonstrate the mechanics behind the deal reconstructions above." /></h2>
+          <LBOSandbox />
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(min(360px,100%),1fr))", gap: 14 }}>{PROJECTS.map((p, i) => <div key={i} style={{ ...S.pCard, ...(hovP === i ? { border: "1px solid #0d6d5650", transform: "translateY(-6px) scale(1.01)", boxShadow: "0 20px 50px rgba(13,109,86,0.12), 0 0 0 1px rgba(13,109,86,0.15), 0 0 40px rgba(13,109,86,0.05)" } : {}), animation: "fadeUp 0.5s ease both", animationDelay: `${i * 0.07}s` }} onMouseEnter={() => setHovP(i)} onMouseLeave={() => setHovP(null)}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}><span style={{ fontSize: 9, color: "#8a8072", fontFamily: "JetBrains Mono, monospace", letterSpacing: 1 }}>PROJECT_{String(i + 1).padStart(2, "0")}{p.completed && <span style={{ marginLeft: 8, color: "#a2977f" }}>· {p.completed}</span>}</span><div style={{ display: "flex", alignItems: "center", gap: 6 }}>{p.updated && <span style={{ fontSize: 8, color: "#a2977f", fontFamily: "JetBrains Mono, monospace" }}>Updated {p.updated}</span>}<span style={{ fontSize: 9, padding: "3px 10px", borderRadius: 20, background: p.status === "In Progress" ? "#b0741e08" : "#0d6d5608", color: p.status === "In Progress" ? "#b0741e" : "#0d6d56", fontFamily: "JetBrains Mono, monospace" }}>{p.status}</span></div></div>
           {p.img && <img src={p.img} alt={p.title} loading="lazy" style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", objectPosition: "top", borderRadius: 10, border: "1px solid #e9ddc9", marginBottom: 14, display: "block", background: "#f6eee1" }} />}
           <h3 style={{ color: "#33302c", fontSize: 17, fontWeight: 600, marginBottom: 10, lineHeight: 1.3 }}>{p.title}</h3>
@@ -719,6 +730,15 @@ export default function App() {
           </div>
         </div>
         <div style={{ ...S.card, marginBottom: 14 }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#b0741e" }}>◆</span> Now<span style={{ marginLeft: "auto", fontSize: 8, color: "#a2977f", letterSpacing: 1 }}>UPDATED JUL 2026</span></h2>
+          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            {["Interviewing for analyst roles across investment banking, private equity, wealth management, and corporate finance",
+              "Extending the EA / Jagex LBO framework to new hypothetical buyout targets",
+              "Preparing for the FINRA SIE — CFA Level I planned next",
+              "Reading Damodaran on Valuation and Pignataro's Financial Modeling & Valuation"].map((t, i) => <div key={i} style={{ display: "flex", gap: 10, alignItems: "baseline" }}><span style={{ color: "#0d6d56", fontSize: 11, fontFamily: "'JetBrains Mono',monospace" }}>→</span><span style={{ color: "#4a443c", fontSize: 13, lineHeight: 1.6 }}>{t}</span></div>)}
+          </div>
+        </div>
+        <div style={{ ...S.card, marginBottom: 14 }}>
           <h2 style={S.cardTitle}><span style={{ color: "#1f5a9e" }}>◆</span> Timeline</h2>
           <div style={{ position: "relative", paddingLeft: 22 }}><div style={{ position: "absolute", left: 5, top: 5, bottom: 5, width: 2, background: "linear-gradient(180deg,#0d6d56,#1f5a9e,#e9ddc9)", borderRadius: 1 }} />
             {EXPERIENCE.map((e, i) => <div key={i} style={{ position: "relative", marginBottom: i < EXPERIENCE.length - 1 ? 18 : 0 }}>
@@ -768,7 +788,7 @@ export default function App() {
         {LINKS.map(l => <a key={l.label} href={l.url} target="_blank" rel="noopener noreferrer" style={{ color: "#8a8072", fontSize: 10, fontFamily: "'JetBrains Mono',monospace", textDecoration: "none", letterSpacing: 1, transition: "color 0.2s" }} onMouseEnter={e => e.currentTarget.style.color = "#0d6d56"} onMouseLeave={e => e.currentTarget.style.color = "#8a8072"}>{l.label}</a>)}
       </div>
       <div style={{ color: "#a2977f", fontSize: 9, fontFamily: "JetBrains Mono, monospace", display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
-        <span>Mason J. Bennett</span><span>·</span><span>M.S. Finance, Walton College</span><span>·</span><span>© {new Date().getFullYear()}</span><span>·</span><span>⌘K or 1-5</span>
+        <span>Mason J. Bennett</span><span>·</span><span>M.S. Finance, Walton College</span><span>·</span><span>© {new Date().getFullYear()}</span><span>·</span><span>⌘K or 1-4</span>
       </div>
     </footer>
 
@@ -787,6 +807,13 @@ export default function App() {
       *{box-sizing:border-box;margin:0;padding:0}
       html{scroll-behavior:smooth}
       body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;text-rendering:optimizeLegibility}
+      input[type=range]{accent-color:#0d6d56}
+      @media print{
+        .status-bar,header nav,header>div:last-child,.tape,footer,.bg-fx{display:none!important}
+        body{background:#fff!important}
+        main{opacity:1!important;transform:none!important;padding:0!important;max-width:100%!important}
+        header{position:static!important;box-shadow:none!important;background:#fff!important}
+      }
       ::selection{background:rgba(13,109,86,0.2);color:#33302c}
       ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:#d8c8b0;border-radius:4px}::-webkit-scrollbar-thumb:hover{background:#a2977f}
       input:focus,textarea:focus,select:focus{border-color:#0d6d5660!important;box-shadow:0 0 0 4px rgba(13,109,86,0.12),0 0 20px rgba(13,109,86,0.08)!important}
