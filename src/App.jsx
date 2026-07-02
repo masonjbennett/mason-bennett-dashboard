@@ -31,21 +31,38 @@ const PORTFOLIO = [
 ];
 const PROJECTS = [
   { title: "ML Credit Default Classifier", desc: "Machine-learning credit-risk model on a 70,000-observation near-prime loan dataset. Engineered a 60-seed bagged neural-network ensemble with LightGBM feature selection, pairwise-interaction features, and PCA — achieving 0.9931 ROC-AUC versus a 0.58 baseline.", tags: ["Python", "Machine Learning", "LightGBM", "Credit Risk"], status: "Completed", completed: "May 2026" },
-  { title: "Take-Private LBO — Electronic Arts ($55B)", desc: "Graduate coursework reconstruction of EA's real $55B all-cash take-private, rebuilt and presented as a hypothetical acquisition using publicly available SEC filings. Led the student deal team producing a 38-page investment memorandum, 24-slide IC pitch deck, and 12-tab Excel LBO model — three-case operating projections deriving 1.27x–2.43x MoM and 4.8%–19.4% gross IRR, five-method football field, and full value-creation bridge. Selected by course faculty as the reference standard for future iterations.", tags: ["LBO", "Private Equity", "Excel", "Student Project"], status: "Completed", completed: "May 2026" },
-  { title: "Sponsor-to-Sponsor LBO — Jagex (£900M)", desc: "Graduate coursework reconstruction of the real £900M / $1.1B acquisition of Jagex (RuneScape) by CVC and Haveli from The Carlyle Group, rebuilt as a hypothetical cross-border buyout from PwC-audited Companies House accounts. Led the student deal team building a 10-tab LBO model at a 13.4x FY23 EBITDA entry, a 26-page investment memorandum, a quality-of-earnings bridge ($56.4M reported to $75M pro-forma EBITDA), and a full PE fund waterfall underwriting a 1.77x MOIC / 12.1% sponsor IRR base case.", tags: ["LBO", "Private Equity", "Excel", "Student Project"], status: "Completed", completed: "May 2026" },
   { title: "Personal Budgeting App", desc: "Full-stack personal finance tool with 11 modules: income & tax estimation (all 50 states, 2026 IRS brackets), 50/30/20 budget builder, expense tracking with CSV import and recurring templates, net worth monitoring, debt payoff planner (avalanche vs snowball), savings goals, investment projector with 401(k) career match calculator, FIRE calculator, and tax optimizer. Month-over-month dashboard with historical navigation.", tags: ["Python", "Streamlit", "Personal Finance", "Tax Planning"], status: "Completed", completed: "Apr 2026", updated: "Apr 12, 2026", img: "/projects/budgeting-app.png", url: "https://github.com/masonjbennett/budgeting-app", demo: "https://masonbennett-budget.streamlit.app/" },
   { title: "Portfolio Analytics App", desc: "Real-time equity portfolio construction and optimization tool with 6 analytical modules. Mean-variance optimization (GMV & Tangency), efficient frontier with CAL, CAPM beta/alpha regression, risk contribution decomposition (PRC), and estimation window sensitivity analysis. Features a tiered tooltip system (Beginner/Intermediate/Advanced) that adapts explanations to the user's knowledge level, custom portfolio builder with live frontier plotting, and CSV/Excel export.", tags: ["Python", "Streamlit", "Portfolio Optimization", "scipy"], status: "Completed", completed: "Apr 2026", updated: "Apr 11, 2026", img: "/projects/portfolio-app.png", url: "https://github.com/masonjbennett/portfolio-app", demo: "https://portfolio-app-ifh8afmcuxkyr6ivov9fmj.streamlit.app/" },
-  { title: "Stock Pitch — HCA Healthcare (GFI Competition)", desc: "One of only four graduate teams invited to present a buy recommendation on HCA Healthcare (NYSE: HCA) to the Garrison Financial Institute Advisory Board of industry practitioners. Built the financial projections and pitch deck, and defended the thesis in live Q&A.", tags: ["Equity Research", "Valuation", "Pitch Deck"], status: "Completed", completed: "Oct 2025" },
   { title: "Applied Econometrics — Hurricane Michael", desc: "Regression analysis studying Hurricane Michael's impact on Florida housing prices across 67 counties. Built MLR and Difference-in-Difference models achieving R² of 0.59, identifying a $36,631 median price decline in affected counties. Analyzed median income, unemployment, elevation, FEMA risk indices, and population density as determinants.", tags: ["Stata", "Econometrics", "Regression Analysis", "Diff-in-Diff"], status: "Completed", completed: "Apr 2024", url: "/hurricane-paper.docx" },
 ];
 const DEALS = [
-  { value: "$55B", type: "Take-Private LBO", co: "Electronic Arts Inc.", sub: "NASDAQ: EA", detail: "38-page IM · 24-slide IC deck · 12-tab LBO model", date: "Apr 2026" },
-  { value: "£900M", type: "Sponsor-to-Sponsor LBO", co: "Jagex Limited", sub: "CVC & Haveli ← The Carlyle Group", detail: "10-tab LBO model · 26-page IM · QoE bridge", date: "Apr 2026" },
-  { value: "NYSE: HCA", type: "Buy Recommendation", co: "HCA Healthcare", sub: "GFI Stock Pitch Competition", detail: "1 of 4 graduate teams · live Q&A defense", date: "Oct 2025" },
+  { id: "ea-take-private", value: "$55B", type: "Take-Private LBO", co: "Electronic Arts Inc.", sub: "NASDAQ: EA", detail: "38-page IM · 24-slide IC deck · 12-tab LBO model", date: "Apr 2026",
+    thesis: "Durable live-services cash flow supports an all-cash take-private; returns underwritten primarily to EBITDA growth and deleveraging, not multiple expansion.",
+    assumptions: "$36.4B equity / $18.0B debt sources & uses; three-case operating projections spanning 1.27x–2.43x MoM and 4.8%–19.4% gross IRR; reconstruction diverges from reported terms where figures were not public.",
+    takeaway: "Returns attribution — separating EBITDA growth, multiple expansion, and deleveraging — tells you more about a deal than the headline IRR." },
+  { id: "jagex-lbo", value: "£900M", type: "Sponsor-to-Sponsor LBO", co: "Jagex Limited", sub: "CVC & Haveli ← The Carlyle Group", detail: "10-tab LBO model · 26-page IM · QoE bridge", date: "Apr 2026",
+    thesis: "Recurring subscription revenue with pricing power justifies a 13.4x FY23 EBITDA entry in a secondary buyout, underwriting a 1.77x MOIC / 12.1% IRR base case.",
+    assumptions: "Quality-of-earnings bridge normalizing $56.4M reported to $75M pro-forma EBITDA ($18.6M add-backs); ~10% CAPM-derived WACC; full 2-and-20 fund waterfall; every figure footnoted to primary sources.",
+    takeaway: "Cross-border, limited-disclosure deals live or die on quality of earnings — the add-back bridge was the real model." },
+  { id: "hca-pitch", value: "NYSE: HCA", type: "Buy Recommendation", co: "HCA Healthcare", sub: "GFI Stock Pitch Competition", detail: "1 of 4 graduate teams · live Q&A defense", date: "Oct 2025",
+    thesis: "Buy recommendation on HCA presented to the Garrison Financial Institute Advisory Board — one of four graduate teams invited to pitch industry practitioners.",
+    assumptions: "Team-built financial projections and valuation; recommendation defended live under practitioner questioning.",
+    takeaway: "Pitching to practitioners punishes any assumption you can't defend out loud — the Q&A was the real test." },
+];
+const ARTIFACTS = [
+  { label: "Resume (PDF)", href: "/resume.pdf" },
+  { label: "EA $55B take-private LBO — student reconstruction", tab: "projects", id: "ea-take-private" },
+  { label: "Jagex £900M sponsor-to-sponsor LBO — student reconstruction", tab: "projects", id: "jagex-lbo" },
+  { label: "HCA Healthcare stock pitch — GFI competition", tab: "projects", id: "hca-pitch" },
+  { label: "Interactive mini-LBO model", tab: "projects", id: "lbo-sandbox" },
+  { label: "Personal budgeting app — live demo", href: "https://masonbennett-budget.streamlit.app/" },
+  { label: "Portfolio analytics app — live demo", href: "https://portfolio-app-ifh8afmcuxkyr6ivov9fmj.streamlit.app/" },
+  { label: "GitHub", href: "https://github.com/masonjbennett" },
+  { label: "Shollmier Investment Fund — Garrison Financial Institute", href: "https://gfi.uark.edu/shollmier-fund.php" },
 ];
 const EXPERIENCE = [
   { role: "M.S. Finance", org: "Walton College of Business", date: "2025–2026", type: "edu", detail: "4.0 GPA · Advanced Financial Modeling, Advanced Corporate Finance, Alternative Investments, New Venture (Private Equity), Financial Data Analytics II" },
-  { role: "Analyst — Shollmier Investment Fund", org: "Walton College · Student-managed fund", date: "2025–2026", type: "work", detail: "Sector analysis for a live $700K+ fixed-income portfolio managed by graduate students." },
+  { role: "Analyst — Shollmier Investment Fund", org: "Garrison Financial Institute · Walton College", url: "https://gfi.uark.edu/shollmier-fund.php", date: "2025–2026", type: "work", detail: "Sector analysis for a live $700K+ fixed-income portfolio managed by graduate students." },
   { role: "B.S. Business Administration", org: "Walton College of Business", date: "2021–2024", type: "edu", detail: "3.62 GPA · Business Economics · Dean's List (5 semesters) · Funded 100% of undergraduate education through service-industry work" },
   { role: "Finance & Economics Tutor", org: "Self-employed · Fayetteville, AR", date: "2021–2024", type: "work", detail: "10+ students/semester. Tailored study guides. Helped improve grades 1–2 letters." },
   { role: "Event Manager", org: "Venue on Spring Creek · TX", date: "2016–2020", type: "work", detail: "100+ guest events. Coordinated vendors, supervised staff. 95%+ satisfaction." },
@@ -270,6 +287,12 @@ const EMAIL = "bennettmasonj@gmail.com";
 function CopyEmail({ style }) {
   const [copied, setCopied] = useState(false);
   return <a href={`mailto:${EMAIL}`} onClick={() => { try { navigator.clipboard.writeText(EMAIL); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch {} }} style={style} title="Click to copy">{copied ? "✓ Copied to clipboard" : EMAIL}</a>;
+}
+
+// ============ COPY ANCHOR ============
+function CopyAnchor({ tab, id }) {
+  const [ok, setOk] = useState(false);
+  return <button onClick={() => { try { navigator.clipboard.writeText(`https://masonjbennett.com/?tab=${tab}#${id}`); setOk(true); setTimeout(() => setOk(false), 1600); } catch {} }} title="Copy a direct link" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 8, color: ok ? "#0d6d56" : "#a2977f", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, padding: 0, textTransform: "uppercase" }}>{ok ? "✓ link copied" : "§ copy link"}</button>;
 }
 
 // ============ VISUAL PRIMITIVES ============
@@ -600,8 +623,10 @@ export default function App() {
   const [finnhubKey, setFinnhubKey] = useState(() => localStorage.getItem("mb_finnhub_key") || "");
   const [showSettings, setShowSettings] = useState(false);
   const { prices, live: pricesLive } = usePrices(TICKERS, finnhubKey);
-  const [tab, setTabRaw] = useState(() => { try { const q = new URLSearchParams(window.location.search).get("tab"); return ["home", "projects", "markets", "news"].includes(q) ? q : "home"; } catch { return "home"; } }), [hovP, setHovP] = useState(null), [cmd, setCmd] = useState(false), [showHero, setShowHero] = useState(() => { try { return !sessionStorage.getItem("mb_intro"); } catch { return true; } }), [mounted, setMounted] = useState(false);
+  const [tab, setTabRaw] = useState(() => { try { const q = new URLSearchParams(window.location.search).get("tab"); return ["home", "projects", "markets", "news", "recruiter"].includes(q) ? q : "home"; } catch { return "home"; } }), [hovP, setHovP] = useState(null), [cmd, setCmd] = useState(false), [showHero, setShowHero] = useState(() => { try { return !sessionStorage.getItem("mb_intro"); } catch { return true; } }), [mounted, setMounted] = useState(false);
   const setTab = (t) => { setTabRaw(t); window.scrollTo(0, 0); };
+  const goAnchor = (t, id) => { setTabRaw(t); setTimeout(() => { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); else window.scrollTo(0, 0); }, 80); };
+  useEffect(() => { if (!window.location.hash) return; const id = window.location.hash.slice(1); const t = setTimeout(() => document.getElementById(id)?.scrollIntoView({ block: "start" }), showHero ? 3200 : 300); return () => clearTimeout(t); }, []);
   useEffect(() => { window.scrollTo(0, 0); if (!showHero) { setMounted(true); return; } try { sessionStorage.setItem("mb_intro", "1"); } catch {} const t = setTimeout(() => { setShowHero(false); setMounted(true); }, 2900); return () => clearTimeout(t); }, []);
   useEffect(() => { const h = e => { if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setCmd(true); } if (e.key === "Escape") setCmd(false); if (!e.metaKey && !e.ctrlKey && !e.altKey && ["1", "2", "3", "4"].includes(e.key) && !e.target.closest("input") && !e.target.closest("textarea")) setTab(["home", "projects", "markets", "news"][+e.key - 1]); }; window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, []);
 
@@ -656,6 +681,7 @@ export default function App() {
         <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
           <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.08s both" }}>
             <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> Watchlist<Info text="Live market prices grouped by signal: indices (SPY, QQQ, IWM), mega-cap movers (NVDA, AAPL, MSFT, JPM, TSLA), and macro indicators (TLT for rates, GLD for risk-off, UUP for dollar). Click any ticker for TradingView. Source: Finnhub.io" />{apiKey && <Info text={"Signal cheat sheet: TLT drops + SPY flat \u2192 rates rising, deal flow slows. GLD + TLT both spike \u2192 risk-off, market scared. IWM diverges from SPY \u2192 small-cap sentiment shifting (PE pipeline signal). QQQ outpaces SPY \u2192 growth/tech rotation. JPM moves on earnings \u2192 read-through on credit conditions and IB deal activity. UUP rising \u2192 dollar strengthening, pressure on international deals and EM. NVDA guidance \u2192 AI capex cycle indicator, affects entire tech sector. TLT rising + SPY rising \u2192 goldilocks (rates falling, equities up)."} linkLabel="TradingView" link="https://www.tradingview.com" />}{!pricesLive && <span style={{ marginLeft: "auto", fontSize: 8, padding: "3px 8px", borderRadius: 8, background: "rgba(176,116,30,0.08)", color: "#b0741e", border: "1px solid rgba(176,116,30,0.25)", letterSpacing: 1 }}>DEMO DATA</span>}</h2>
+            <p style={{ fontSize: 11, color: "#8a8072", fontStyle: "italic", margin: "-6px 0 10px" }}>The names I track daily.</p>
             {prices.map(t => <a key={t.symbol} href={`https://www.tradingview.com/symbols/${t.symbol}/`} target="_blank" rel="noopener noreferrer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 12px", borderRadius: 10, transition: "all 0.2s", cursor: "pointer", borderLeft: "2px solid transparent", textDecoration: "none" }} onMouseEnter={e => {e.currentTarget.style.background = "rgba(13,109,86,0.04)"; e.currentTarget.style.borderLeftColor = "#0d6d5650";}} onMouseLeave={e => {e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderLeftColor = "transparent";}}>
               <div><span style={{ color: "#33302c", fontWeight: 600, fontSize: 13 }}>{t.symbol}</span><span style={{ color: "#8a8072", fontSize: 11, marginLeft: 8 }}>{t.name}</span></div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}><Spark pos={parseFloat(t.change) >= 0} /><span style={{ color: "#33302c", fontFamily: "JetBrains Mono, monospace", fontSize: 13, minWidth: 60, textAlign: "right" }}>${t.price}</span><span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, minWidth: 58, textAlign: "right", color: parseFloat(t.change) >= 0 ? "#0d6d56" : "#b2342b", fontWeight: 600 }}>{parseFloat(t.change) >= 0 ? "▲" : "▼"} {Math.abs(parseFloat(t.change)).toFixed(2)}%</span></div>
@@ -691,7 +717,7 @@ export default function App() {
         <div style={{ ...S.card, marginBottom: 16 }}>
           <h2 style={S.cardTitle}><span style={{ color: "#33302c" }}>◆</span> Deal Sheet<span style={{ marginLeft: "auto", fontSize: 8, color: "#a2977f", letterSpacing: 1 }}>STUDENT RECONSTRUCTIONS OF REAL TRANSACTIONS</span></h2>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(230px,100%),1fr))", gap: 14 }}>
-            {DEALS.map(d => <div key={d.co} style={{ border: "1px solid #33302c", outline: "1px solid #33302c", outlineOffset: -5, borderRadius: 2, padding: "30px 18px 20px", textAlign: "center", background: "#fffdf9" }}>
+            {DEALS.map(d => <div key={d.co} id={d.id} style={{ border: "1px solid #33302c", outline: "1px solid #33302c", outlineOffset: -5, borderRadius: 2, padding: "30px 18px 20px", textAlign: "center", background: "#fffdf9", display: "flex", flexDirection: "column" }}>
               <div style={{ fontSize: 30, fontFamily: "'Instrument Serif',serif", color: "#262421", lineHeight: 1 }}>{d.value}</div>
               <div style={{ fontSize: 8, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 2, marginTop: 8 }}>{d.type}</div>
               <div style={{ width: 36, borderTop: "1px solid #0d6d56", margin: "14px auto" }} />
@@ -699,11 +725,18 @@ export default function App() {
               <div style={{ fontSize: 10, color: "#6f675c", marginTop: 3 }}>{d.sub}</div>
               <div style={{ fontSize: 9, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", marginTop: 12, lineHeight: 1.6 }}>{d.detail}</div>
               <div style={{ fontSize: 8, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, marginTop: 12, textTransform: "uppercase" }}>{d.date} · Student Reconstruction</div>
+              <div style={{ borderTop: "1px solid #e9ddc9", marginTop: 16, paddingTop: 12, textAlign: "left", flex: 1 }}>
+                {[["Thesis", d.thesis], ["Assumptions", d.assumptions], ["Takeaway", d.takeaway]].map(([l, t]) => <div key={l} style={{ marginBottom: 8 }}>
+                  <span style={{ fontSize: 8, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 1.5 }}>{l} — </span>
+                  <span style={{ fontSize: 11, color: "#4a443c", lineHeight: 1.6 }}>{t}</span>
+                </div>)}
+              </div>
+              <div style={{ marginTop: 6 }}><CopyAnchor tab="projects" id={d.id} /></div>
             </div>)}
           </div>
         </div>
-        <div style={{ ...S.card, marginBottom: 16 }}>
-          <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> Interactive — Mini LBO Model<Info text="A simplified leveraged-buyout model you can play with. Set the entry price, leverage, growth, and exit assumptions — the sponsor returns and value-creation bridge update live. Built in React to demonstrate the mechanics behind the deal reconstructions above." /></h2>
+        <div id="lbo-sandbox" style={{ ...S.card, marginBottom: 16 }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> Interactive — Mini LBO Model<Info text="A simplified leveraged-buyout model you can play with. Set the entry price, leverage, growth, and exit assumptions — the sponsor returns and value-creation bridge update live. Built in React to demonstrate the mechanics behind the deal reconstructions above." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="projects" id="lbo-sandbox" /></span></h2>
           <LBOSandbox />
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(min(360px,100%),1fr))", gap: 14 }}>{PROJECTS.map((p, i) => <div key={i} style={{ ...S.pCard, ...(hovP === i ? { border: "1px solid #0d6d5650", transform: "translateY(-6px) scale(1.01)", boxShadow: "0 20px 50px rgba(13,109,86,0.12), 0 0 0 1px rgba(13,109,86,0.15), 0 0 40px rgba(13,109,86,0.05)" } : {}), animation: "fadeUp 0.5s ease both", animationDelay: `${i * 0.07}s` }} onMouseEnter={() => setHovP(i)} onMouseLeave={() => setHovP(null)}>
@@ -732,7 +765,12 @@ export default function App() {
             <div style={{ flex: 1 }}>
               <h2 style={{ color: "#33302c", fontSize: 30, fontFamily: "Instrument Serif, serif", marginBottom: 4, textShadow: "0 2px 16px rgba(0,0,0,0)" }}>Mason J. Bennett</h2>
               <p style={{ color: "#0d6d56", fontSize: 12, fontFamily: "JetBrains Mono, monospace", marginBottom: 16 }}>M.S. Finance · University of Arkansas · Dallas–Fort Worth, TX</p>
-              <p style={{ color: "#4a443c", fontSize: 14, lineHeight: 1.85, marginBottom: 18 }}>M.S. Finance graduate (May 2026, 4.0 GPA) from the Sam M. Walton College of Business, based in Dallas–Fort Worth. Led graduate student deal teams reconstructing two real transactions — a $55B take-private LBO and a £900M sponsor-to-sponsor buyout — as fully modeled hypothetical acquisitions built from public filings, and contributed sector analysis to a $700K+ student-managed fixed-income fund. Bloomberg Market Concepts certified, FINRA SIE in progress. Pursuing investment banking, private equity, wealth management, and corporate finance roles.</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14, borderTop: "1px solid #e9ddc9", borderBottom: "1px solid #e9ddc9", padding: "12px 0" }}>
+                {["M.S. Finance, 4.0 GPA — Walton College of Business, May 2026",
+                  "Analyst — Shollmier Investment Fund, a $700K+ student-managed portfolio",
+                  "Seeking analyst roles: IB · PE · Wealth Management · Corporate Finance — Dallas–Fort Worth"].map(l => <div key={l} style={{ fontSize: 13.5, color: "#33302c", fontWeight: 600, lineHeight: 1.45 }}>{l}</div>)}
+              </div>
+              <p style={{ color: "#4a443c", fontSize: 13.5, lineHeight: 1.8, marginBottom: 18 }}>Led graduate student deal teams reconstructing two real transactions — a $55B take-private LBO and a £900M sponsor-to-sponsor buyout — as fully modeled hypothetical acquisitions built from public filings. Bloomberg Market Concepts certified; FINRA SIE in progress.</p>
               <div className="bio-badges" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{["Investment Banking", "Private Equity", "Wealth Management", "Corporate Finance"].map(t => <span key={t} style={{ fontSize: 10, padding: "5px 14px", borderRadius: 20, background: "linear-gradient(135deg, rgba(13,109,86,0.1), rgba(31,90,158,0.06))", color: "#0d6d56", border: "1px solid rgba(13,109,86,0.2)", fontFamily: "JetBrains Mono, monospace", boxShadow: "0 2px 8px rgba(13,109,86,0.06)" }}>{t}</span>)}</div>
               <div className="bio-badges" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
                 <a href="/resume.pdf" target="_blank" rel="noopener noreferrer" style={{ padding: "10px 22px", borderRadius: 10, background: "#0d6d56", color: "#fdf8f0", fontSize: 12, fontWeight: 600, textDecoration: "none", boxShadow: "0 4px 14px rgba(13,109,86,0.25)", transition: "all 0.25s" }} onMouseEnter={e => e.currentTarget.style.background = "#0a5a47"} onMouseLeave={e => e.currentTarget.style.background = "#0d6d56"}>Download Resume</a>
@@ -786,7 +824,7 @@ export default function App() {
             {EXPERIENCE.map((e, i) => <div key={i} style={{ position: "relative", marginBottom: i < EXPERIENCE.length - 1 ? 18 : 0 }}>
               <div style={{ position: "absolute", left: -19, top: 4, width: 9, height: 9, borderRadius: 5, background: e.type === "edu" ? "#0d6d56" : "#1f5a9e", border: "2px solid #f6eee1" }} />
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 2 }}><h3 style={{ color: "#33302c", fontSize: 13, fontWeight: 600 }}>{e.role}</h3><span style={{ color: "#8a8072", fontSize: 9, fontFamily: "JetBrains Mono, monospace", flexShrink: 0, marginLeft: 8 }}>{e.date}</span></div>
-              <p style={{ color: e.type === "edu" ? "#0d6d56" : "#1f5a9e", fontSize: 10, marginBottom: 3, fontFamily: "JetBrains Mono, monospace" }}>{e.org}</p>
+              <p style={{ color: e.type === "edu" ? "#0d6d56" : "#1f5a9e", fontSize: 10, marginBottom: 3, fontFamily: "JetBrains Mono, monospace" }}>{e.url ? <a href={e.url} target="_blank" rel="noopener noreferrer" style={{ color: "inherit", textDecoration: "underline dotted", textUnderlineOffset: 3 }}>{e.org} ↗</a> : e.org}</p>
               <p style={{ color: "#6f675c", fontSize: 11, lineHeight: 1.5 }}>{e.detail}</p>
             </div>)}
           </div>
@@ -822,16 +860,51 @@ export default function App() {
           </div>
         </div>
         </Reveal>
+        <Reveal><div style={{ ...S.card, marginBottom: 14 }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#33302c" }}>◆</span> Work Index<span style={{ marginLeft: "auto", fontSize: 8, color: "#a2977f", letterSpacing: 1 }}>EVERYTHING, ONE LIST</span></h2>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {ARTIFACTS.map((a, i) => <div key={a.label} style={{ borderTop: i === 0 ? "none" : "1px solid #efe4d2" }}>
+              {a.href
+                ? <a href={a.href} target={a.href.startsWith("/") ? "_self" : "_blank"} rel="noopener noreferrer" style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, padding: "9px 2px", fontSize: 12.5, color: "#33302c", textDecoration: "none", transition: "color 0.2s" }} onMouseEnter={e => e.currentTarget.style.color = "#0d6d56"} onMouseLeave={e => e.currentTarget.style.color = "#33302c"}>{a.label}<span style={{ color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", fontSize: 10, flexShrink: 0 }}>↗</span></a>
+                : <button onClick={() => goAnchor(a.tab, a.id)} style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, padding: "9px 2px", fontSize: 12.5, color: "#33302c", background: "none", border: "none", width: "100%", textAlign: "left", cursor: "pointer", fontFamily: "'Space Grotesk',sans-serif", transition: "color 0.2s" }} onMouseEnter={e => e.currentTarget.style.color = "#0d6d56"} onMouseLeave={e => e.currentTarget.style.color = "#33302c"}>{a.label}<span style={{ color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", fontSize: 10, flexShrink: 0 }}>→</span></button>}
+            </div>)}
+          </div>
+        </div></Reveal>
         <Reveal><div style={S.card}>
           <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> Connect</h2>
           <div className="connect-links" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>{LINKS.map(l => <a key={l.label} href={l.url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 24px", borderRadius: 12, background: "linear-gradient(145deg, #fffdf9, #fbf5ec)", color: "#33302c", textDecoration: "none", fontSize: 13, fontWeight: 500, border: "1px solid #e3d5bf", transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)", boxShadow: "0 4px 12px rgba(64,52,32,0.07)", flex: "1 1 0", justifyContent: "center", minWidth: 140 }} onMouseEnter={e => { e.currentTarget.style.borderColor = "#0d6d5650"; e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(13,109,86,0.12), 0 0 0 1px rgba(13,109,86,0.1)"; }} onMouseLeave={e => { e.currentTarget.style.borderColor = "#e3d5bf"; e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(64,52,32,0.07)"; }}><span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 12, fontWeight: 700, color: "#0d6d56" }}>{l.ic}</span>{l.label}</a>)}</div>
         </div></Reveal>
+      </div>}
+
+      {tab === "recruiter" && <div style={{ animation: "fadeUp 0.4s ease both", maxWidth: 600, margin: "0 auto", textAlign: "center", padding: "14px 0 30px" }}>
+        <div style={{ fontSize: 9, fontFamily: "'JetBrains Mono',monospace", color: "#0d6d56", letterSpacing: 3, textTransform: "uppercase", marginBottom: 20 }}>Recruiter Packet — Everything on One Screen</div>
+        <img src="/headshot.jpg" alt="Mason J. Bennett" style={{ width: 104, height: 104, borderRadius: 8, objectFit: "cover", objectPosition: "center 15%", border: "1px solid #33302c", outline: "1px solid #33302c", outlineOffset: 3, margin: "0 auto 18px", display: "block", filter: "grayscale(0.18) sepia(0.1) contrast(1.05)" }} />
+        <h1 style={{ fontFamily: "'Instrument Serif',serif", fontSize: 34, fontWeight: 400, color: "#262421", marginBottom: 6, lineHeight: 1 }}>Mason J. Bennett</h1>
+        <p style={{ color: "#0d6d56", fontSize: 11, fontFamily: "'JetBrains Mono',monospace", marginBottom: 20 }}>M.S. Finance · University of Arkansas · Dallas–Fort Worth, TX</p>
+        <div style={{ borderTop: "1px solid #e9ddc9", borderBottom: "1px solid #e9ddc9", padding: "14px 0", marginBottom: 20, display: "flex", flexDirection: "column", gap: 8 }}>
+          {["4.0 GPA — M.S. Finance, Walton College of Business (May 2026)", "Analyst — Shollmier Investment Fund, $700K+ student-managed portfolio", "Bloomberg Market Concepts certified · FINRA SIE in progress"].map(s => <div key={s} style={{ fontSize: 13, color: "#33302c", fontWeight: 500 }}>{s}</div>)}
+        </div>
+        <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginBottom: 24 }}>
+          <a href="/resume.pdf" target="_blank" rel="noopener noreferrer" style={{ padding: "10px 22px", borderRadius: 10, background: "#0d6d56", color: "#fdf8f0", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Download Resume</a>
+          <a href="https://linkedin.com/in/bennettmason" target="_blank" rel="noopener noreferrer" style={{ padding: "10px 22px", borderRadius: 10, background: "#fffdf9", color: "#33302c", fontSize: 12, fontWeight: 600, textDecoration: "none", border: "1px solid #d8c8b0" }}>LinkedIn</a>
+          <CopyEmail style={{ padding: "10px 22px", borderRadius: 10, background: "#fffdf9", color: "#33302c", fontSize: 12, fontWeight: 600, textDecoration: "none", border: "1px solid #d8c8b0", fontFamily: "'JetBrains Mono',monospace" }} />
+        </div>
+        <div style={{ textAlign: "left", marginBottom: 22 }}>
+          <div style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#0d6d56", textTransform: "uppercase", letterSpacing: 2, marginBottom: 6 }}>Work Samples</div>
+          {ARTIFACTS.filter(a => a.label !== "Resume (PDF)").map((a, i) => <div key={a.label} style={{ borderTop: i === 0 ? "none" : "1px solid #efe4d2" }}>
+            {a.href
+              ? <a href={a.href} target="_blank" rel="noopener noreferrer" style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "8px 2px", fontSize: 12.5, color: "#33302c", textDecoration: "none" }} onMouseEnter={e => e.currentTarget.style.color = "#0d6d56"} onMouseLeave={e => e.currentTarget.style.color = "#33302c"}>{a.label}<span style={{ color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", fontSize: 10 }}>↗</span></a>
+              : <button onClick={() => goAnchor(a.tab, a.id)} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "8px 2px", fontSize: 12.5, color: "#33302c", background: "none", border: "none", width: "100%", textAlign: "left", cursor: "pointer", fontFamily: "'Space Grotesk',sans-serif" }} onMouseEnter={e => e.currentTarget.style.color = "#0d6d56"} onMouseLeave={e => e.currentTarget.style.color = "#33302c"}>{a.label}<span style={{ color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", fontSize: 10 }}>→</span></button>}
+          </div>)}
+        </div>
+        <button onClick={() => setTab("home")} style={{ ...S.btn, padding: "8px 20px" }}>← Full site</button>
       </div>}
     </main>
 
     <footer style={{ padding: "26px 32px", borderTop: "1px solid #ddcfb8", background: "linear-gradient(180deg, transparent, rgba(247,240,229,0.8))", boxShadow: "0 -4px 30px rgba(64,52,32,0.07)", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
       <div style={{ display: "flex", gap: 18, flexWrap: "wrap", justifyContent: "center" }}>
         {LINKS.map(l => <a key={l.label} href={l.url} target="_blank" rel="noopener noreferrer" style={{ color: "#8a8072", fontSize: 10, fontFamily: "'JetBrains Mono',monospace", textDecoration: "none", letterSpacing: 1, transition: "color 0.2s" }} onMouseEnter={e => e.currentTarget.style.color = "#0d6d56"} onMouseLeave={e => e.currentTarget.style.color = "#8a8072"}>{l.label}</a>)}
+        <button onClick={() => setTab("recruiter")} style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8072", fontSize: 10, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, padding: 0 }} onMouseEnter={e => e.currentTarget.style.color = "#0d6d56"} onMouseLeave={e => e.currentTarget.style.color = "#8a8072"}>For Recruiters</button>
       </div>
       <div style={{ color: "#a2977f", fontSize: 9, fontFamily: "JetBrains Mono, monospace", display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
         <span>Mason J. Bennett</span><span>·</span><span>M.S. Finance, Walton College</span><span>·</span><span>© {new Date().getFullYear()}</span><span>·</span><span>⌘K or 1-4</span>
