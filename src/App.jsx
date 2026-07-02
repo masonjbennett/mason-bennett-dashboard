@@ -36,11 +36,11 @@ const PROJECTS = [
   { title: "Applied Econometrics — Hurricane Michael", desc: "Regression analysis studying Hurricane Michael's impact on Florida housing prices across 67 counties. Built MLR and Difference-in-Difference models achieving R² of 0.59, identifying a $36,631 median price decline in affected counties. Analyzed median income, unemployment, elevation, FEMA risk indices, and population density as determinants.", tags: ["Stata", "Econometrics", "Regression Analysis", "Diff-in-Diff"], status: "Completed", completed: "Apr 2024", url: "/hurricane-paper.docx" },
 ];
 const DEALS = [
-  { id: "ea-take-private", value: "$55B", type: "Take-Private LBO", co: "Electronic Arts Inc.", sub: "NASDAQ: EA", detail: "38-page IM · 24-slide IC deck · 12-tab LBO model", date: "Apr 2026",
+  { id: "ea-take-private", value: "$55B", type: "Take-Private LBO", co: "Electronic Arts Inc.", sub: "NASDAQ: EA", detail: "38-page IM · 24-slide IC deck · 12-tab LBO model", date: "Apr 2026", model: "/deals/ea-lbo-model.xlsx", memo: "/deals/ea-memo.pdf",
     thesis: "Durable live-services cash flow supports an all-cash take-private; returns underwritten primarily to EBITDA growth and deleveraging, not multiple expansion.",
     assumptions: "$36.4B equity / $18.0B debt sources & uses; three-case operating projections spanning 1.27x–2.43x MoM and 4.8%–19.4% gross IRR; reconstruction diverges from reported terms where figures were not public.",
     takeaway: "Returns attribution — separating EBITDA growth, multiple expansion, and deleveraging — tells you more about a deal than the headline IRR." },
-  { id: "jagex-lbo", value: "£900M", type: "Sponsor-to-Sponsor LBO", co: "Jagex Limited", sub: "CVC & Haveli ← The Carlyle Group", detail: "10-tab LBO model · 26-page IM · QoE bridge", date: "Apr 2026",
+  { id: "jagex-lbo", value: "£900M", type: "Sponsor-to-Sponsor LBO", co: "Jagex Limited", sub: "CVC & Haveli ← The Carlyle Group", detail: "10-tab LBO model · 26-page IM · QoE bridge", date: "Apr 2026", model: "/deals/jagex-lbo-model.xlsx", memo: "/deals/jagex-memo.pdf",
     thesis: "Recurring subscription revenue with pricing power justifies a 13.4x FY23 EBITDA entry in a secondary buyout, underwriting a 1.77x MOIC / 12.1% IRR base case.",
     assumptions: "Quality-of-earnings bridge normalizing $56.4M reported to $75M pro-forma EBITDA ($18.6M add-backs); ~10% CAPM-derived WACC; full 2-and-20 fund waterfall; every figure footnoted to primary sources.",
     takeaway: "Cross-border, limited-disclosure deals live or die on quality of earnings — the add-back bridge was the real model." },
@@ -57,12 +57,13 @@ const ARTIFACTS = [
   { label: "Interactive mini-LBO model", tab: "projects", id: "lbo-sandbox" },
   { label: "Personal budgeting app — live demo", href: "https://masonbennett-budget.streamlit.app/" },
   { label: "Portfolio analytics app — live demo", href: "https://portfolio-app-ifh8afmcuxkyr6ivov9fmj.streamlit.app/" },
+  { label: "Bloomberg Market Concepts certificate (PDF)", href: "/bmc-certificate.pdf" },
   { label: "GitHub", href: "https://github.com/masonjbennett" },
   { label: "Shollmier Investment Fund — Garrison Financial Institute", href: "https://gfi.uark.edu/shollmier-fund.php" },
 ];
 const EXPERIENCE = [
   { role: "M.S. Finance", org: "Walton College of Business", date: "2025–2026", type: "edu", detail: "4.0 GPA · Advanced Financial Modeling, Advanced Corporate Finance, Alternative Investments, New Venture (Private Equity), Financial Data Analytics II" },
-  { role: "Analyst — Shollmier Investment Fund", org: "Garrison Financial Institute · Walton College", url: "https://gfi.uark.edu/shollmier-fund.php", date: "2025–2026", type: "work", detail: "Sector analysis for a live $700K+ fixed-income portfolio managed by graduate students." },
+  { role: "Analyst, Information Technology Sector — Shollmier Investment Fund", org: "Garrison Financial Institute · Walton College", url: "https://gfi.uark.edu/shollmier-fund.php", date: "2025–2026", type: "work", detail: "Covered the Information Technology sector for a live $700K+ fixed-income portfolio managed by graduate students." },
   { role: "B.S. Business Administration", org: "Walton College of Business", date: "2021–2024", type: "edu", detail: "3.62 GPA · Business Economics · Dean's List (5 semesters) · Funded 100% of undergraduate education through service-industry work" },
   { role: "Finance & Economics Tutor", org: "Self-employed · Fayetteville, AR", date: "2021–2024", type: "work", detail: "10+ students/semester. Tailored study guides. Helped improve grades 1–2 letters." },
   { role: "Event Manager", org: "Venue on Spring Creek · TX", date: "2016–2020", type: "work", detail: "100+ guest events. Coordinated vendors, supervised staff. 95%+ satisfaction." },
@@ -731,7 +732,13 @@ export default function App() {
                   <span style={{ fontSize: 11, color: "#4a443c", lineHeight: 1.6 }}>{t}</span>
                 </div>)}
               </div>
-              <div style={{ marginTop: 6 }}><CopyAnchor tab="projects" id={d.id} /></div>
+              <div style={{ marginTop: 6, display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+                <span style={{ display: "flex", gap: 12 }}>
+                  {d.model && <a href={d.model} download style={{ fontSize: 8, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, textTransform: "uppercase", textDecoration: "underline dotted", textUnderlineOffset: 3 }}>↧ Model (.xlsx)</a>}
+                  {d.memo && <a href={d.memo} target="_blank" rel="noopener noreferrer" style={{ fontSize: 8, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, textTransform: "uppercase", textDecoration: "underline dotted", textUnderlineOffset: 3 }}>Memo (PDF)</a>}
+                </span>
+                <CopyAnchor tab="projects" id={d.id} />
+              </div>
             </div>)}
           </div>
         </div>
@@ -767,7 +774,7 @@ export default function App() {
               <p style={{ color: "#0d6d56", fontSize: 12, fontFamily: "JetBrains Mono, monospace", marginBottom: 16 }}>M.S. Finance · University of Arkansas · Dallas–Fort Worth, TX</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14, borderTop: "1px solid #e9ddc9", borderBottom: "1px solid #e9ddc9", padding: "12px 0" }}>
                 {["M.S. Finance, 4.0 GPA — Walton College of Business, May 2026",
-                  "Analyst — Shollmier Investment Fund, a $700K+ student-managed portfolio",
+                  "Info Tech Sector Analyst — Shollmier Investment Fund, a $700K+ student-managed portfolio (2025–26)",
                   "Seeking analyst roles: IB · PE · Wealth Management · Corporate Finance — Dallas–Fort Worth"].map(l => <div key={l} style={{ fontSize: 13.5, color: "#33302c", fontWeight: 600, lineHeight: 1.45 }}>{l}</div>)}
               </div>
               <p style={{ color: "#4a443c", fontSize: 13.5, lineHeight: 1.8, marginBottom: 18 }}>Led graduate student deal teams reconstructing two real transactions — a $55B take-private LBO and a £900M sponsor-to-sponsor buyout — as fully modeled hypothetical acquisitions built from public filings. Bloomberg Market Concepts certified; FINRA SIE in progress.</p>
@@ -835,7 +842,7 @@ export default function App() {
           <div style={{ marginBottom: 14 }}><div style={{ fontSize: 8, color: "#8a8072", textTransform: "uppercase", letterSpacing: 2, marginBottom: 8, fontFamily: "JetBrains Mono, monospace" }}>Core Finance</div><div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{["Financial Modeling", "Valuation (DCF, LBO, Comps)", "Quality of Earnings (QoE)", "Investment Analysis", "Transaction Analysis", "Portfolio Management", "Monte Carlo Simulation", "Econometrics", "Quantitative Research"].map(s => <span key={s} style={{ fontSize: 11, padding: "6px 14px", borderRadius: 8, background: "linear-gradient(135deg, rgba(13,109,86,0.08), rgba(13,109,86,0.04))", color: "#0d6d56", border: "1px solid rgba(13,109,86,0.15)", transition: "all 0.25s", cursor: "default", boxShadow: "0 2px 6px rgba(13,109,86,0.04)" }} onMouseEnter={e=>{e.currentTarget.style.background="rgba(13,109,86,0.12)";e.currentTarget.style.boxShadow="0 4px 12px rgba(13,109,86,0.1)";e.currentTarget.style.transform="translateY(-1px)"}} onMouseLeave={e=>{e.currentTarget.style.background="linear-gradient(135deg, rgba(13,109,86,0.08), rgba(13,109,86,0.04))";e.currentTarget.style.boxShadow="0 2px 6px rgba(13,109,86,0.04)";e.currentTarget.style.transform="none"}}>{s}</span>)}</div></div>
           <div style={{ marginBottom: 14 }}><div style={{ fontSize: 8, color: "#8a8072", textTransform: "uppercase", letterSpacing: 2, marginBottom: 8, fontFamily: "JetBrains Mono, monospace" }}>Tools</div><div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{["Excel", "Python", "Bloomberg", "PitchBook", "Stata", "RStudio", "SQL", "PowerPoint", "Streamlit"].map(s => <span key={s} style={{ fontSize: 11, padding: "6px 14px", borderRadius: 8, background: "linear-gradient(145deg, #fffdf9, #f6eee1)", color: "#6f675c", border: "1px solid #e3d5bf", transition: "all 0.25s", cursor: "default", boxShadow: "0 2px 6px rgba(64,52,32,0.05)" }} onMouseEnter={e=>{e.currentTarget.style.borderColor="#1f5a9e40";e.currentTarget.style.color="#1f5a9e";e.currentTarget.style.boxShadow="0 4px 12px rgba(31,90,158,0.08)";e.currentTarget.style.transform="translateY(-1px)"}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#e3d5bf";e.currentTarget.style.color="#6f675c";e.currentTarget.style.boxShadow="0 2px 6px rgba(64,52,32,0.05)";e.currentTarget.style.transform="none"}}>{s}</span>)}</div></div>
           <div><div style={{ fontSize: 8, color: "#8a8072", textTransform: "uppercase", letterSpacing: 2, marginBottom: 8, fontFamily: "JetBrains Mono, monospace" }}>Certifications & Licenses</div><div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {[["Bloomberg Market Concepts", "Certified · Apr 2026", "#0d6d56"], ["FINRA SIE", "In Progress", "#b0741e"], ["CFA Level I", "Planned", "#8a8072"]].map(([name, status, c]) => <span key={name} style={{ fontSize: 11, padding: "6px 14px", borderRadius: 8, background: `${c}0a`, color: c, border: `1px solid ${c}30`, cursor: "default", display: "inline-flex", alignItems: "center", gap: 8 }}>{name}<span style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 1, opacity: 0.75 }}>{status}</span></span>)}
+            {[["Bloomberg Market Concepts", "Certified · Apr 2026 ↗", "#0d6d56", "/bmc-certificate.pdf"], ["FINRA SIE", "In Progress", "#b0741e", null], ["CFA Level I", "Planned", "#8a8072", null]].map(([name, status, c, url]) => { const inner = <>{name}<span style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 1, opacity: 0.75 }}>{status}</span></>; const st = { fontSize: 11, padding: "6px 14px", borderRadius: 8, background: `${c}0a`, color: c, border: `1px solid ${c}30`, cursor: url ? "pointer" : "default", display: "inline-flex", alignItems: "center", gap: 8, textDecoration: "none" }; return url ? <a key={name} href={url} target="_blank" rel="noopener noreferrer" style={st} title="View certificate">{inner}</a> : <span key={name} style={st}>{inner}</span>; })}
           </div></div>
         </div>
         </Reveal>
@@ -882,7 +889,7 @@ export default function App() {
         <h1 style={{ fontFamily: "'Instrument Serif',serif", fontSize: 34, fontWeight: 400, color: "#262421", marginBottom: 6, lineHeight: 1 }}>Mason J. Bennett</h1>
         <p style={{ color: "#0d6d56", fontSize: 11, fontFamily: "'JetBrains Mono',monospace", marginBottom: 20 }}>M.S. Finance · University of Arkansas · Dallas–Fort Worth, TX</p>
         <div style={{ borderTop: "1px solid #e9ddc9", borderBottom: "1px solid #e9ddc9", padding: "14px 0", marginBottom: 20, display: "flex", flexDirection: "column", gap: 8 }}>
-          {["4.0 GPA — M.S. Finance, Walton College of Business (May 2026)", "Analyst — Shollmier Investment Fund, $700K+ student-managed portfolio", "Bloomberg Market Concepts certified · FINRA SIE in progress"].map(s => <div key={s} style={{ fontSize: 13, color: "#33302c", fontWeight: 500 }}>{s}</div>)}
+          {["4.0 GPA — M.S. Finance, Walton College of Business (May 2026)", "Info Tech Sector Analyst — Shollmier Investment Fund ($700K+, 2025–26)", "Bloomberg Market Concepts certified · FINRA SIE in progress"].map(s => <div key={s} style={{ fontSize: 13, color: "#33302c", fontWeight: 500 }}>{s}</div>)}
         </div>
         <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginBottom: 24 }}>
           <a href="/resume.pdf" target="_blank" rel="noopener noreferrer" style={{ padding: "10px 22px", borderRadius: 10, background: "#0d6d56", color: "#fdf8f0", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Download Resume</a>
