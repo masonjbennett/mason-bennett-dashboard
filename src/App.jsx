@@ -44,9 +44,9 @@ const DEALS = [
     thesis: "Recurring subscription revenue with pricing power justifies a 13.4x FY23 EBITDA entry in a secondary buyout, underwriting a 1.77x MOIC / 12.1% IRR base case.",
     assumptions: "Quality-of-earnings bridge normalizing $56.4M reported to $75M pro-forma EBITDA ($18.6M add-backs); ~10% CAPM-derived WACC; full 2-and-20 fund waterfall; every figure footnoted to primary sources.",
     takeaway: "Cross-border, limited-disclosure deals live or die on quality of earnings — the add-back bridge was the real model." },
-  { id: "hca-pitch", value: "NYSE: HCA", type: "Buy Recommendation", co: "HCA Healthcare", sub: "GFI Stock Pitch Competition", detail: "1 of 4 graduate teams · live Q&A defense", date: "Oct 2025",
-    thesis: "Buy recommendation on HCA presented to the Garrison Financial Institute Advisory Board — one of four graduate teams invited to pitch industry practitioners.",
-    assumptions: "Team-built financial projections and valuation; recommendation defended live under practitioner questioning.",
+  { id: "hca-pitch", value: "NYSE: HCA", type: "Buy · PT $557", co: "HCA Healthcare", sub: "GFI Stock Pitch Competition", detail: "1 of 4 graduate teams · live Q&A defense", date: "Oct 2025",
+    thesis: "Buy at $466.58 with a $557.26 one-year target — defensive non-discretionary demand, inflation-resistant hard assets, and disciplined hospital growth in key markets.",
+    assumptions: "Three-method valuation: EPS multiple 16x–20x ($428–537), DCF exit multiple 6x–10x ($497–737), DCF Gordon growth ($555–602); comps vs. THC, UHS, CYH; as of Oct 30, 2025.",
     takeaway: "Pitching to practitioners punishes any assumption you can't defend out loud — the Q&A was the real test." },
 ];
 const ARTIFACTS = [
@@ -734,6 +734,48 @@ function LBOSandbox() {
   </div>;
 }
 
+// ============ HCA FOOTBALL FIELD ============
+function FootballField() {
+  const ROWS = [
+    { m: "EPS multiple · 16x–20x", lo: 428, hi: 537, base: 482, c: "#1f5a9e" },
+    { m: "DCF · exit multiple 6x–10x", lo: 497, hi: 737, base: 612, c: "#0d6d56" },
+    { m: "DCF · Gordon growth", lo: 555, hi: 602, base: 578, c: "#6d549e" },
+  ];
+  const PT = 557.26, PITCH = 466.58;
+  const [live, setLive] = useState(null);
+  useEffect(() => {
+    let c = false;
+    (async () => { try { const cached = cacheGet("mb_hca_live", 5); if (cached) { if (!c) setLive(cached); return; } const r = await fetch("/api/quotes?symbols=HCA"); if (!r.ok) return; const d = await r.json(); if (d.HCA && d.HCA.c && !c) { setLive(d.HCA.c); cacheSet("mb_hca_live", d.HCA.c); } } catch {} })();
+    return () => { c = true; };
+  }, []);
+  const vals = [400, 760, PT, PITCH, ...(live ? [live] : [])];
+  const lo = Math.min(...vals) - 15, hi = Math.max(...vals) + 15;
+  const x = v => `${((v - lo) / (hi - lo)) * 100}%`;
+  const Rule = ({ v, color, dash, label, top }) => <div style={{ position: "absolute", left: x(v), top: 0, bottom: 0, width: 0, borderLeft: `1px ${dash ? "dashed" : "solid"} ${color}` }}>
+    <span style={{ position: "absolute", top: top ? -16 : "100%", left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap", fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color, letterSpacing: 0.5, marginTop: top ? 0 : 3 }}>{label}</span>
+  </div>;
+  return <div>
+    <div style={{ position: "relative", padding: "22px 8px 26px" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16, position: "relative" }}>
+        {ROWS.map(r => <div key={r.m} style={{ position: "relative" }}>
+          <div style={{ fontSize: 10, color: "#6f675c", marginBottom: 4 }}>{r.m}</div>
+          <div style={{ position: "relative", height: 16 }}>
+            <div style={{ position: "absolute", top: 7, left: 0, right: 0, height: 1, background: "#efe4d2" }} />
+            <div style={{ position: "absolute", left: x(r.lo), width: `calc(${x(r.hi)} - ${x(r.lo)})`, top: 1, height: 13, background: `${r.c}1f`, border: `1px solid ${r.c}66`, borderRadius: 2 }} />
+            <div style={{ position: "absolute", left: x(r.base), top: 0, width: 2, height: 15, background: r.c }} title={`Base $${r.base}`} />
+            <span style={{ position: "absolute", left: x(r.lo), top: -1, transform: "translateX(-104%)", fontSize: 8.5, fontFamily: "'JetBrains Mono',monospace", color: "#8a8072" }}>${r.lo}</span>
+            <span style={{ position: "absolute", left: x(r.hi), top: -1, transform: "translateX(6%)", fontSize: 8.5, fontFamily: "'JetBrains Mono',monospace", color: "#8a8072" }}>${r.hi}</span>
+          </div>
+        </div>)}
+        <Rule v={PT} color="#0d6d56" dash label={`PT $${PT.toFixed(0)}`} top />
+        <Rule v={PITCH} color="#b8ab97" dash label={`$${PITCH.toFixed(0)} at pitch`} />
+        {live && <Rule v={live} color="#262421" label={`live $${live.toFixed(0)}`} top={false} />}
+      </div>
+    </div>
+    <p style={{ fontSize: 9, color: "#a2977f", lineHeight: 1.6 }}>Ranges from the team's sensitivity tables (5.8%–7.8% discount rate). Student pitch — assumptions as of Oct 30, 2025{live ? " · live price updates daily" : ""}. Not investment advice.</p>
+  </div>;
+}
+
 // ============ MERGER MATH ============
 function MergerMath() {
   const A = { ni: 500, sh: 200, pe: 15 }, B = { ni: 150, peStand: 12 }, TAX = 0.21;
@@ -988,6 +1030,10 @@ export default function App() {
               </div>
             </div>)}
           </div>
+        </div>
+        <div id="hca-field" style={{ ...S.card, marginBottom: 16 }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> HCA Healthcare — Valuation Football Field<Info text="The classic banker valuation summary, hand-built in React from the GFI pitch: each bar is one valuation method's range from the team's sensitivity tables, with the price target, the price on pitch day, and today's live price drawn as vertical rules." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="projects" id="hca-field" /></span></h2>
+          <FootballField />
         </div>
         <div id="lbo-sandbox" style={{ ...S.card, marginBottom: 16 }}>
           <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> Interactive — Mini LBO Model<Info text="A simplified leveraged-buyout model you can play with. Set the entry price, leverage, growth, and exit assumptions — the sponsor returns and value-creation bridge update live. Built in React to demonstrate the mechanics behind the deal reconstructions above." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="projects" id="lbo-sandbox" /></span></h2>
