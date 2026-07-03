@@ -308,7 +308,7 @@ function CopyEmail({ style }) {
 // ============ COPY ANCHOR ============
 function CopyAnchor({ tab, id }) {
   const [ok, setOk] = useState(false);
-  return <button onClick={() => { try { navigator.clipboard.writeText(`https://masonjbennett.com/?tab=${tab}#${id}`); setOk(true); setTimeout(() => setOk(false), 1600); } catch {} }} title="Copy a direct link" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 8, color: ok ? "#0d6d56" : "#a2977f", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, padding: 0, textTransform: "uppercase" }}>{ok ? "✓ link copied" : "§ copy link"}</button>;
+  return <button onClick={() => { try { navigator.clipboard.writeText(`https://masonjbennett.com/${tab}#${id}`); setOk(true); setTimeout(() => setOk(false), 1600); } catch {} }} title="Copy a direct link" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 8, color: ok ? "#0d6d56" : "#a2977f", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, padding: 0, textTransform: "uppercase" }}>{ok ? "✓ link copied" : "§ copy link"}</button>;
 }
 
 // ============ VISUAL PRIMITIVES ============
@@ -908,9 +908,18 @@ export default function App() {
   const [finnhubKey, setFinnhubKey] = useState(() => localStorage.getItem("mb_finnhub_key") || "");
   const [showSettings, setShowSettings] = useState(false);
   const { prices, live: pricesLive, asOf } = usePrices(TICKERS, finnhubKey);
-  const [tab, setTabRaw] = useState(() => { try { const q = new URLSearchParams(window.location.search).get("tab"); return ["home", "projects", "markets", "news", "recruiter"].includes(q) ? q : "home"; } catch { return "home"; } }), [hovP, setHovP] = useState(null), [cmd, setCmd] = useState(false), [showHero, setShowHero] = useState(() => { try { return !sessionStorage.getItem("mb_intro"); } catch { return true; } }), [mounted, setMounted] = useState(false);
-  const setTab = (t) => { setTabRaw(t); window.scrollTo(0, 0); };
-  const goAnchor = (t, id) => { setTabRaw(t); setTimeout(() => { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); else window.scrollTo(0, 0); }, 80); };
+  const [tab, setTabRaw] = useState(() => { try { const valid = ["home", "projects", "markets", "news", "recruiter"]; const path = window.location.pathname.replace(/\/+$/, "").slice(1); if (valid.includes(path)) return path; const q = new URLSearchParams(window.location.search).get("tab"); return valid.includes(q) ? q : "home"; } catch { return "home"; } }), [hovP, setHovP] = useState(null), [cmd, setCmd] = useState(false), [showHero, setShowHero] = useState(() => { try { return !sessionStorage.getItem("mb_intro"); } catch { return true; } }), [mounted, setMounted] = useState(false);
+  const setTab = (t) => { setTabRaw(t); try { window.history.pushState({ tab: t }, "", t === "home" ? "/" : `/${t}`); } catch {} window.scrollTo(0, 0); };
+  const goAnchor = (t, id) => { setTabRaw(t); try { window.history.pushState({ tab: t }, "", `${t === "home" ? "/" : `/${t}`}#${id}`); } catch {} setTimeout(() => { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); else window.scrollTo(0, 0); }, 80); };
+  useEffect(() => {
+    const h = () => { try { const valid = ["home", "projects", "markets", "news", "recruiter"]; const path = window.location.pathname.replace(/\/+$/, "").slice(1); const q = new URLSearchParams(window.location.search).get("tab"); setTabRaw(valid.includes(path) ? path : valid.includes(q) ? q : "home"); } catch {} };
+    window.addEventListener("popstate", h);
+    return () => window.removeEventListener("popstate", h);
+  }, []);
+  useEffect(() => {
+    const titles = { home: "Mason J. Bennett — M.S. Finance · Analyst Candidate", projects: "Projects & Deal Sheet — Mason J. Bennett", markets: "Markets — Mason J. Bennett", news: "News & Briefings — Mason J. Bennett", recruiter: "Recruiter Packet — Mason J. Bennett" };
+    document.title = titles[tab] || titles.home;
+  }, [tab]);
   useEffect(() => { if (!window.location.hash) return; const id = window.location.hash.slice(1); const t = setTimeout(() => document.getElementById(id)?.scrollIntoView({ block: "start" }), showHero ? 3200 : 300); return () => clearTimeout(t); }, []);
   useEffect(() => { window.scrollTo(0, 0); if (!showHero) { setMounted(true); return; } try { sessionStorage.setItem("mb_intro", "1"); } catch {} const t = setTimeout(() => { setShowHero(false); setMounted(true); }, 2900); return () => clearTimeout(t); }, []);
   useEffect(() => { const h = e => { if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setCmd(true); } if (e.key === "Escape") setCmd(false); if (!e.metaKey && !e.ctrlKey && !e.altKey && ["1", "2", "3", "4"].includes(e.key) && !e.target.closest("input") && !e.target.closest("textarea")) setTab(["home", "projects", "markets", "news"][+e.key - 1]); }; window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, []);
@@ -1219,6 +1228,7 @@ export default function App() {
       <div style={{ display: "flex", gap: 18, flexWrap: "wrap", justifyContent: "center" }}>
         {LINKS.map(l => <a key={l.label} href={l.url} target="_blank" rel="noopener noreferrer" style={{ color: "#8a8072", fontSize: 10, fontFamily: "'JetBrains Mono',monospace", textDecoration: "none", letterSpacing: 1, transition: "color 0.2s" }} onMouseEnter={e => e.currentTarget.style.color = "#0d6d56"} onMouseLeave={e => e.currentTarget.style.color = "#8a8072"}>{l.label}</a>)}
         <button onClick={() => setTab("recruiter")} style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8072", fontSize: 10, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, padding: 0 }} onMouseEnter={e => e.currentTarget.style.color = "#0d6d56"} onMouseLeave={e => e.currentTarget.style.color = "#8a8072"}>For Recruiters</button>
+        <button onClick={() => window.print()} style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8072", fontSize: 10, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, padding: 0 }} onMouseEnter={e => e.currentTarget.style.color = "#0d6d56"} onMouseLeave={e => e.currentTarget.style.color = "#8a8072"}>Print This Edition</button>
       </div>
       <div style={{ color: "#a2977f", fontSize: 9, fontFamily: "JetBrains Mono, monospace", display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
         <span>Mason J. Bennett</span><span>·</span><span>M.S. Finance, Walton College</span><span>·</span><span>© {new Date().getFullYear()}</span><span>·</span><span>⌘K or 1-4</span>

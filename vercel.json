@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    { "source": "/projects", "destination": "/index.html" },
+    { "source": "/markets", "destination": "/index.html" },
+    { "source": "/news", "destination": "/index.html" },
+    { "source": "/recruiter", "destination": "/index.html" }
+  ]
+}

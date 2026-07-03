@@ -1,0 +1,40 @@
+# Mason J. Bennett — masonjbennett.com
+
+Personal site of Mason J. Bennett: M.S. Finance graduate (May 2026, 4.0 GPA),
+Sam M. Walton College of Business, University of Arkansas. Based in
+Dallas–Fort Worth, TX. Seeking analyst roles in investment banking, private
+equity, wealth management, and corporate finance.
+
+IMPORTANT FRAMING: The LBO deal work on this site consists of GRADUATE
+COURSEWORK RECONSTRUCTIONS of real transactions, rebuilt as hypothetical
+acquisitions from publicly available filings. Mason led student deal teams;
+he was NOT part of the actual transactions.
+
+## Credentials
+- M.S. Finance, 4.0/4.0 GPA, Walton College of Business (May 2026)
+- B.S. Business Administration (Business Economics), 3.62 GPA, Dean's List x5 (May 2024)
+- Analyst, Information Technology Sector — Shollmier Investment Fund, a $700K+
+  student-managed portfolio at the Garrison Financial Institute (2025–26)
+- Bloomberg Market Concepts (BMC), certified April 2026 (certificate: /bmc-certificate.pdf)
+- FINRA SIE in progress; CFA Level I planned
+- Funded 100% of undergraduate education through service-industry work
+
+## Work samples
+- EA $55B take-private LBO — student reconstruction: 38-page memo, 24-slide IC
+  deck, 12-tab Excel LBO model (downloads: /deals/ea-lbo-model.xlsx, /deals/ea-memo.pdf)
+- Jagex £900M sponsor-to-sponsor LBO — student reconstruction: 10-tab model,
+  QoE bridge, PE fund waterfall (downloads: /deals/jagex-lbo-model.xlsx, /deals/jagex-memo.pdf)
+- HCA Healthcare stock pitch — Garrison Financial Institute competition,
+  1 of 4 graduate teams (Oct 2025)
+- Interactive mini-LBO model, merger math (accretion/dilution) sandbox, and a
+  paper-LBO drill generator, all built in React (/projects)
+- ML credit-default classifier: 0.9931 ROC-AUC on 70,000 loans
+- Live apps: budgeting app (masonbennett-budget.streamlit.app) and portfolio
+  analytics app (Streamlit)
+
+## Contact
+- Email: bennettmasonj@gmail.com
+- LinkedIn: linkedin.com/in/bennettmason
+- GitHub: github.com/masonjbennett
+- Resume: masonjbennett.com/resume.pdf
+- Recruiter one-screen packet: masonjbennett.com/?tab=recruiter
