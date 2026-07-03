@@ -1,0 +1,21 @@
+{
+  "note": "Official release schedules, verified Jul 2026. Sources: federalreserve.gov/monetarypolicy/fomccalendars.htm, bls.gov/schedule, bea.gov/news/schedule. Refresh each January.",
+  "events": [
+    { "date": "2026-07-14", "event": "CPI — June", "time": "8:30 AM ET", "imp": "high" },
+    { "date": "2026-07-29", "event": "FOMC Rate Decision", "time": "2:00 PM ET", "imp": "high" },
+    { "date": "2026-07-30", "event": "GDP — Q2 Advance Estimate", "time": "8:30 AM ET", "imp": "high" },
+    { "date": "2026-08-07", "event": "Employment Situation — July", "time": "8:30 AM ET", "imp": "high" },
+    { "date": "2026-08-12", "event": "CPI — July", "time": "8:30 AM ET", "imp": "high" },
+    { "date": "2026-09-04", "event": "Employment Situation — August", "time": "8:30 AM ET", "imp": "high" },
+    { "date": "2026-09-11", "event": "CPI — August", "time": "8:30 AM ET", "imp": "high" },
+    { "date": "2026-09-16", "event": "FOMC Rate Decision", "time": "2:00 PM ET", "imp": "high" },
+    { "date": "2026-10-02", "event": "Employment Situation — September", "time": "8:30 AM ET", "imp": "high" },
+    { "date": "2026-10-14", "event": "CPI — September", "time": "8:30 AM ET", "imp": "high" },
+    { "date": "2026-10-28", "event": "FOMC Rate Decision", "time": "2:00 PM ET", "imp": "high" },
+    { "date": "2026-11-06", "event": "Employment Situation — October", "time": "8:30 AM ET", "imp": "high" },
+    { "date": "2026-11-10", "event": "CPI — October", "time": "8:30 AM ET", "imp": "high" },
+    { "date": "2026-12-04", "event": "Employment Situation — November", "time": "8:30 AM ET", "imp": "high" },
+    { "date": "2026-12-09", "event": "FOMC Rate Decision", "time": "2:00 PM ET", "imp": "high" },
+    { "date": "2026-12-10", "event": "CPI — November", "time": "8:30 AM ET", "imp": "high" }
+  ]
+}

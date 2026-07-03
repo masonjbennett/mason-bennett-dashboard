@@ -231,7 +231,7 @@ function usePrices(tickers, finnhubKey) {
         try {
           const r = await fetch(`https://finnhub.io/api/v1/quote?symbol=${tickers[i].symbol}&token=${finnhubKey}`);
           const d = await r.json();
-          if (d.c) results[i] = { ...tickers[i], price: d.c.toFixed(2), change: d.dp ? d.dp.toFixed(2) : "0.00", loading: false };
+          if (d.c) results[i] = { ...tickers[i], price: d.c.toFixed(2), change: d.dp ? d.dp.toFixed(2) : "0.00", h: d.h, l: d.l, pc: d.pc, loading: false };
         } catch {}
         if (i < tickers.length - 1) await delay(120); // Rate limit: ~60/min
       }
@@ -245,6 +245,8 @@ function usePrices(tickers, finnhubKey) {
   }, [finnhubKey]);
   // Fallback: server-side proxy (real data, key stays on Vercel), then simulated
   const [live, setLive] = useState(false);
+  const [asOf, setAsOf] = useState(null);
+  const stamp = () => setAsOf(new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
   useEffect(() => {
     if (finnhubKey) return;
     let cancelled = false, iv = null;
@@ -256,20 +258,33 @@ function usePrices(tickers, finnhubKey) {
     (async () => {
       try {
         const cached = cacheGet("mb_prices_proxy", 5);
-        if (cached) { if (!cancelled) { setP(cached); setLive(true); } return; }
+        if (cached) { if (!cancelled) { setP(cached); setLive(true); stamp(); } return; }
         const r = await fetch(`/api/quotes?symbols=${tickers.map(t => t.symbol).join(",")}`);
         if (!r.ok) throw 0;
         const d = await r.json();
-        const mapped = tickers.map(t => d[t.symbol] && d[t.symbol].c ? { ...t, price: d[t.symbol].c.toFixed(2), change: (d[t.symbol].dp || 0).toFixed(2) } : null);
+        const mapped = tickers.map(t => d[t.symbol] && d[t.symbol].c ? { ...t, price: d[t.symbol].c.toFixed(2), change: (d[t.symbol].dp || 0).toFixed(2), h: d[t.symbol].h, l: d[t.symbol].l, pc: d[t.symbol].pc } : null);
         if (mapped.filter(Boolean).length < tickers.length / 2) throw 0;
         const filled = mapped.map((m, i) => m || { ...tickers[i], price: "—", change: "0.00" });
-        if (!cancelled) { setP(filled); setLive(true); cacheSet("mb_prices_proxy", filled); }
+        if (!cancelled) { setP(filled); setLive(true); stamp(); cacheSet("mb_prices_proxy", filled); }
       } catch { startSim(); }
     })();
     return () => { cancelled = true; if (iv) clearInterval(iv); };
   }, [finnhubKey]);
-  return { prices: p, live: !!finnhubKey || live };
+  return { prices: p, live: !!finnhubKey || live, asOf };
 }
+
+// Engraved day-range bar: low -> high with a teal tick at the current price
+const RangeBar = ({ h, l, c }) => {
+  if (!(h > l) || !(c > 0)) return <span style={{ width: 56 }} />;
+  const p = Math.max(0, Math.min(100, ((c - l) / (h - l)) * 100));
+  return <span style={{ display: "inline-flex", alignItems: "center", width: 56, flexShrink: 0 }} title={`Day range ${l.toFixed(2)} – ${h.toFixed(2)}`}>
+    <span style={{ position: "relative", width: "100%", height: 1, background: "#d8c8b0", display: "block" }}>
+      <span style={{ position: "absolute", left: 0, top: -3, width: 1, height: 7, background: "#b8ab97" }} />
+      <span style={{ position: "absolute", right: 0, top: -3, width: 1, height: 7, background: "#b8ab97" }} />
+      <span style={{ position: "absolute", left: `calc(${p}% - 1.5px)`, top: -4, width: 3, height: 9, background: "#0d6d56", borderRadius: 1 }} />
+    </span>
+  </span>;
+};
 
 // ============ INFO TOOLTIP ============
 function Info({ text, link, linkLabel }) {
@@ -329,9 +344,80 @@ const Slug = ({ icon = "#0d6d56", children, right }) => <div style={{ position: 
   {right || null}
 </div>;
 const SourceLine = ({ children }) => <div style={{ fontSize: 8.5, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 0.5, marginTop: 12, borderTop: "1px solid #efe4d2", paddingTop: 8 }}>{children}</div>;
+const CloudIc = ({ size = 13 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M17.5 19a4.5 4.5 0 0 0 .9-8.91 6 6 0 0 0-11.66 1.4A4 4 0 0 0 7 19Z" /></svg>;
+const StormIc = ({ size = 13 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M17.5 16a4.5 4.5 0 0 0 .9-8.91 6 6 0 0 0-11.66 1.4A4 4 0 0 0 7 16Z" /><path d="M12.5 16 10 20h3l-2 4" /></svg>;
+function WeatherEar({ prices }) {
+  const spy = prices.find(p => p.symbol === "SPY");
+  const chg = spy ? parseFloat(spy.change) : NaN;
+  if (!(chg === chg)) return null;
+  const adv = prices.filter(p => parseFloat(p.change) > 0).length / (prices.length || 1);
+  const heavy = Math.abs(chg) >= 2;
+  const [Icon, label] = heavy && chg < 0 ? [StormIc, "Heavy weather"]
+    : chg <= -0.75 || adv <= 0.35 ? [StormIc, "Stormy tape"]
+    : chg >= 0.75 && adv >= 0.6 ? [SunIc, "Fair skies"]
+    : [CloudIc, "Partly sunny"];
+  return <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 9, fontFamily: "'JetBrains Mono',monospace", color: "#8a8072", letterSpacing: 1 }} title="Market weather — S&P 500 move and market breadth">
+    <span style={{ color: "#b0741e", display: "inline-flex" }}><Icon /></span>
+    {label} · S&P {chg >= 0 ? "+" : "−"}{Math.abs(chg).toFixed(2)}%
+  </div>;
+}
+function MacroTape() {
+  const [rows, setRows] = useState(null);
+  useEffect(() => {
+    let c = false;
+    (async () => {
+      try {
+        const cached = cacheGet("mb_macro", 5);
+        if (cached) { if (!c) setRows(cached); return; }
+        const r = await fetch("/api/quotes?symbols=SPY,QQQ,VIXY,UUP,GLD,USO,IBIT");
+        if (!r.ok) return;
+        const d = await r.json();
+        const L = [["SPY", "S&P"], ["QQQ", "NASDAQ"], ["VIXY", "VIX·PROXY"], ["UUP", "DOLLAR"], ["GLD", "GOLD"], ["USO", "OIL"], ["IBIT", "BITCOIN"]];
+        const out = L.filter(([s]) => d[s]).map(([s, label]) => ({ s, label, c: d[s].c, dp: d[s].dp }));
+        if (out.length && !c) { setRows(out); cacheSet("mb_macro", out); }
+      } catch {}
+    })();
+    return () => { c = true; };
+  }, []);
+  if (!rows) return null;
+  return <div style={{ borderTop: "3px double #33302c", borderBottom: "1px solid #ddcfb8", padding: "9px 2px", marginBottom: 22, display: "flex", flexWrap: "wrap", gap: "6px 24px", fontFamily: "'JetBrains Mono',monospace", fontSize: 11, animation: "fadeUp 0.5s ease both" }}>
+    {rows.map(r => <span key={r.s} style={{ display: "inline-flex", gap: 7, alignItems: "baseline" }}>
+      <span style={{ color: "#8a8072", fontSize: 9, letterSpacing: 1 }}>{r.label}</span>
+      <span style={{ color: "#33302c" }}>{r.c.toFixed(2)}</span>
+      <span style={{ color: r.dp >= 0 ? "#0d6d56" : "#b2342b", fontWeight: 600 }}>{r.dp >= 0 ? "▲" : "▼"} {Math.abs(r.dp).toFixed(2)}%</span>
+    </span>)}
+  </div>;
+}
+function QuoteLookup() {
+  const [q, setQ] = useState("");
+  const [res, setRes] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => { const h = e => { if (e.key === "/" && !e.target.closest("input") && !e.target.closest("textarea")) { e.preventDefault(); ref.current?.focus(); } }; window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, []);
+  const go = async () => {
+    const sym = q.trim().toUpperCase();
+    if (!/^[A-Z.]{1,10}$/.test(sym)) return;
+    setBusy(true); setRes(null);
+    try { const r = await fetch(`/api/quotes?symbols=${sym}`); const d = await r.json(); setRes(d[sym] && d[sym].c ? { sym, ...d[sym] } : { sym, none: true }); } catch { setRes({ sym, none: true }); }
+    setBusy(false);
+  };
+  return <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 22, fontFamily: "'JetBrains Mono',monospace" }}>
+    <span style={{ fontSize: 9, color: "#8a8072", letterSpacing: 2 }}>QUOTE</span>
+    <input ref={ref} value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && go()} placeholder="Any US ticker — press / to focus" style={{ ...S.input, width: 250, fontSize: 11, fontFamily: "'JetBrains Mono',monospace", padding: "7px 12px" }} />
+    <button onClick={go} disabled={busy} style={{ ...S.btn, fontSize: 10, letterSpacing: 2, padding: "7px 16px", opacity: busy ? 0.5 : 1 }}>GO</button>
+    {res && (res.none
+      ? <span style={{ fontSize: 11, color: "#8a8072" }}>{res.sym} – no quote</span>
+      : <span style={{ display: "inline-flex", gap: 12, alignItems: "center", fontSize: 12 }}>
+          <span style={{ color: "#33302c", fontWeight: 700 }}>{res.sym}</span>
+          <span style={{ color: "#33302c" }}>${res.c.toFixed(2)}</span>
+          <span style={{ color: res.dp >= 0 ? "#0d6d56" : "#b2342b", fontWeight: 600 }}>{res.dp >= 0 ? "▲" : "▼"} {Math.abs(res.dp).toFixed(2)}%</span>
+          {res.h > res.l && <RangeBar h={res.h} l={res.l} c={res.c} />}
+          {res.pc > 0 && <span style={{ fontSize: 9, color: "#8a8072" }}>PREV {res.pc.toFixed(2)}</span>}
+        </span>)}
+  </div>;
+}
 
 // ============ SMALL COMPONENTS ============
-function Spark({ pos, w = 88, h = 28 }) { const id = useRef(`s${Math.random().toString(36).slice(2,6)}`); const glow = useRef(`g${Math.random().toString(36).slice(2,6)}`); const pts = useRef(Array.from({length:22},(_,i)=>{const x=(i/21)*w,y=h/2+(pos?-1:1)*i*0.35+(Math.random()-0.5)*h*0.45;return`${x},${Math.max(2,Math.min(h-2,y))}`;}).join(" ")); return <svg width={w} height={h} style={{display:"block"}}><defs><linearGradient id={id.current} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={pos?"#0d6d56":"#b2342b"} stopOpacity="0.25"/><stop offset="100%" stopColor={pos?"#0d6d56":"#b2342b"} stopOpacity="0"/></linearGradient></defs><polyline points={pts.current+` ${w},${h} 0,${h}`} fill={`url(#${id.current})`}/><polyline points={pts.current} fill="none" stroke={pos?"#0d6d56":"#b2342b"} strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/></svg>; }
 function Donut({ data, size = 200 }) { const [hov,setHov]=useState(null); const total=data.reduce((s,d)=>s+d.weight,0),C=["#0d6d56","#1f5a9e","#6d549e","#990f3d","#b0741e","#b3551d","#6f675c"]; let cum=-90; return <svg viewBox="0 0 200 200" width={size} height={size} style={{filter:"drop-shadow(0 4px 24px rgba(13,109,86,0.12)) drop-shadow(0 0 40px rgba(13,109,86,0.04))"}}>{data.map((d,i)=>{const a=(d.weight/total)*360,s=cum;cum+=a;const r=hov===i?84:80,rd=v=>(v*Math.PI)/180;const x1=100+r*Math.cos(rd(s)),y1=100+r*Math.sin(rd(s)),x2=100+r*Math.cos(rd(cum)),y2=100+r*Math.sin(rd(cum));return <path key={i} d={`M100,100 L${x1},${y1} A${r},${r} 0 ${a>180?1:0},1 ${x2},${y2} Z`} fill={C[i%C.length]} stroke="#f6eee1" strokeWidth="2.5" style={{transition:"all 0.25s",cursor:"pointer",filter:hov===i?`drop-shadow(0 0 8px ${C[i%C.length]}50)`:"none"}} onMouseEnter={()=>setHov(i)} onMouseLeave={()=>setHov(null)}/>})}<circle cx="100" cy="100" r="62" fill="#fffdf9" stroke="#e9ddc9" strokeWidth="1"/>{hov!==null?<><text x="100" y="97" textAnchor="middle" fill={C[hov%C.length]} fontSize="15" fontWeight="700" fontFamily="JetBrains Mono">{data[hov].ticker}</text><text x="100" y="114" textAnchor="middle" fill="#6f675c" fontSize="10" fontFamily="JetBrains Mono">{data[hov].weight}%</text></>:<><text x="100" y="99" textAnchor="middle" fill="#262421" fontSize="17" fontFamily="Instrument Serif, serif">Portfolio</text><text x="100" y="115" textAnchor="middle" fill="#8a8072" fontSize="9" fontFamily="JetBrains Mono">{data.length} holdings</text></>}</svg>; }
 function HeatMap({ finnhubKey }){
   const [cells, setCells] = useState(() => HEATMAP.map(h => ({ ...h, change: (Math.random() * 9 - 4.5).toFixed(2) })));
@@ -426,6 +512,24 @@ function RegimeIndicator({ apiKey }) {
 function EarningsCal({ apiKey }) {
   const [data, setData] = useState(null), [loading, setLoading] = useState(false), [error, setError] = useState(false), [fetchTime, setFetchTime] = useState(null);
   const load = async () => { if (!apiKey) { setError(true); setLoading(false); return; } setLoading(true); setError(false); const r = await fetchEarnings(apiKey); if (r) { setData(r); setFetchTime(new Date()); } else setError(true); setLoading(false); };
+  // Visitors: real upcoming earnings for the watchlist via the serverless proxy
+  useEffect(() => {
+    if (apiKey) return;
+    let c = false;
+    (async () => {
+      try {
+        const cached = cacheGet("mb_earn_proxy", 360);
+        if (cached) { if (!c) setData(cached); return; }
+        const r = await fetch(`/api/earnings?symbols=${TICKERS.map(t => t.symbol).join(",")}`);
+        if (!r.ok) return;
+        const rows = await r.json();
+        if (!Array.isArray(rows) || !rows.length) return;
+        const mapped = rows.map(e => ({ ticker: e.symbol, company: "", date: new Date(e.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }), time: e.hour === "bmo" ? "BMO" : e.hour === "amc" ? "AMC" : "—", est_eps: e.eps != null ? `$${e.eps.toFixed(2)}` : null }));
+        if (!c) { setData(mapped); cacheSet("mb_earn_proxy", mapped); }
+      } catch {}
+    })();
+    return () => { c = true; };
+  }, [apiKey]);
   return <div style={{...S.card, animation:"fadeUp 0.5s ease 0.32s both"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:data?12:0}}>
       <h2 style={S.cardTitle}><span style={{color:"#1f5a9e"}}>◆</span> Earnings Calendar<Info text="Upcoming quarterly earnings reports for major companies. BMO = Before Market Open, AMC = After Market Close. Est EPS is the consensus analyst estimate. Source: Earnings data aggregated via AI web search from Yahoo Finance, Nasdaq, and MarketWatch." link="https://www.investopedia.com/terms/e/earningsreport.asp" linkLabel="Understanding earnings reports" /></h2>
@@ -465,6 +569,22 @@ function EconCalendar({ apiKey }) {
   const [data, setData] = useState(null), [loading, setLoading] = useState(false), [error, setError] = useState(false), [fetchTime, setFetchTime] = useState(null);
   const load = async () => { if (!apiKey) { setError(true); return; } setLoading(true); setError(false); const r = await fetchEconCal(apiKey); if (r) { setData(r); setFetchTime(new Date()); } else setError(true); setLoading(false); };
   const ic = { high: "#b2342b", medium: "#b0741e", low: "#8a8072" };
+  // Visitors: deterministic calendar from official annual release schedules
+  useEffect(() => {
+    if (apiKey) return;
+    let c = false;
+    (async () => {
+      try {
+        const r = await fetch("/econ-2026.json");
+        if (!r.ok) return;
+        const d = await r.json();
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const rows = (d.events || []).filter(e => new Date(e.date + "T23:59:00") >= today).slice(0, 6).map(e => ({ event: e.event, date: new Date(e.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }), time: e.time, importance: e.imp }));
+        if (rows.length && !c) setData(rows);
+      } catch {}
+    })();
+    return () => { c = true; };
+  }, [apiKey]);
   return <div style={{...S.card, animation:"fadeUp 0.5s ease 0.36s both"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:data?12:0}}>
       <h2 style={S.cardTitle}><span style={{color:"#990f3d"}}>◆</span> Economic Calendar<Info text="Upcoming economic data releases — Fed rate decisions (FOMC), inflation (CPI/PPI), employment (NFP), GDP, and retail sales. Red dot = high market impact. Source: Federal Reserve, BLS, BEA, and Census Bureau schedules via AI web search." link="https://www.investopedia.com/terms/e/economic-calendar.asp" linkLabel="Economic indicators explained" /></h2>
@@ -629,7 +749,7 @@ export default function App() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem("mb_api_key") || "");
   const [finnhubKey, setFinnhubKey] = useState(() => localStorage.getItem("mb_finnhub_key") || "");
   const [showSettings, setShowSettings] = useState(false);
-  const { prices, live: pricesLive } = usePrices(TICKERS, finnhubKey);
+  const { prices, live: pricesLive, asOf } = usePrices(TICKERS, finnhubKey);
   const [tab, setTabRaw] = useState(() => { try { const q = new URLSearchParams(window.location.search).get("tab"); return ["home", "projects", "markets", "news", "recruiter"].includes(q) ? q : "home"; } catch { return "home"; } }), [hovP, setHovP] = useState(null), [cmd, setCmd] = useState(false), [showHero, setShowHero] = useState(() => { try { return !sessionStorage.getItem("mb_intro"); } catch { return true; } }), [mounted, setMounted] = useState(false);
   const setTab = (t) => { setTabRaw(t); window.scrollTo(0, 0); };
   const goAnchor = (t, id) => { setTabRaw(t); setTimeout(() => { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); else window.scrollTo(0, 0); }, 80); };
@@ -650,6 +770,7 @@ export default function App() {
 
     <div className="status-bar" style={{ background: "#2b2825", padding: "7px 32px", display: "flex", justifyContent: "space-between", fontSize: 9, fontFamily: "JetBrains Mono, monospace", color: "#cfc5b4", letterSpacing: 1, position: "relative", zIndex: 2 }}>
       <span>WALTON COLLEGE OF BUSINESS · UNIVERSITY OF ARKANSAS · DALLAS–FORT WORTH, TX</span>
+      {pricesLive && <span className="statusbar-quotes" style={{ display: "flex", gap: 18 }}>{["SPY", "QQQ", "TLT", "GLD"].map(sym => { const t = prices.find(p => p.symbol === sym); if (!t || t.price === "—") return null; const up = parseFloat(t.change) >= 0; return <span key={sym} style={{ display: "inline-flex", gap: 6 }}><span style={{ color: "#7d7568" }}>{sym}</span><span style={{ color: "#cfc5b4" }}>{t.price}</span><span style={{ color: up ? "#3ecf8e" : "#e07a70" }}>{up ? "+" : "−"}{Math.abs(parseFloat(t.change)).toFixed(2)}%</span></span>; })}</span>}
       <span><span style={{ color: "#3ecf8e" }}>●</span> OPEN TO OPPORTUNITIES · IB / PE / WEALTH MANAGEMENT / CORPORATE FINANCE</span>
     </div>
 
@@ -660,7 +781,7 @@ export default function App() {
           <div className="masthead-name" style={{ fontFamily: "'Instrument Serif',serif", fontSize: 36, fontWeight: 400, color: "#262421", letterSpacing: "-0.015em", lineHeight: 1 }}>Mason J. Bennett</div>
           <div className="masthead-tag" style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#0d6d56", letterSpacing: 3, textTransform: "uppercase", marginTop: 7 }}>Investment Banking · Private Equity · Wealth Management · Corporate Finance</div>
         </div>
-        <div className="masthead-side" style={{ flex: "1 1 0", display: "flex", justifyContent: "flex-end" }}><MktBadge /></div>
+        <div className="masthead-side" style={{ flex: "1 1 0", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}><MktBadge />{pricesLive && <WeatherEar prices={prices} />}</div>
       </div>
     </div>
 
@@ -684,6 +805,8 @@ export default function App() {
 
       {tab === "markets" && <div>
         <Kicker n="03" t="Markets & Data" />
+        <MacroTape />
+        <QuoteLookup />
         <div style={{ marginBottom: 24, animation: "fadeUp 0.5s ease both", padding: "20px 24px", background: "linear-gradient(135deg, rgba(255,253,249,0.9), rgba(251,245,236,0.7))", borderRadius: 10, border: "1px solid #e3d5bf", boxShadow: "0 4px 20px rgba(64,52,32,0.07)" }}><Clock /></div>
         <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
           <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.08s both" }}>
@@ -692,9 +815,9 @@ export default function App() {
             {prices.every(p => p.price === "—") && <div style={{ fontSize: 10, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, padding: "8px 0" }}>AWAITING WIRE <span style={{ animation: "blink 1s step-end infinite", color: "#0d6d56" }}>▮</span></div>}
             {prices.map(t => <a key={t.symbol} href={`https://www.tradingview.com/symbols/${t.symbol}/`} target="_blank" rel="noopener noreferrer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 12px", borderRadius: 10, transition: "all 0.2s", cursor: "pointer", borderLeft: "2px solid transparent", textDecoration: "none" }} onMouseEnter={e => {e.currentTarget.style.background = "rgba(13,109,86,0.04)"; e.currentTarget.style.borderLeftColor = "#0d6d5650";}} onMouseLeave={e => {e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderLeftColor = "transparent";}}>
               <div><span style={{ color: "#33302c", fontWeight: 600, fontSize: 13 }}>{t.symbol}</span><span style={{ color: "#8a8072", fontSize: 11, marginLeft: 8 }}>{t.name}</span></div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}><Spark pos={parseFloat(t.change) >= 0} /><span style={{ color: "#33302c", fontFamily: "JetBrains Mono, monospace", fontSize: 13, minWidth: 60, textAlign: "right" }}>${t.price}</span><span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, minWidth: 58, textAlign: "right", color: parseFloat(t.change) >= 0 ? "#0d6d56" : "#b2342b", fontWeight: 600 }}>{parseFloat(t.change) >= 0 ? "▲" : "▼"} {Math.abs(parseFloat(t.change)).toFixed(2)}%</span></div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}><RangeBar h={t.h} l={t.l} c={parseFloat(t.price)} /><span style={{ color: "#33302c", fontFamily: "JetBrains Mono, monospace", fontSize: 13, minWidth: 60, textAlign: "right" }}>${t.price}</span><span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, minWidth: 58, textAlign: "right", color: parseFloat(t.change) >= 0 ? "#0d6d56" : "#b2342b", fontWeight: 600 }}>{parseFloat(t.change) >= 0 ? "▲" : "▼"} {Math.abs(parseFloat(t.change)).toFixed(2)}%</span></div>
             </a>)}
-            <SourceLine>Source: Finnhub · 5-min cache{pricesLive ? "" : " · simulated demo data"}</SourceLine>
+            <SourceLine>Source: Finnhub · 5-min cache{asOf ? ` · as of ${asOf}` : ""}{pricesLive ? "" : " · simulated demo data"}</SourceLine>
           </section>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.12s both" }}>
@@ -964,6 +1087,7 @@ export default function App() {
       input:focus,textarea:focus,select:focus{border-color:#0d6d5660!important;box-shadow:0 0 0 4px rgba(13,109,86,0.12),0 0 20px rgba(13,109,86,0.08)!important}
       button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid #0d6d5660;outline-offset:2px;border-radius:10px}
       button:hover{transform:translateY(-1px)}button:active{transform:translateY(0px)}
+      @media(max-width:1140px){.statusbar-quotes{display:none!important}}
       @media(max-width:768px){
         .masthead{padding:12px 14px 10px!important}
         .masthead-side{display:none!important}

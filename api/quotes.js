@@ -11,7 +11,7 @@ export default async function handler(req, res) {
     try {
       const r = await fetch(`https://finnhub.io/api/v1/quote?symbol=${s}&token=${key}`);
       const d = await r.json();
-      if (d && typeof d.c === "number" && d.c > 0) out[s] = { c: d.c, dp: d.dp ?? 0 };
+      if (d && typeof d.c === "number" && d.c > 0) out[s] = { c: d.c, dp: d.dp ?? 0, h: d.h, l: d.l, o: d.o, pc: d.pc };
     } catch {}
   }));
   res.setHeader("Cache-Control", "s-maxage=300, stale-while-revalidate=900");
