@@ -650,7 +650,25 @@ return <div><Briefings apiKey={apiKey}/><div style={{height:16}}/>
 // ============ LBO SANDBOX ============
 function LBOSandbox() {
   const [inp, setInp] = useState({ entry: 10, debt: 60, growth: 6, exit: 10, years: 5 });
-  const set = k => e => setInp(p => ({ ...p, [k]: parseFloat(e.target.value) }));
+  const [scen, setScen] = useState(null);
+  const animRef = useRef(null);
+  const set = k => e => { setScen(null); setInp(p => ({ ...p, [k]: parseFloat(e.target.value) })); };
+  const SCENARIOS = {
+    Base: { v: { entry: 10, debt: 60, growth: 6, exit: 10, years: 5 }, note: "Steady growth at a flat exit multiple — returns come from EBITDA growth and debt paydown." },
+    Upside: { v: { entry: 9.5, debt: 65, growth: 9, exit: 11.5, years: 5 }, note: "Cheaper entry, faster growth, and multiple expansion — all three levers pulling at once." },
+    Downside: { v: { entry: 10.5, debt: 55, growth: 2, exit: 8.5, years: 5 }, note: "Slow growth into multiple compression — deleveraging alone can't carry the deal." },
+  };
+  const runScenario = (name) => {
+    setScen(name);
+    const target = SCENARIOS[name].v, start = { ...inp }, t0 = performance.now();
+    cancelAnimationFrame(animRef.current);
+    const step = (now) => {
+      const k = Math.min(1, (now - t0) / 650), ez = 1 - Math.pow(1 - k, 3);
+      setInp({ entry: +(start.entry + (target.entry - start.entry) * ez).toFixed(1), debt: Math.round(start.debt + (target.debt - start.debt) * ez), growth: +(start.growth + (target.growth - start.growth) * ez).toFixed(1), exit: +(start.exit + (target.exit - start.exit) * ez).toFixed(1), years: Math.round(start.years + (target.years - start.years) * ez) });
+      if (k < 1) animRef.current = requestAnimationFrame(step);
+    };
+    animRef.current = requestAnimationFrame(step);
+  };
   const E0 = 100, EV0 = inp.entry * E0, D0 = EV0 * inp.debt / 100, Q0 = EV0 - D0;
   const EN = E0 * Math.pow(1 + inp.growth / 100, inp.years);
   let debt = D0;
@@ -671,6 +689,13 @@ function LBOSandbox() {
     ["Hold period", "years", 3, 7, 1, v => `${v} years`],
   ];
   return <div>
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ fontSize: 11, color: "#6f675c", fontStyle: "italic", marginBottom: 8 }}>How the five levers of an LBO drive returns — press a scenario to test.</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {Object.keys(SCENARIOS).map(n => <button key={n} onClick={() => runScenario(n)} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "6px 16px", ...(scen === n ? { background: "#0d6d56", color: "#fdf8f0", border: "1px solid #0d6d56" } : {}) }}>{n}</button>)}
+      </div>
+      {scen && <div style={{ fontSize: 11.5, color: "#4a443c", marginTop: 10, fontStyle: "italic", borderLeft: "2px solid #0d6d56", paddingLeft: 10, lineHeight: 1.6 }}>{SCENARIOS[scen].note} <span style={{ color: "#0d6d56", fontWeight: 600, fontStyle: "normal", fontFamily: "'JetBrains Mono',monospace" }}>→ {irr.toFixed(1)}% IRR · {mom.toFixed(2)}x</span></div>}
+    </div>
     <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 28, alignItems: "start" }}>
       <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
         {sliders.map(([label, k, min, max, step, fmt]) => <div key={k}>
@@ -706,6 +731,97 @@ function LBOSandbox() {
       </div>
     </div>
     <p style={{ fontSize: 9, color: "#a2977f", marginTop: 16, lineHeight: 1.6 }}>Simplified and illustrative — $100M entry EBITDA (indexed), 45% of EBITDA converts to debt paydown annually, no fees or taxes. Built to demonstrate LBO mechanics, not investment advice.</p>
+  </div>;
+}
+
+// ============ MERGER MATH ============
+function MergerMath() {
+  const A = { ni: 500, sh: 200, pe: 15 }, B = { ni: 150, peStand: 12 }, TAX = 0.21;
+  const [inp, setInp] = useState({ prem: 25, stock: 50, kd: 6, syn: 50 });
+  const set = k => e => setInp(p => ({ ...p, [k]: parseFloat(e.target.value) }));
+  const epsA = A.ni / A.sh, priceA = epsA * A.pe;
+  const offer = B.ni * B.peStand * (1 + inp.prem / 100);
+  const stockVal = offer * inp.stock / 100, debtVal = offer - stockVal;
+  const newSh = stockVal / priceA;
+  const atInt = debtVal * (inp.kd / 100) * (1 - TAX);
+  const pfNI = A.ni + B.ni + inp.syn * (1 - TAX) - atInt;
+  const pfSh = A.sh + newSh;
+  const pfEPS = pfNI / pfSh;
+  const acc = (pfEPS / epsA - 1) * 100;
+  const breakeven = Math.max(0, (epsA * pfSh - A.ni - B.ni + atInt) / (1 - TAX));
+  const sliders = [
+    ["Premium to standalone", "prem", 0, 60, 5, v => `${v}%`],
+    ["Consideration mix", "stock", 0, 100, 10, v => `${v}% stock · ${100 - v}% debt`],
+    ["Cost of debt", "kd", 3, 9, 0.5, v => `${v.toFixed(1)}%`],
+    ["Pre-tax synergies", "syn", 0, 300, 10, v => `$${v}M`],
+  ];
+  return <div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
+      {sliders.map(([label, k, min, max, step, fmt]) => <div key={k}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+          <span style={{ fontSize: 11, color: "#6f675c", fontWeight: 500 }}>{label}</span>
+          <span style={{ fontSize: 11, color: "#1f5a9e", fontFamily: "'JetBrains Mono',monospace", fontWeight: 600 }}>{fmt(inp[k])}</span>
+        </div>
+        <input type="range" min={min} max={max} step={step} value={inp[k]} onChange={set(k)} style={{ width: "100%", cursor: "pointer", accentColor: "#1f5a9e" }} />
+      </div>)}
+    </div>
+    <div style={{ display: "flex", alignItems: "baseline", gap: 14, marginBottom: 8 }}>
+      <span style={{ fontSize: 32, fontFamily: "'Instrument Serif',serif", color: acc >= 0 ? "#0d6d56" : "#b2342b", lineHeight: 1 }}>{acc >= 0 ? "+" : "−"}{Math.abs(acc).toFixed(1)}%</span>
+      <span style={{ fontSize: 9, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 1.5 }}>{acc >= 0 ? "Accretive" : "Dilutive"}</span>
+    </div>
+    <div style={{ fontSize: 11, color: "#4a443c", fontFamily: "'JetBrains Mono',monospace", marginBottom: 4 }}>Pro-forma EPS ${pfEPS.toFixed(2)} vs ${epsA.toFixed(2)} standalone</div>
+    <div style={{ fontSize: 11, color: "#4a443c", fontFamily: "'JetBrains Mono',monospace", marginBottom: 10 }}>Breakeven synergies: ${breakeven.toFixed(0)}M pre-tax</div>
+    <div style={{ fontSize: 11.5, color: "#4a443c", fontStyle: "italic", borderLeft: "2px solid #1f5a9e", paddingLeft: 10, lineHeight: 1.6 }}>
+      {inp.stock === 100 ? "All-stock" : inp.stock === 0 ? "All-debt" : `A ${inp.stock}% stock deal`} at a {inp.prem}% premium is {acc >= 0 ? "accretive from day one." : `dilutive until roughly $${breakeven.toFixed(0)}M of pre-tax synergies.`}
+    </div>
+    <p style={{ fontSize: 9, color: "#a2977f", marginTop: 12, lineHeight: 1.6 }}>Hypothetical companies — Acquirer: $500M net income, 200M shares, 15.0x P/E ($37.50). Target: $150M net income, 12.0x standalone. 21% tax; simplified (no fees, amortization, or balance-sheet cash).</p>
+  </div>;
+}
+
+// ============ PUZZLE CORNER ============
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function PuzzleCorner() {
+  const [seed, setSeed] = useState(20260702);
+  const [ans, setAns] = useState({ eq: "", exit: "", mom: "", irr: "" });
+  const [checked, setChecked] = useState(false);
+  const r = mulberry32(seed);
+  const pick = arr => arr[Math.floor(r() * arr.length)];
+  const E0 = pick([50, 75, 100, 125, 150, 200]);
+  const entry = pick([6, 7, 8, 9, 10, 11, 12]);
+  const debtPct = pick([50, 55, 60, 65, 70]);
+  const factor = pick([1.25, 1.4, 1.5, 1.6, 1.75, 2.0]);
+  const exitM = Math.max(5, entry + pick([-1, 0, 0.5, 1, 2]));
+  const EV0 = entry * E0, D = EV0 * debtPct / 100, Eq0 = EV0 - D;
+  const EN = Math.round(E0 * factor), EVN = exitM * EN, EqN = EVN - D;
+  const mom = EqN / Eq0, irr = (Math.pow(mom, 1 / 5) - 1) * 100;
+  const num = s => parseFloat(String(s).replace(/[$,%x\s]/gi, ""));
+  const grade = { eq: Math.abs(num(ans.eq) - Eq0) <= Math.max(1, Eq0 * 0.01), exit: Math.abs(num(ans.exit) - EqN) <= Math.max(1, EqN * 0.01), mom: Math.abs(num(ans.mom) - mom) <= 0.06, irr: Math.abs(num(ans.irr) - irr) <= 1.2 };
+  const fields = [["eq", "Equity check ($M)", `${Eq0.toFixed(0)}`], ["exit", "Exit equity ($M)", `${EqN.toFixed(0)}`], ["mom", "Multiple of money (x)", `${mom.toFixed(2)}x`], ["irr", "5-yr IRR (%)", `${irr.toFixed(1)}%`]];
+  const fresh = () => { setSeed(s => s + 1); setAns({ eq: "", exit: "", mom: "", irr: "" }); setChecked(false); };
+  return <div>
+    <p style={{ fontSize: 12.5, color: "#4a443c", lineHeight: 1.8, marginBottom: 14 }}>
+      A sponsor buys a company generating <b>${E0}M of EBITDA</b> at <b>{entry.toFixed(1)}x</b>, financed with <b>{debtPct}% debt</b> (interest-only, no paydown). Over five years EBITDA grows to <b>${EN}M</b> and the sponsor exits at <b>{exitM.toFixed(1)}x</b>. Work it on paper:
+    </p>
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+      {fields.map(([k, label, sol]) => <div key={k} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ fontSize: 10.5, color: "#6f675c", width: 150, flexShrink: 0 }}>{label}</span>
+        <input value={ans[k]} onChange={e => { setAns(p => ({ ...p, [k]: e.target.value })); setChecked(false); }} style={{ ...S.input, width: 92, fontFamily: "'JetBrains Mono',monospace", fontSize: 12, padding: "6px 10px", textAlign: "right" }} />
+        {checked && <span style={{ fontSize: 12, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: grade[k] ? "#0d6d56" : "#b2342b" }}>{grade[k] ? "✓" : `✗ ${sol}`}</span>}
+      </div>)}
+    </div>
+    <div style={{ display: "flex", gap: 10, marginBottom: checked ? 14 : 0 }}>
+      <button onClick={() => setChecked(true)} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "7px 18px" }}>Check</button>
+      <button onClick={fresh} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "7px 18px", color: "#6f675c", border: "1px solid #ddcfb8" }}>New problem</button>
+    </div>
+    {checked && <div style={{ borderTop: "1px solid #e9ddc9", paddingTop: 12 }}>
+      <div style={{ fontSize: 8, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 2, marginBottom: 8 }}>Worked solution</div>
+      {[`Entry EV = ${entry.toFixed(1)}x × $${E0}M = $${EV0.toFixed(0)}M`,
+        `Debt = ${debtPct}% × $${EV0.toFixed(0)}M = $${D.toFixed(0)}M → Equity check = $${Eq0.toFixed(0)}M`,
+        `Exit EV = ${exitM.toFixed(1)}x × $${EN}M = $${EVN.toFixed(0)}M`,
+        `Exit equity = $${EVN.toFixed(0)}M − $${D.toFixed(0)}M = $${EqN.toFixed(0)}M`,
+        `MoM = ${EqN.toFixed(0)} ÷ ${Eq0.toFixed(0)} = ${mom.toFixed(2)}x → IRR = ${mom.toFixed(2)}^(1/5) − 1 ≈ ${irr.toFixed(1)}%`].map((s, i) => <div key={i} style={{ fontSize: 11, color: "#4a443c", fontFamily: "'JetBrains Mono',monospace", lineHeight: 2 }}>{i + 1}. {s}</div>)}
+    </div>}
+    <p style={{ fontSize: 9, color: "#a2977f", marginTop: 12, lineHeight: 1.6 }}>The classic PE interview warm-up — interest-only debt, no fees or taxes. Fresh numbers every time.</p>
   </div>;
 }
 
@@ -876,6 +992,16 @@ export default function App() {
         <div id="lbo-sandbox" style={{ ...S.card, marginBottom: 16 }}>
           <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> Interactive — Mini LBO Model<Info text="A simplified leveraged-buyout model you can play with. Set the entry price, leverage, growth, and exit assumptions — the sponsor returns and value-creation bridge update live. Built in React to demonstrate the mechanics behind the deal reconstructions above." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="projects" id="lbo-sandbox" /></span></h2>
           <LBOSandbox />
+        </div>
+        <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16, alignItems: "start" }}>
+          <div id="merger-math" style={S.card}>
+            <h2 style={S.cardTitle}><span style={{ color: "#1f5a9e" }}>◆</span> Interactive — Merger Math<Info text="Accretion/dilution — the other classic IB interview mechanic. Two hypothetical companies: set the premium, consideration mix, cost of debt, and synergies, and pro-forma EPS updates live." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="projects" id="merger-math" /></span></h2>
+            <MergerMath />
+          </div>
+          <div id="puzzle-corner" style={S.card}>
+            <h2 style={S.cardTitle}><span style={{ color: "#b0741e" }}>◆</span> Puzzle Corner — The Paper LBO<Info text="The classic private equity interview warm-up, generated fresh every time. Work it on paper, enter your answers, and check against the full worked solution." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="projects" id="puzzle-corner" /></span></h2>
+            <PuzzleCorner />
+          </div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(min(360px,100%),1fr))", gap: 14 }}>{PROJECTS.map((p, i) => <div key={i} style={{ ...S.pCard, ...(hovP === i ? { border: "1px solid #0d6d5650", transform: "translateY(-6px) scale(1.01)", boxShadow: "0 20px 50px rgba(13,109,86,0.12), 0 0 0 1px rgba(13,109,86,0.15), 0 0 40px rgba(13,109,86,0.05)" } : {}), animation: "fadeUp 0.5s ease both", animationDelay: `${i * 0.07}s` }} onMouseEnter={() => setHovP(i)} onMouseLeave={() => setHovP(null)}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}><span style={{ fontSize: 9, color: "#8a8072", fontFamily: "JetBrains Mono, monospace", letterSpacing: 1 }}>PROJECT_{String(i + 1).padStart(2, "0")}{p.completed && <span style={{ marginLeft: 8, color: "#a2977f" }}>· {p.completed}</span>}</span><div style={{ display: "flex", alignItems: "center", gap: 6 }}>{p.updated && <span style={{ fontSize: 8, color: "#a2977f", fontFamily: "JetBrains Mono, monospace" }}>Updated {p.updated}</span>}<span style={{ fontSize: 9, padding: "3px 10px", borderRadius: 20, background: p.status === "In Progress" ? "#b0741e08" : "#0d6d5608", color: p.status === "In Progress" ? "#b0741e" : "#0d6d56", fontFamily: "JetBrains Mono, monospace" }}>{p.status}</span></div></div>
