@@ -392,28 +392,39 @@ function QuoteLookup() {
   const [q, setQ] = useState("");
   const [res, setRes] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [news, setNews] = useState(null);
   const ref = useRef(null);
   useEffect(() => { const h = e => { if (e.key === "/" && !e.target.closest("input") && !e.target.closest("textarea")) { e.preventDefault(); ref.current?.focus(); } }; window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, []);
   const go = async () => {
     const sym = q.trim().toUpperCase();
     if (!/^[A-Z.]{1,10}$/.test(sym)) return;
-    setBusy(true); setRes(null);
+    setBusy(true); setRes(null); setNews(null);
     try { const r = await fetch(`/api/quotes?symbols=${sym}`); const d = await r.json(); setRes(d[sym] && d[sym].c ? { sym, ...d[sym] } : { sym, none: true }); } catch { setRes({ sym, none: true }); }
     setBusy(false);
+    // Terminal N: recent headlines for the name, fetched after the quote lands
+    try { const r = await fetch(`/api/news?symbol=${sym}`); if (r.ok) { const d = await r.json(); if (d.items && d.items.length) setNews(d); } } catch {}
   };
-  return <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 22, fontFamily: "'JetBrains Mono',monospace" }}>
-    <span style={{ fontSize: 9, color: "#8a8072", letterSpacing: 2 }}>QUOTE</span>
-    <input ref={ref} value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && go()} placeholder="Any US ticker — press / to focus" style={{ ...S.input, width: 250, fontSize: 11, fontFamily: "'JetBrains Mono',monospace", padding: "7px 12px" }} />
-    <button onClick={go} disabled={busy} style={{ ...S.btn, fontSize: 10, letterSpacing: 2, padding: "7px 16px", opacity: busy ? 0.5 : 1 }}>GO</button>
-    {res && (res.none
-      ? <span style={{ fontSize: 11, color: "#8a8072" }}>{res.sym} – no quote</span>
-      : <span style={{ display: "inline-flex", gap: 12, alignItems: "center", fontSize: 12 }}>
-          <span style={{ color: "#33302c", fontWeight: 700 }}>{res.sym}</span>
-          <span style={{ color: "#33302c" }}>${res.c.toFixed(2)}</span>
-          <span style={{ color: res.dp >= 0 ? "#0d6d56" : "#b2342b", fontWeight: 600 }}>{res.dp >= 0 ? "▲" : "▼"} {Math.abs(res.dp).toFixed(2)}%</span>
-          {res.h > res.l && <RangeBar h={res.h} l={res.l} c={res.c} />}
-          {res.pc > 0 && <span style={{ fontSize: 9, color: "#8a8072" }}>PREV {res.pc.toFixed(2)}</span>}
-        </span>)}
+  return <div style={{ marginBottom: 22 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontFamily: "'JetBrains Mono',monospace" }}>
+      <span style={{ fontSize: 9, color: "#8a8072", letterSpacing: 2 }}>QUOTE</span>
+      <input ref={ref} value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && go()} placeholder="Any US ticker — press / to focus" style={{ ...S.input, width: 250, fontSize: 11, fontFamily: "'JetBrains Mono',monospace", padding: "7px 12px" }} />
+      <button onClick={go} disabled={busy} style={{ ...S.btn, fontSize: 10, letterSpacing: 2, padding: "7px 16px", opacity: busy ? 0.5 : 1 }}>GO</button>
+      {res && (res.none
+        ? <span style={{ fontSize: 11, color: "#8a8072" }}>{res.sym} – no quote</span>
+        : <span style={{ display: "inline-flex", gap: 12, alignItems: "center", fontSize: 12 }}>
+            <span style={{ color: "#33302c", fontWeight: 700 }}>{res.sym}</span>
+            <span style={{ color: "#33302c" }}>${res.c.toFixed(2)}</span>
+            <span style={{ color: res.dp >= 0 ? "#0d6d56" : "#b2342b", fontWeight: 600 }}>{res.dp >= 0 ? "▲" : "▼"} {Math.abs(res.dp).toFixed(2)}%</span>
+            {res.h > res.l && <RangeBar h={res.h} l={res.l} c={res.c} />}
+            {res.pc > 0 && <span style={{ fontSize: 9, color: "#8a8072" }}>PREV {res.pc.toFixed(2)}</span>}
+          </span>)}
+    </div>
+    {news && res && !res.none && news.symbol === res.sym && <div style={{ margin: "8px 0 0 52px", maxWidth: 640 }}>
+      {news.items.slice(0, 3).map((n, i) => <a key={i} href={n.url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "3px 0", textDecoration: "none" }} onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
+        <span style={{ fontSize: 8, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", flexShrink: 0, minWidth: 38 }}>{n.datetime ? new Date(n.datetime * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : ""}</span>
+        <span style={{ fontSize: 11, color: "#4a443c", lineHeight: 1.5 }}>{n.headline}<span style={{ fontSize: 8.5, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", marginLeft: 7, letterSpacing: 0.5, textTransform: "uppercase" }}>{n.source}</span></span>
+      </a>)}
+    </div>}
   </div>;
 }
 
@@ -471,6 +482,7 @@ function Clock(){const[now,setNow]=useState(new Date());useEffect(()=>{const iv=
 // ============ MARKET REGIME ============
 function RegimeIndicator({ apiKey }) {
   const [data, setData] = useState(null), [loading, setLoading] = useState(false), [error, setError] = useState(false), [fetchTime, setFetchTime] = useState(null);
+  const fg = useFearGreed();
   const load = async () => { if (!apiKey) { setError(true); setLoading(false); return; } setLoading(true); setError(false); const r = await fetchRegime(apiKey); if (r) { setData(r); setFetchTime(new Date()); } else setError(true); setLoading(false); };
   const rc = data ? (data.regime === "Risk-On" ? "#0d6d56" : data.regime === "Risk-Off" ? "#b2342b" : "#b0741e") : "#8a8072";
   return <div style={{...S.card, animation:"fadeUp 0.5s ease 0.28s both"}}>
@@ -481,7 +493,13 @@ function RegimeIndicator({ apiKey }) {
         <button onClick={load} disabled={loading} style={{...S.btn,fontSize:10,padding:"4px 10px",opacity:loading?0.5:1}}>{loading?"⟳...":data?"↻":"Load"}</button>
       </div>}
     </div>
-    {!apiKey&&!data&&<p style={{color:"#8a8072",fontSize:12,textAlign:"center",padding:"12px 0",lineHeight:1.6}}>Live market regime analysis — tracks VIX, Fear & Greed Index, and 10Y Treasury yield in real time.<br/><span style={{fontSize:10,color:"#a2977f"}}>Powered by Claude AI + web search</span></p>}
+    {fg&&<div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap",marginBottom:data?12:6,padding:"8px 12px",borderRadius:8,background:"#f6eee1",border:"1px solid #e9ddc9"}}>
+      <span style={{fontSize:19,fontWeight:700,fontFamily:"'JetBrains Mono',monospace",color:fg.score>60?"#0d6d56":fg.score>40?"#b0741e":"#b2342b"}}>{Math.round(fg.score)}</span>
+      <span style={{fontSize:11,color:"#33302c",fontWeight:600,textTransform:"capitalize"}}>{fg.rating}</span>
+      {typeof fg.prev==="number"&&<span style={{fontSize:9,color:"#8a8072",fontFamily:"'JetBrains Mono',monospace"}}>prev close {Math.round(fg.prev)}</span>}
+      <span style={{marginLeft:"auto",fontSize:8,color:"#a2977f",fontFamily:"'JetBrains Mono',monospace",letterSpacing:1}}>FEAR & GREED · PER CNN BUSINESS · LIVE</span>
+    </div>}
+    {!apiKey&&!data&&<p style={{color:"#8a8072",fontSize:12,textAlign:"center",padding:"12px 0",lineHeight:1.6}}>Live market regime analysis — tracks VIX, Fear & Greed Index, and 10Y Treasury yield in real time.<br/><span style={{fontSize:10,color:"#a2977f"}}>{fg?"Fear & Greed above is live for everyone — the full read is ":""}Powered by Claude AI + web search</span></p>}
     {apiKey&&!data&&!loading&&!error&&<p style={{color:"#8a8072",fontSize:12,textAlign:"center",padding:"8px 0"}}>Click Load to fetch VIX, Fear/Greed, and 10Y yield</p>}
     {error&&!loading&&apiKey&&<p style={{color:"#b2342b",fontSize:12,textAlign:"center",padding:"8px 0"}}>Failed to load — click Load to retry</p>}
     {loading&&<div style={{textAlign:"center",padding:"12px 0"}}><div style={{display:"inline-flex",gap:4}}>{[0,1,2].map(i=><div key={i} style={{width:5,height:5,borderRadius:3,background:"#b3551d",animation:"pulse 1s infinite",animationDelay:`${i*0.2}s`}}/>)}</div></div>}
@@ -925,26 +943,32 @@ function TechnicalsDesk() {
   const [open, setOpen] = useState(null);
   const [rev, setRev] = useState(false);
   const [marked, setMarked] = useState(false);
+  const [showAll, setShowAll] = useState(false);
+  const PREVIEW = 8;
   const list = cat === "all" ? bank : bank.filter(x => x.cat === cat);
+  const visible = showAll ? list : list.slice(0, PREVIEW);
   const toggle = id => { setOpen(open === id ? null : id); setRev(false); setMarked(false); };
   if (!bank.length) return <AwaitingWire />;
   return <div>
     <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
-      {[["all", "All"], ...Object.entries(CAT_LABELS)].map(([k, l]) => <button key={k} onClick={() => { setCat(k); setOpen(null); }} style={{ ...S.chip, padding: "5px 11px", fontSize: 10, cursor: "pointer", ...(cat === k ? { color: "#0d6d56", border: "1px solid #0d6d5640", background: "rgba(13,109,86,0.06)" } : {}) }}>{l}</button>)}
+      {[["all", "All"], ...Object.entries(CAT_LABELS)].map(([k, l]) => <button key={k} onClick={() => { setCat(k); setOpen(null); setShowAll(false); }} style={{ ...S.chip, padding: "5px 11px", fontSize: 10, cursor: "pointer", ...(cat === k ? { color: "#0d6d56", border: "1px solid #0d6d5640", background: "rgba(13,109,86,0.06)" } : {}) }}>{l}</button>)}
     </div>
-    {list.map(q => <div key={q.id} style={{ borderTop: "1px solid #efe4d2" }}>
-      <button onClick={() => toggle(q.id)} style={{ display: "flex", width: "100%", background: "none", border: "none", cursor: "pointer", padding: "10px 2px", gap: 10, alignItems: "baseline", textAlign: "left" }}>
-        <span style={{ fontSize: 8, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, flexShrink: 0, width: 24 }}>{"I".repeat(q.d)}</span>
-        <span style={{ fontSize: 13, color: open === q.id ? "#0d6d56" : "#33302c", lineHeight: 1.5, flex: 1 }}>{q.q}</span>
-        <span style={{ fontSize: 8, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, textTransform: "uppercase", flexShrink: 0 }}>{CAT_LABELS[q.cat]}</span>
-      </button>
-      {open === q.id && <div style={{ padding: "2px 2px 14px 34px" }}>
-        <Redacted revealed={rev} onReveal={() => setRev(true)}>{q.a}</Redacted>
-        {rev && <div style={{ marginTop: 10 }}>
-          <GradeBar done={marked} onGrade={g => { recordSelfGrade({ src: "tech", qid: q.id, grade: g, front: q.q, back: q.a }); setMarked(true); }} />
+    <div style={showAll ? { maxHeight: 460, overflowY: "auto", paddingRight: 6 } : undefined}>
+      {visible.map(q => <div key={q.id} style={{ borderTop: "1px solid #efe4d2" }}>
+        <button onClick={() => toggle(q.id)} style={{ display: "flex", width: "100%", background: "none", border: "none", cursor: "pointer", padding: "10px 2px", gap: 10, alignItems: "baseline", textAlign: "left" }}>
+          <span style={{ fontSize: 8, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, flexShrink: 0, width: 24 }}>{"I".repeat(q.d)}</span>
+          <span style={{ fontSize: 13, color: open === q.id ? "#0d6d56" : "#33302c", lineHeight: 1.5, flex: 1 }}>{q.q}</span>
+          <span style={{ fontSize: 8, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, textTransform: "uppercase", flexShrink: 0 }}>{CAT_LABELS[q.cat]}</span>
+        </button>
+        {open === q.id && <div style={{ padding: "2px 2px 14px 34px" }}>
+          <Redacted revealed={rev} onReveal={() => setRev(true)}>{q.a}</Redacted>
+          {rev && <div style={{ marginTop: 10 }}>
+            <GradeBar done={marked} onGrade={g => { recordSelfGrade({ src: "tech", qid: q.id, grade: g, front: q.q, back: q.a }); setMarked(true); }} />
+          </div>}
         </div>}
-      </div>}
-    </div>)}
+      </div>)}
+    </div>
+    {list.length > PREVIEW && <button onClick={() => setShowAll(!showAll)} style={{ display: "block", width: "100%", background: "none", border: "none", borderTop: "1px solid #ddcfb8", cursor: "pointer", padding: "10px 2px 4px", textAlign: "center", fontSize: 9, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, textTransform: "uppercase", color: "#0d6d56" }}>{showAll ? "▴ Fold the bank away" : `▾ Open the full bank — ${list.length} questions`}</button>}
     <SourceLine>{bank.length} questions at press time · house bank, original questions · reveal before you grade — say the answer out loud first</SourceLine>
   </div>;
 }
@@ -1319,6 +1343,111 @@ function RatesPlate() {
   </div>;
 }
 
+// FX (ECB reference rates via Frankfurter) + crypto (CoinGecko) — both keyless and CORS-open, browser-direct.
+function CrossAssetRows() {
+  const [fx, setFx] = useState(null);
+  const [cr, setCr] = useState(null);
+  useEffect(() => {
+    let on = true;
+    (async () => {
+      try {
+        const cached = cacheGet("mjb_fx", 60); if (cached) { if (on) setFx(cached); return; }
+        const r = await fetch(`https://api.frankfurter.dev/v1/${addDaysISO(-8)}..?base=USD&symbols=EUR,GBP,JPY,CNY`);
+        if (!r.ok) return;
+        const d = await r.json();
+        const dates = Object.keys(d.rates || {}).sort();
+        if (dates.length < 2) return;
+        const cur = d.rates[dates[dates.length - 1]], prev = d.rates[dates[dates.length - 2]];
+        const out = [
+          { l: "EUR/USD", v: 1 / cur.EUR, p: 1 / prev.EUR, dp: 4 },
+          { l: "GBP/USD", v: 1 / cur.GBP, p: 1 / prev.GBP, dp: 4 },
+          { l: "USD/JPY", v: cur.JPY, p: prev.JPY, dp: 2 },
+          { l: "USD/CNY", v: cur.CNY, p: prev.CNY, dp: 3 },
+        ].map(x => ({ l: x.l, v: x.v, dp: x.dp, up: x.v > x.p, flat: Math.abs(x.v - x.p) < 1e-6 }));
+        if (on) { setFx(out); cacheSet("mjb_fx", out); }
+      } catch {}
+    })();
+    (async () => {
+      try {
+        const cached = cacheGet("mjb_crypto", 10); if (cached) { if (on) setCr(cached); return; }
+        const r = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true");
+        if (!r.ok) return;
+        const d = await r.json();
+        const out = [["bitcoin", "BTC"], ["ethereum", "ETH"], ["solana", "SOL"]].filter(([k]) => d[k] && d[k].usd).map(([k, l]) => ({ l, v: d[k].usd, ch: d[k].usd_24h_change || 0 }));
+        if (on && out.length) { setCr(out); cacheSet("mjb_crypto", out); }
+      } catch {}
+    })();
+    return () => { on = false; };
+  }, []);
+  if (!fx && !cr) return null;
+  return <div style={{ borderBottom: "1px solid #ddcfb8", padding: "7px 2px 8px", marginTop: -14, marginBottom: 22, display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "6px 22px", fontFamily: "'JetBrains Mono',monospace", fontSize: 10.5, animation: "fadeUp 0.5s ease both" }}>
+    {(fx || []).map(x => <span key={x.l} style={{ display: "inline-flex", gap: 7, alignItems: "baseline" }}>
+      <span style={{ color: "#8a8072", fontSize: 8.5, letterSpacing: 1 }}>{x.l}</span>
+      <span style={{ color: "#33302c" }}>{x.v.toFixed(x.dp)}</span>
+      {!x.flat && <span style={{ color: x.up ? "#0d6d56" : "#b2342b", fontWeight: 600 }}>{x.up ? "▲" : "▼"}</span>}
+    </span>)}
+    {(cr || []).map(x => <span key={x.l} style={{ display: "inline-flex", gap: 7, alignItems: "baseline" }}>
+      <span style={{ color: "#8a8072", fontSize: 8.5, letterSpacing: 1 }}>{x.l}</span>
+      <span style={{ color: "#33302c" }}>${x.v >= 1000 ? Math.round(x.v).toLocaleString() : x.v.toFixed(2)}</span>
+      <span style={{ color: x.ch >= 0 ? "#0d6d56" : "#b2342b", fontWeight: 600 }}>{x.ch >= 0 ? "▲" : "▼"} {Math.abs(x.ch).toFixed(1)}%</span>
+    </span>)}
+    <span style={{ marginLeft: "auto", fontSize: 7.5, color: "#a2977f", letterSpacing: 0.5 }}>RATES: ECB VIA FRANKFURTER · CRYPTO: COINGECKO</span>
+  </div>;
+}
+
+// CNN Fear & Greed — unofficial keyless JSON, CORS-open; graceful null on any failure.
+function useFearGreed() {
+  const [fg, setFg] = useState(null);
+  useEffect(() => {
+    let on = true;
+    (async () => {
+      try {
+        const cached = cacheGet("mjb_fg", 60); if (cached) { if (on) setFg(cached); return; }
+        const r = await fetch("https://production.dataviz.cnn.io/index/fearandgreed/graphdata");
+        if (!r.ok) return;
+        const d = await r.json();
+        const s = d && d.fear_and_greed;
+        if (!s || typeof s.score !== "number") return;
+        const out = { score: s.score, rating: s.rating || "", prev: s.previous_close };
+        if (on) { setFg(out); cacheSet("mjb_fg", out); }
+      } catch {}
+    })();
+    return () => { on = false; };
+  }, []);
+  return fg;
+}
+
+// SEC EDGAR current-filings column (public domain), via api/edgar.js
+const FORM_GLOSS = { "8-K": "material event", "13D": "activist / >5% stake", "S-1": "IPO registration" };
+const FORM_COLOR = { "8-K": "#1f5a9e", "13D": "#990f3d", "S-1": "#b0741e" };
+function FilingsWire() {
+  const [items, setItems] = useState(null);
+  useEffect(() => {
+    let on = true;
+    (async () => {
+      try {
+        const cached = cacheGet("mjb_edgar", 10); if (cached) { if (on) setItems(cached); return; }
+        const r = await fetch("/api/edgar?forms=8-K,13D,S-1");
+        if (!r.ok) return;
+        const d = await r.json();
+        if (d.items && d.items.length && on) { setItems(d.items); cacheSet("mjb_edgar", d.items); }
+      } catch {}
+    })();
+    return () => { on = false; };
+  }, []);
+  const clean = t => t.replace(/^[^-]+-\s*/, "").replace(/\s*\(\d{7,}\)\s*/g, " ").replace(/\((Filer|Subject|Reporting Owner|Reporting)\)/gi, "").replace(/\s{2,}/g, " ").trim();
+  const when = iso => { try { const d = new Date(iso); return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); } catch { return ""; } };
+  if (!items) return <p style={{ color: "#8a8072", fontSize: 12, textAlign: "center", padding: "12px 0", lineHeight: 1.6 }}>The primary-source wire — 8-Ks, activist stakes, and IPO registrations as they hit SEC EDGAR, continuously.<br /><span style={{ fontSize: 10, color: "#a2977f" }}>Live in production</span></p>;
+  return <div>
+    {items.slice(0, 14).map((f, i) => <a key={i} href={f.link} target="_blank" rel="noopener noreferrer" style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "7px 2px", borderTop: i ? "1px solid #efe4d2" : "none", textDecoration: "none" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(13,109,86,0.03)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+      <span style={{ fontSize: 8, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", flexShrink: 0, minWidth: 74 }}>{when(f.updated)}</span>
+      <span style={{ fontSize: 8.5, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, color: FORM_COLOR[f.form] || "#6f675c", flexShrink: 0, minWidth: 34, fontWeight: 600 }}>{f.form}</span>
+      <span style={{ fontSize: 11.5, color: "#33302c", lineHeight: 1.5, flex: 1 }}>{clean(f.title)}<span style={{ fontSize: 8.5, color: "#a2977f", marginLeft: 7, fontStyle: "italic" }}>{FORM_GLOSS[f.form]}</span></span>
+    </a>)}
+    <SourceLine>Source: SEC EDGAR, latest filings · public domain · 10-min cache · filings link to sec.gov</SourceLine>
+  </div>;
+}
+
 function PuzzleCorner() {
   const [seed, setSeed] = useState(() => Math.floor(Date.now() / 86400000)); // today's edition; "New problem" deals more
   const [ans, setAns] = useState({ eq: "", exit: "", mom: "", irr: "" });
@@ -1479,6 +1608,7 @@ export default function App() {
       {tab === "markets" && <div>
         <Kicker n="03" t="Markets & Data" />
         <MacroTape />
+        <CrossAssetRows />
         <QuoteLookup />
         {desk && <EditionStrip />}
         {desk && <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
@@ -1543,7 +1673,12 @@ export default function App() {
         </div>
       </div>}
 
-      {tab === "news" && <div style={{ animation: "fadeUp 0.4s ease both" }}><Kicker n="04" t="News & Briefings" /><NewsFeed apiKey={apiKey} /></div>}
+      {tab === "news" && <div style={{ animation: "fadeUp 0.4s ease both" }}><Kicker n="04" t="News & Briefings" /><NewsFeed apiKey={apiKey} />
+        <div id="filings-wire" style={{ ...S.card, marginTop: 16 }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> Filings Wire<Info text="Material corporate events straight from the primary source: 8-K material-event reports, SC 13D activist stakes, and S-1 IPO registrations, live from SEC EDGAR's current-filings feed. Public-domain data; every line links to the filing itself on sec.gov." link="https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent" linkLabel="EDGAR latest filings" /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="news" id="filings-wire" /></span></h2>
+          <FilingsWire />
+        </div>
+      </div>}
 
       {tab === "projects" && <div style={{ animation: "fadeUp 0.4s ease both" }}>
         <Kicker n="02" t="Selected Work" />
