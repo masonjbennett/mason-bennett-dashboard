@@ -666,6 +666,42 @@ return <div><Briefings apiKey={apiKey}/><div style={{height:16}}/>
 </div>;}
 
 // ============ LBO SANDBOX ============
+// Damodaran sector anchors — loaded lazily from /damodaran-2026.json (data used with attribution;
+// refreshed each January alongside the econ-json chore)
+let DAMO_CACHE = null;
+function useDamodaran() {
+  const [d, setD] = useState(DAMO_CACHE);
+  useEffect(() => {
+    if (DAMO_CACHE) return;
+    let on = true;
+    (async () => { try { const r = await fetch("/damodaran-2026.json"); if (!r.ok) return; const j = await r.json(); if (j && j.industries) { DAMO_CACHE = j; if (on) setD(j); } } catch {} })();
+    return () => { on = false; };
+  }, []);
+  return d;
+}
+function SectorReference({ exit }) {
+  const d = useDamodaran();
+  const [sector, setSector] = useState("Software (System & Application)");
+  if (!d) return null;
+  const row = d.industries.find(x => x.name === sector);
+  if (!row) return null;
+  const diff = exit - row.evEbitda;
+  const inline = Math.abs(diff) < 0.75;
+  return <div style={{ borderTop: "1px solid #e9ddc9", marginTop: 16, paddingTop: 10 }}>
+    <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+      <span style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#8a8072", letterSpacing: 2, textTransform: "uppercase", flexShrink: 0 }}>Sector reference</span>
+      <select value={sector} onChange={e => setSector(e.target.value)} style={{ ...S.input, width: "auto", maxWidth: 240, fontSize: 10, padding: "4px 8px", fontFamily: "'JetBrains Mono',monospace" }}>
+        {d.industries.map(x => <option key={x.name} value={x.name}>{x.name}</option>)}
+      </select>
+      <span style={{ fontSize: 11, fontFamily: "'JetBrains Mono',monospace", color: "#33302c", fontWeight: 600 }}>{row.evEbitda.toFixed(1)}x EV/EBITDA</span>
+      <span style={{ fontSize: 10.5, color: inline ? "#0d6d56" : diff > 0 ? "#990f3d" : "#0d6d56" }}>
+        {inline ? "your exit is in line with the sector" : `your exit at ${exit.toFixed(1)}x is ${Math.abs(diff).toFixed(1)} turns ${diff > 0 ? "above" : "below"} the sector`}
+      </span>
+    </div>
+    <div style={{ fontSize: 8, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", marginTop: 6, letterSpacing: 0.5 }}>Data: A. Damodaran, NYU Stern · {d.asOf} · aggregate multiples over positive-EBITDA firms ({row.firms} firms in this group)</div>
+  </div>;
+}
+
 function LBOSandbox() {
   const [inp, setInp] = useState({ entry: 10, debt: 60, growth: 6, exit: 10, years: 5 });
   const [scen, setScen] = useState(null);
@@ -748,6 +784,7 @@ function LBOSandbox() {
         </div>
       </div>
     </div>
+    <SectorReference exit={inp.exit} />
     <p style={{ fontSize: 9, color: "#a2977f", marginTop: 16, lineHeight: 1.6 }}>Simplified and illustrative — $100M entry EBITDA (indexed), 45% of EBITDA converts to debt paydown annually, no fees or taxes. Built to demonstrate LBO mechanics, not investment advice.</p>
   </div>;
 }

@@ -1,0 +1,465 @@
+{
+  "source": "Aswath Damodaran, NYU Stern - EV/EBITDA multiples by industry (US)",
+  "url": "https://pages.stern.nyu.edu/~adamodar/New_Home_Page/datafile/vebitda.html",
+  "asOf": "January 2026",
+  "note": "EV/EBITDA computed over positive-EBITDA firms only; refresh each January with the econ-json chore",
+  "totalMarket": 19.73,
+  "totalMarketExFinancials": 16.95,
+  "industries": [
+    {
+      "name": "Advertising",
+      "firms": 52,
+      "evEbitda": 12.0
+    },
+    {
+      "name": "Aerospace/Defense",
+      "firms": 79,
+      "evEbitda": 21.58
+    },
+    {
+      "name": "Air Transport",
+      "firms": 23,
+      "evEbitda": 7.58
+    },
+    {
+      "name": "Apparel",
+      "firms": 35,
+      "evEbitda": 10.3
+    },
+    {
+      "name": "Auto & Truck",
+      "firms": 33,
+      "evEbitda": 47.76
+    },
+    {
+      "name": "Auto Parts",
+      "firms": 35,
+      "evEbitda": 6.43
+    },
+    {
+      "name": "Beverage (Alcoholic)",
+      "firms": 14,
+      "evEbitda": 8.61
+    },
+    {
+      "name": "Beverage (Soft)",
+      "firms": 27,
+      "evEbitda": 16.9
+    },
+    {
+      "name": "Broadcasting",
+      "firms": 24,
+      "evEbitda": 7.85
+    },
+    {
+      "name": "Building Materials",
+      "firms": 41,
+      "evEbitda": 11.61
+    },
+    {
+      "name": "Business & Consumer Services",
+      "firms": 155,
+      "evEbitda": 14.26
+    },
+    {
+      "name": "Cable TV",
+      "firms": 9,
+      "evEbitda": 6.21
+    },
+    {
+      "name": "Chemical (Basic)",
+      "firms": 29,
+      "evEbitda": 8.57
+    },
+    {
+      "name": "Chemical (Diversified)",
+      "firms": 4,
+      "evEbitda": 8.39
+    },
+    {
+      "name": "Chemical (Specialty)",
+      "firms": 59,
+      "evEbitda": 13.36
+    },
+    {
+      "name": "Coal & Related Energy",
+      "firms": 16,
+      "evEbitda": 10.37
+    },
+    {
+      "name": "Computer Services",
+      "firms": 64,
+      "evEbitda": 14.1
+    },
+    {
+      "name": "Computers/Peripherals",
+      "firms": 36,
+      "evEbitda": 25.42
+    },
+    {
+      "name": "Construction Supplies",
+      "firms": 40,
+      "evEbitda": 16.82
+    },
+    {
+      "name": "Diversified",
+      "firms": 20,
+      "evEbitda": 11.42
+    },
+    {
+      "name": "Drugs (Biotechnology)",
+      "firms": 496,
+      "evEbitda": 15.78
+    },
+    {
+      "name": "Drugs (Pharmaceutical)",
+      "firms": 228,
+      "evEbitda": 15.25
+    },
+    {
+      "name": "Education",
+      "firms": 32,
+      "evEbitda": 9.26
+    },
+    {
+      "name": "Electrical Equipment",
+      "firms": 112,
+      "evEbitda": 24.59
+    },
+    {
+      "name": "Electronics (Consumer & Office)",
+      "firms": 8,
+      "evEbitda": 30.7
+    },
+    {
+      "name": "Electronics (General)",
+      "firms": 114,
+      "evEbitda": 19.99
+    },
+    {
+      "name": "Engineering/Construction",
+      "firms": 48,
+      "evEbitda": 17.18
+    },
+    {
+      "name": "Entertainment",
+      "firms": 92,
+      "evEbitda": 19.41
+    },
+    {
+      "name": "Environmental & Waste Services",
+      "firms": 53,
+      "evEbitda": 15.61
+    },
+    {
+      "name": "Farming/Agriculture",
+      "firms": 35,
+      "evEbitda": 16.04
+    },
+    {
+      "name": "Financial Svcs. (Non-bank & Insurance)",
+      "firms": 176,
+      "evEbitda": 57.52
+    },
+    {
+      "name": "Food Processing",
+      "firms": 78,
+      "evEbitda": 10.01
+    },
+    {
+      "name": "Food Wholesalers",
+      "firms": 13,
+      "evEbitda": 11.08
+    },
+    {
+      "name": "Furn/Home Furnishings",
+      "firms": 27,
+      "evEbitda": 11.27
+    },
+    {
+      "name": "Green & Renewable Energy",
+      "firms": 15,
+      "evEbitda": 13.44
+    },
+    {
+      "name": "Healthcare Products",
+      "firms": 204,
+      "evEbitda": 19.78
+    },
+    {
+      "name": "Healthcare Support Services",
+      "firms": 104,
+      "evEbitda": 11.17
+    },
+    {
+      "name": "Healthcare Information and Technology",
+      "firms": 115,
+      "evEbitda": 21.27
+    },
+    {
+      "name": "Homebuilding",
+      "firms": 30,
+      "evEbitda": 8.92
+    },
+    {
+      "name": "Hospitals/Healthcare Facilities",
+      "firms": 31,
+      "evEbitda": 8.86
+    },
+    {
+      "name": "Hotel/Gaming",
+      "firms": 63,
+      "evEbitda": 14.93
+    },
+    {
+      "name": "Household Products",
+      "firms": 110,
+      "evEbitda": 13.17
+    },
+    {
+      "name": "Information Services",
+      "firms": 15,
+      "evEbitda": 11.5
+    },
+    {
+      "name": "Insurance (General)",
+      "firms": 21,
+      "evEbitda": 15.76
+    },
+    {
+      "name": "Insurance (Life)",
+      "firms": 20,
+      "evEbitda": 12.52
+    },
+    {
+      "name": "Insurance (Prop/Cas.)",
+      "firms": 57,
+      "evEbitda": 8.44
+    },
+    {
+      "name": "Investments & Asset Management",
+      "firms": 283,
+      "evEbitda": 38.03
+    },
+    {
+      "name": "Machinery",
+      "firms": 105,
+      "evEbitda": 16.22
+    },
+    {
+      "name": "Metals & Mining",
+      "firms": 73,
+      "evEbitda": 11.39
+    },
+    {
+      "name": "Office Equipment & Services",
+      "firms": 14,
+      "evEbitda": 8.59
+    },
+    {
+      "name": "Oil/Gas (Integrated)",
+      "firms": 4,
+      "evEbitda": 8.16
+    },
+    {
+      "name": "Oil/Gas (Production and Exploration)",
+      "firms": 142,
+      "evEbitda": 5.15
+    },
+    {
+      "name": "Oil/Gas Distribution",
+      "firms": 23,
+      "evEbitda": 11.56
+    },
+    {
+      "name": "Oilfield Svcs/Equip.",
+      "firms": 97,
+      "evEbitda": 8.63
+    },
+    {
+      "name": "Packaging & Container",
+      "firms": 19,
+      "evEbitda": 9.71
+    },
+    {
+      "name": "Paper/Forest Products",
+      "firms": 6,
+      "evEbitda": 8.18
+    },
+    {
+      "name": "Power",
+      "firms": 46,
+      "evEbitda": 12.38
+    },
+    {
+      "name": "Precious Metals",
+      "firms": 56,
+      "evEbitda": 10.68
+    },
+    {
+      "name": "Publishing & Newspapers",
+      "firms": 19,
+      "evEbitda": 11.24
+    },
+    {
+      "name": "R.E.I.T.",
+      "firms": 190,
+      "evEbitda": 19.87
+    },
+    {
+      "name": "Real Estate (Development)",
+      "firms": 14,
+      "evEbitda": 10.23
+    },
+    {
+      "name": "Real Estate (General/Diversified)",
+      "firms": 12,
+      "evEbitda": 17.29
+    },
+    {
+      "name": "Real Estate (Operations & Services)",
+      "firms": 54,
+      "evEbitda": 21.95
+    },
+    {
+      "name": "Recreation",
+      "firms": 49,
+      "evEbitda": 10.39
+    },
+    {
+      "name": "Reinsurance",
+      "firms": 1,
+      "evEbitda": 8.67
+    },
+    {
+      "name": "Restaurant/Dining",
+      "firms": 64,
+      "evEbitda": 17.49
+    },
+    {
+      "name": "Retail (Automotive)",
+      "firms": 34,
+      "evEbitda": 14.79
+    },
+    {
+      "name": "Retail (Building Supply)",
+      "firms": 14,
+      "evEbitda": 14.42
+    },
+    {
+      "name": "Retail (Distributors)",
+      "firms": 62,
+      "evEbitda": 13.71
+    },
+    {
+      "name": "Retail (General)",
+      "firms": 23,
+      "evEbitda": 17.38
+    },
+    {
+      "name": "Retail (Grocery and Food)",
+      "firms": 15,
+      "evEbitda": 8.94
+    },
+    {
+      "name": "Retail (REITs)",
+      "firms": 26,
+      "evEbitda": 16.73
+    },
+    {
+      "name": "Retail (Special Lines)",
+      "firms": 94,
+      "evEbitda": 11.47
+    },
+    {
+      "name": "Rubber & Tires",
+      "firms": 3,
+      "evEbitda": 6.74
+    },
+    {
+      "name": "Semiconductor",
+      "firms": 66,
+      "evEbitda": 34.75
+    },
+    {
+      "name": "Semiconductor Equip",
+      "firms": 31,
+      "evEbitda": 24.74
+    },
+    {
+      "name": "Shipbuilding & Marine",
+      "firms": 8,
+      "evEbitda": 7.95
+    },
+    {
+      "name": "Shoe",
+      "firms": 11,
+      "evEbitda": 16.86
+    },
+    {
+      "name": "Software (Entertainment)",
+      "firms": 77,
+      "evEbitda": 22.01
+    },
+    {
+      "name": "Software (Internet)",
+      "firms": 29,
+      "evEbitda": 30.26
+    },
+    {
+      "name": "Software (System & Application)",
+      "firms": 309,
+      "evEbitda": 24.48
+    },
+    {
+      "name": "Steel",
+      "firms": 19,
+      "evEbitda": 11.59
+    },
+    {
+      "name": "Telecom (Wireless)",
+      "firms": 12,
+      "evEbitda": 8.97
+    },
+    {
+      "name": "Telecom. Equipment",
+      "firms": 57,
+      "evEbitda": 24.07
+    },
+    {
+      "name": "Telecom. Services",
+      "firms": 39,
+      "evEbitda": 6.54
+    },
+    {
+      "name": "Tobacco",
+      "firms": 10,
+      "evEbitda": 13.46
+    },
+    {
+      "name": "Transportation",
+      "firms": 19,
+      "evEbitda": 12.55
+    },
+    {
+      "name": "Transportation (Railroads)",
+      "firms": 4,
+      "evEbitda": 13.49
+    },
+    {
+      "name": "Trucking",
+      "firms": 26,
+      "evEbitda": 10.41
+    },
+    {
+      "name": "Utility (General)",
+      "firms": 14,
+      "evEbitda": 13.73
+    },
+    {
+      "name": "Utility (Water)",
+      "firms": 14,
+      "evEbitda": 14.14
+    }
+  ]
+}
