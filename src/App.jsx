@@ -822,8 +822,505 @@ function MergerMath() {
 
 // ============ PUZZLE CORNER ============
 function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+// ============ LEARNING SPINE ============
+// Shared attempt log + SM-2 review queue + errata ledger + edition streak.
+// All state lives in localStorage (mjb_*); the Docket/Errata/Edition ledgers only render in Desk mode.
+const NYSE_HOLIDAYS_2026 = ["2026-01-01", "2026-01-19", "2026-02-16", "2026-04-03", "2026-05-25", "2026-06-19", "2026-07-03", "2026-09-07", "2026-11-26", "2026-12-25"]; // refresh with the January econ-json chore
+const toISO = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const todayISO = () => toISO(new Date());
+const addDaysISO = n => { const d = new Date(); d.setDate(d.getDate() + n); return toISO(d); };
+const isTradingDay = d => { const w = d.getDay(); return w !== 0 && w !== 6 && !NYSE_HOLIDAYS_2026.includes(toISO(d)); };
+const weekKey = d => { const m = new Date(d); m.setDate(m.getDate() - ((m.getDay() + 6) % 7)); return toISO(m); };
+function lastTradingDays(n) { const out = [], d = new Date(); while (out.length < n) { if (isTradingDay(d)) out.push(toISO(d)); d.setDate(d.getDate() - 1); } return out; }
+function lsGet(k, f) { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? f : v; } catch { return f; } }
+function lsSet(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+const learnPing = () => { try { window.dispatchEvent(new Event("mjb-learn")); } catch {} };
+function useLearnTick() { const [, s] = useState(0); useEffect(() => { const h = () => s(x => x + 1); window.addEventListener("mjb-learn", h); return () => window.removeEventListener("mjb-learn", h); }, []); }
+// SM-2 (public-domain algorithm). q: 1 = missed, 3 = shaky, 5 = solid.
+function sm2(card, q) {
+  const c = { ...card };
+  if (q >= 3) { c.reps = (c.reps || 0) + 1; c.ivl = c.reps === 1 ? 1 : c.reps === 2 ? 6 : Math.round((c.ivl || 1) * c.ef); }
+  else { c.reps = 0; c.ivl = 1; c.lapses = (c.lapses || 0) + 1; }
+  c.ef = Math.max(1.3, c.ef + 0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
+  c.due = addDaysISO(c.ivl);
+  return c;
+}
+function upsertCard(id, front, back, from, q) {
+  const cards = lsGet("mjb_srs", []);
+  const i = cards.findIndex(x => x.id === id);
+  if (i < 0) cards.push(sm2({ id, front, back, from, ef: 2.5, reps: 0, ivl: 0, lapses: 0 }, q));
+  else cards[i] = sm2(cards[i], q);
+  lsSet("mjb_srs", cards);
+}
+function recordEdition(via) { const ed = lsGet("mjb_editions", {}); const t = todayISO(); if (!ed[t]) { ed[t] = { via }; lsSet("mjb_editions", ed); } }
+function recordSelfGrade({ src, qid, grade, front, back, given }) {
+  const a = lsGet("mjb_attempts", []); a.push({ d: todayISO(), src, qid, ok: grade !== "missed" }); if (a.length > 2000) a.splice(0, a.length - 2000); lsSet("mjb_attempts", a);
+  if (grade === "missed") {
+    const e = lsGet("mjb_errata", []); e.unshift({ d: todayISO(), src, prompt: front, given: given || "", correct: back, rule: "" }); if (e.length > 200) e.length = 200; lsSet("mjb_errata", e);
+    upsertCard(`${src}:${qid}`, front, back, src, 1);
+  } else if (grade === "shaky") upsertCard(`${src}:${qid}`, front, back, src, 3);
+  else { const cards = lsGet("mjb_srs", []); const i = cards.findIndex(x => x.id === `${src}:${qid}`); if (i >= 0) { cards[i] = sm2(cards[i], 5); lsSet("mjb_srs", cards); } }
+  recordEdition(src);
+  learnPing();
+}
+const recordDrillResult = ({ src, qid, ok, front, back, given }) => recordSelfGrade({ src, qid, grade: ok ? "solid" : "missed", front, back, given });
+// Streak in NYSE trading days; one silent grace day per calendar week.
+function computeStreak(editions) {
+  let streak = 0; const grace = new Set(); const d = new Date();
+  if (!(isTradingDay(d) && editions[toISO(d)])) d.setDate(d.getDate() - 1);
+  for (let i = 0; i < 400; i++) {
+    if (isTradingDay(d)) {
+      if (editions[toISO(d)]) streak++;
+      else if (!grace.has(weekKey(d))) grace.add(weekKey(d));
+      else break;
+    }
+    d.setDate(d.getDate() - 1);
+  }
+  return streak;
+}
+const CAT_LABELS = { acct: "Accounting", ev: "EV & Equity Value", val: "Valuation & DCF", merger: "Merger Math", lbo: "LBO", mkts: "Markets", deal: "Deal Discussion", fit: "Fit" };
+// The question bank is a separate lazy chunk so the home page (the recruiter entry) stays light.
+let TECH_BANK_CACHE = null;
+function useTechBank() {
+  const [bank, setBank] = useState(TECH_BANK_CACHE || []);
+  useEffect(() => { if (TECH_BANK_CACHE) return; let on = true; import("./technicals.json").then(m => { TECH_BANK_CACHE = m.default; if (on) setBank(m.default); }).catch(() => {}); return () => { on = false; }; }, []);
+  return bank;
+}
+const AwaitingWire = () => <div style={{ fontSize: 10, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, padding: "8px 0" }}>AWAITING WIRE <span style={{ animation: "blink 1s step-end infinite", color: "#0d6d56" }}>▮</span></div>;
+const GradeBar = ({ onGrade, done, doneLabel = "Marked — misses return via the docket" }) => done
+  ? <span style={{ fontSize: 8.5, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, textTransform: "uppercase" }}>{doneLabel}</span>
+  : <span style={{ display: "inline-flex", gap: 16, alignItems: "baseline" }}>
+      <span style={{ fontSize: 8.5, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, textTransform: "uppercase" }}>Mark yourself —</span>
+      {[["missed", "Missed", "#b2342b"], ["shaky", "Shaky", "#b0741e"], ["solid", "Solid", "#0d6d56"]].map(([g, l, c]) => <button key={g} onClick={() => onGrade(g)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 10, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, textTransform: "uppercase", color: c, padding: 0, textDecoration: "underline dotted", textUnderlineOffset: 3 }}>{l}</button>)}
+    </span>;
+const Redacted = ({ revealed, onReveal, children }) => revealed
+  ? <div style={{ fontSize: 12.5, color: "#4a443c", lineHeight: 1.75 }}>{children}</div>
+  : <button onClick={onReveal} style={{ display: "block", width: "100%", background: "#262421", border: "none", borderRadius: 3, padding: "13px 16px", cursor: "pointer", textAlign: "center" }}>
+      <span style={{ fontSize: 8, color: "#faf3ea", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 3, textTransform: "uppercase" }}>Answer set in ink — click to reveal</span>
+    </button>;
+
+function QOTD() {
+  const bank = useTechBank();
+  const [rev, setRev] = useState(false);
+  const [done, setDone] = useState(() => lsGet("mjb_attempts", []).some(x => x.src === "qotd" && x.d === todayISO()));
+  const att = lsGet("mjb_attempts", []).filter(x => x.src === "qotd");
+  const answered = lastTradingDays(30).filter(d => att.some(x => x.d === d)).length;
+  if (!bank.length) return <AwaitingWire />;
+  const q = bank[Math.floor(Date.now() / 86400000) % bank.length];
+  return <div>
+    <div style={{ fontSize: 8, color: "#6d549e", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>{CAT_LABELS[q.cat]} · Difficulty {"I".repeat(q.d)}</div>
+    <p style={{ fontFamily: "'Instrument Serif',serif", fontSize: 19, color: "#262421", lineHeight: 1.45, marginBottom: 12 }}>{q.q}</p>
+    <Redacted revealed={rev} onReveal={() => setRev(true)}>{q.a}</Redacted>
+    {rev && <div style={{ marginTop: 12 }}>
+      <GradeBar done={done} onGrade={g => { recordSelfGrade({ src: "qotd", qid: q.id, grade: g, front: q.q, back: q.a }); setDone(true); }} />
+    </div>}
+    <SourceLine>One question per day from the house bank · same edition for every reader · answered {answered} of the last 30 trading days · grades stay in your browser</SourceLine>
+  </div>;
+}
+
+function TechnicalsDesk() {
+  const bank = useTechBank();
+  const [cat, setCat] = useState("all");
+  const [open, setOpen] = useState(null);
+  const [rev, setRev] = useState(false);
+  const [marked, setMarked] = useState(false);
+  const list = cat === "all" ? bank : bank.filter(x => x.cat === cat);
+  const toggle = id => { setOpen(open === id ? null : id); setRev(false); setMarked(false); };
+  if (!bank.length) return <AwaitingWire />;
+  return <div>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+      {[["all", "All"], ...Object.entries(CAT_LABELS)].map(([k, l]) => <button key={k} onClick={() => { setCat(k); setOpen(null); }} style={{ ...S.chip, padding: "5px 11px", fontSize: 10, cursor: "pointer", ...(cat === k ? { color: "#0d6d56", border: "1px solid #0d6d5640", background: "rgba(13,109,86,0.06)" } : {}) }}>{l}</button>)}
+    </div>
+    {list.map(q => <div key={q.id} style={{ borderTop: "1px solid #efe4d2" }}>
+      <button onClick={() => toggle(q.id)} style={{ display: "flex", width: "100%", background: "none", border: "none", cursor: "pointer", padding: "10px 2px", gap: 10, alignItems: "baseline", textAlign: "left" }}>
+        <span style={{ fontSize: 8, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, flexShrink: 0, width: 24 }}>{"I".repeat(q.d)}</span>
+        <span style={{ fontSize: 13, color: open === q.id ? "#0d6d56" : "#33302c", lineHeight: 1.5, flex: 1 }}>{q.q}</span>
+        <span style={{ fontSize: 8, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, textTransform: "uppercase", flexShrink: 0 }}>{CAT_LABELS[q.cat]}</span>
+      </button>
+      {open === q.id && <div style={{ padding: "2px 2px 14px 34px" }}>
+        <Redacted revealed={rev} onReveal={() => setRev(true)}>{q.a}</Redacted>
+        {rev && <div style={{ marginTop: 10 }}>
+          <GradeBar done={marked} onGrade={g => { recordSelfGrade({ src: "tech", qid: q.id, grade: g, front: q.q, back: q.a }); setMarked(true); }} />
+        </div>}
+      </div>}
+    </div>)}
+    <SourceLine>{bank.length} questions at press time · house bank, original questions · reveal before you grade — say the answer out loud first</SourceLine>
+  </div>;
+}
+
+// Seeded three-statement perturbation drills. Tax rate 25% throughout; amounts chosen so answers are integers.
+const RIPPLES = [
+  { k: "dep", third: "Net PP&E", make: X => ({ prompt: `Depreciation expense rises by $${X} this period. Assume a 25% tax rate, taxes paid in cash.`, ni: -0.75 * X, cash: 0.25 * X, tv: -X,
+    is: [`D&A +$${X} → pre-tax income −$${X}`, `Taxes −$${0.25 * X} → net income −$${0.75 * X}`],
+    cf: [`Start at net income −$${0.75 * X}`, `Add back non-cash D&A +$${X} → cash from ops +$${0.25 * X}`, `Ending cash +$${0.25 * X}`],
+    bs: [`Assets: cash +$${0.25 * X}, net PP&E −$${X} → total −$${0.75 * X}`, `Equity: retained earnings −$${0.75 * X} — balances`] }) },
+  { k: "writedown", third: "Inventory", make: X => ({ prompt: `The company writes down $${X} of inventory (a non-cash charge). Assume a 25% tax rate, taxes paid in cash.`, ni: -0.75 * X, cash: 0.25 * X, tv: -X,
+    is: [`Write-down +$${X} of expense → pre-tax income −$${X}`, `Taxes −$${0.25 * X} → net income −$${0.75 * X}`],
+    cf: [`Start at net income −$${0.75 * X}`, `Add back the non-cash write-down +$${X} → cash from ops +$${0.25 * X}`],
+    bs: [`Assets: cash +$${0.25 * X}, inventory −$${X} → total −$${0.75 * X}`, `Equity: retained earnings −$${0.75 * X} — balances`] }) },
+  { k: "sbc", third: "Total shareholders' equity", make: X => ({ prompt: `The company records $${X} of stock-based compensation. Assume a 25% tax rate, taxes paid in cash.`, ni: -0.75 * X, cash: 0.25 * X, tv: 0.25 * X,
+    is: [`SBC expense +$${X} → pre-tax income −$${X}`, `Taxes −$${0.25 * X} → net income −$${0.75 * X}`],
+    cf: [`Start at net income −$${0.75 * X}`, `Add back non-cash SBC +$${X} → cash from ops +$${0.25 * X}`],
+    bs: [`Assets: cash +$${0.25 * X}`, `Equity: paid-in capital +$${X}, retained earnings −$${0.75 * X} → equity +$${0.25 * X} — balances`] }) },
+  { k: "defrev", third: "Total liabilities", make: X => ({ prompt: `The company collects $${X} in cash for a service it has not yet delivered. No revenue is recognized this period.`, ni: 0, cash: X, tv: X,
+    is: ["No revenue recognized → net income unchanged"],
+    cf: [`Deferred revenue +$${X} is a working-capital source → cash from ops +$${X}`],
+    bs: [`Assets: cash +$${X}`, `Liabilities: deferred revenue +$${X} — balances`] }) },
+  { k: "ar", third: "Accounts receivable", make: X => ({ prompt: `The company books a $${X} sale entirely on credit — ignore COGS. Assume a 25% tax rate, taxes paid in cash.`, ni: 0.75 * X, cash: -0.25 * X, tv: X,
+    is: [`Revenue +$${X} → pre-tax income +$${X}`, `Taxes +$${0.25 * X} paid in cash → net income +$${0.75 * X}`],
+    cf: [`Start at net income +$${0.75 * X}`, `Accounts receivable +$${X} is a working-capital use −$${X} → cash from ops −$${0.25 * X}`],
+    bs: [`Assets: cash −$${0.25 * X}, AR +$${X} → total +$${0.75 * X}`, `Equity: retained earnings +$${0.75 * X} — balances`] }) },
+  { k: "capex", third: "Net PP&E", make: X => ({ prompt: `The company buys $${X} of equipment in cash at year-end — no depreciation has been taken yet.`, ni: 0, cash: -X, tv: X,
+    is: ["Capex never touches the income statement directly → net income unchanged"],
+    cf: [`Investing: capex −$${X} → ending cash −$${X}`],
+    bs: [`Assets: cash −$${X}, net PP&E +$${X} → total unchanged — balances`] }) },
+  { k: "accrual", third: "Total liabilities", make: X => ({ prompt: `The company accrues $${X} of operating expenses it has not yet paid. Assume a 25% tax rate, taxes paid in cash.`, ni: -0.75 * X, cash: 0.25 * X, tv: X,
+    is: [`Accrued expense +$${X} → pre-tax income −$${X}`, `Taxes −$${0.25 * X} → net income −$${0.75 * X}`],
+    cf: [`Start at net income −$${0.75 * X}`, `Accrued liabilities +$${X} is a working-capital source → cash from ops +$${0.25 * X}`],
+    bs: [`Assets: cash +$${0.25 * X}`, `Liabilities +$${X}; equity: retained earnings −$${0.75 * X} — balances`] }) },
+  { k: "prepaid", third: "Prepaid expenses", make: X => ({ prompt: `The company pays $${X} in cash today for next year's insurance. No expense is recognized this period.`, ni: 0, cash: -X, tv: X,
+    is: ["Nothing expensed yet → net income unchanged"],
+    cf: [`Prepaid expenses +$${X} is a working-capital use → cash from ops −$${X}`],
+    bs: [`Assets: cash −$${X}, prepaid expenses +$${X} → total unchanged — balances`] }) },
+  { k: "debt", third: "Long-term debt", make: X => ({ prompt: `The company issues $${X} of long-term debt at year-end — no interest has accrued yet.`, ni: 0, cash: X, tv: X,
+    is: ["Raising debt is a financing event → net income unchanged"],
+    cf: [`Financing: debt issuance +$${X} → ending cash +$${X}`],
+    bs: [`Assets: cash +$${X}`, `Liabilities: long-term debt +$${X} — balances`] }) },
+  { k: "buyback", third: "Total shareholders' equity", make: X => ({ prompt: `The company repurchases $${X} of its own shares for cash.`, ni: 0, cash: -X, tv: -X,
+    is: ["Buybacks never touch the income statement → net income unchanged"],
+    cf: [`Financing: share repurchase −$${X} → ending cash −$${X}`],
+    bs: [`Assets: cash −$${X}`, `Equity: treasury stock −$${X} — balances`] }) },
+];
+function ThreeStatementRipple() {
+  const [seed, setSeed] = useState(() => Math.floor(Date.now() / 86400000));
+  const [ans, setAns] = useState({ ni: "", cash: "", tv: "" });
+  const [checked, setChecked] = useState(false);
+  const r = mulberry32(seed * 2 + 1);
+  const T = RIPPLES[Math.floor(r() * RIPPLES.length)];
+  const X = [8, 12, 16, 20, 24, 40][Math.floor(r() * 6)];
+  const p = T.make(X);
+  const num = s => parseFloat(String(s).replace(/[$,\s]/g, "").replace(/\((\d+\.?\d*)\)/, "-$1").replace(/−/g, "-"));
+  const fmt = v => v === 0 ? "$0" : v < 0 ? `−$${Math.abs(v)}` : `+$${v}`;
+  const grade = { ni: Math.abs(num(ans.ni) - p.ni) <= 0.51, cash: Math.abs(num(ans.cash) - p.cash) <= 0.51, tv: Math.abs(num(ans.tv) - p.tv) <= 0.51 };
+  const fields = [["ni", "Δ Net income", fmt(p.ni)], ["cash", "Δ Ending cash", fmt(p.cash)], ["tv", `Δ ${T.third}`, fmt(p.tv)]];
+  const fresh = () => { setSeed(s => s + 1); setAns({ ni: "", cash: "", tv: "" }); setChecked(false); };
+  const check = () => {
+    setChecked(true);
+    recordDrillResult({ src: "ripple", qid: `${T.k}-${X}-${seed}`, ok: Object.values(grade).every(Boolean), front: p.prompt, back: `Net income ${fmt(p.ni)} · cash ${fmt(p.cash)} · ${T.third} ${fmt(p.tv)}`, given: `${ans.ni} / ${ans.cash} / ${ans.tv}` });
+  };
+  return <div>
+    <p style={{ fontSize: 12.5, color: "#4a443c", lineHeight: 1.8, marginBottom: 6 }}>{p.prompt}</p>
+    <p style={{ fontSize: 9.5, color: "#a2977f", marginBottom: 14 }}>State the change on each line. Decreases are negative — type −12 or (12).</p>
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+      {fields.map(([k, label, sol]) => <div key={k} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ fontSize: 10.5, color: "#6f675c", width: 150, flexShrink: 0 }}>{label}</span>
+        <input value={ans[k]} onChange={e => { setAns(prev => ({ ...prev, [k]: e.target.value })); setChecked(false); }} style={{ ...S.input, width: 92, fontFamily: "'JetBrains Mono',monospace", fontSize: 12, padding: "6px 10px", textAlign: "right" }} />
+        {checked && <span style={{ fontSize: 12, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: grade[k] ? "#0d6d56" : "#b2342b" }}>{grade[k] ? "✓" : `✗ ${sol}`}</span>}
+      </div>)}
+    </div>
+    <div style={{ display: "flex", gap: 10, marginBottom: checked ? 14 : 0 }}>
+      <button onClick={check} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "7px 18px" }}>Check</button>
+      <button onClick={fresh} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "7px 18px", color: "#6f675c", border: "1px solid #ddcfb8" }}>New problem</button>
+    </div>
+    {checked && <div style={{ borderTop: "1px solid #e9ddc9", paddingTop: 12 }}>
+      <div style={{ fontSize: 8, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 2, marginBottom: 8 }}>The ripple, worked</div>
+      {[["Income statement", p.is], ["Cash flow statement", p.cf], ["Balance sheet", p.bs]].map(([h, lines]) => <div key={h} style={{ marginBottom: 8 }}>
+        <div style={{ fontSize: 9, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, textTransform: "uppercase", marginBottom: 2 }}>{h}</div>
+        {lines.map((s, i) => <div key={i} style={{ fontSize: 11, color: "#4a443c", fontFamily: "'JetBrains Mono',monospace", lineHeight: 1.9 }}>{s}</div>)}
+      </div>)}
+    </div>}
+    <p style={{ fontSize: 9, color: "#a2977f", marginTop: 12, lineHeight: 1.6 }}>The most-asked technical question in IB interviews, drilled as arithmetic. Ten perturbation types, fresh numbers daily.</p>
+  </div>;
+}
+
+function EditionStrip() {
+  useLearnTick();
+  const ed = lsGet("mjb_editions", {});
+  const total = Object.keys(ed).length, streak = computeStreak(ed);
+  const now = new Date(), y = now.getFullYear(), m = now.getMonth();
+  const cells = [];
+  for (let i = 1; i <= new Date(y, m + 1, 0).getDate(); i++) { const d = new Date(y, m, i); cells.push({ iso: toISO(d), i, future: d > now, trading: isTradingDay(d), done: !!ed[toISO(d)] }); }
+  return <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, flexWrap: "wrap", padding: "11px 20px", border: "1px solid #e3d5bf", borderRadius: 10, background: "linear-gradient(145deg,#fffdf9,#fbf5ec)", marginBottom: 16, boxShadow: "0 4px 16px rgba(64,52,32,0.05)" }}>
+    <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+      <span style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#0d6d56", letterSpacing: 3, textTransform: "uppercase" }}>The Desk</span>
+      <span style={{ fontFamily: "'Instrument Serif',serif", fontSize: 16, color: "#262421" }}>{total ? `Edition No. ${total}` : "Edition No. 1 awaits"}</span>
+      {streak > 1 && <span style={{ fontSize: 10, color: "#6f675c" }}>{streak} consecutive trading days{ed[todayISO()] ? "" : " — today still open"}</span>}
+      {total > 0 && streak <= 1 && <span style={{ fontSize: 10, color: "#8a8072" }}>{ed[todayISO()] ? "today is put to bed" : "today's edition is still open"}</span>}
+    </div>
+    <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+      <span style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#a2977f", letterSpacing: 1.5, textTransform: "uppercase", marginRight: 5 }}>{now.toLocaleDateString("en-US", { month: "short" })}</span>
+      {cells.map(c => <span key={c.i} title={`${c.iso}${!c.trading ? " — market closed" : c.done ? " — put to bed" : c.future ? "" : " — open"}`} style={{ width: 7, height: 7, borderRadius: 1, flexShrink: 0, background: c.done ? "#0d6d56" : "transparent", border: `1px solid ${!c.trading ? "#eee3d0" : c.future ? "#e3d5bf" : "#b8ab97"}` }} />)}
+    </div>
+  </div>;
+}
+
+function ReviewDocket() {
+  useLearnTick();
+  const [rev, setRev] = useState(false);
+  const cards = lsGet("mjb_srs", []);
+  const due = cards.filter(c => c.due <= todayISO()).slice(0, 10);
+  const card = due[0];
+  const grade = q => { const all = lsGet("mjb_srs", []); const i = all.findIndex(x => x.id === card.id); if (i >= 0) { all[i] = sm2(all[i], q); lsSet("mjb_srs", all); } recordEdition("docket"); setRev(false); learnPing(); };
+  if (!cards.length) return <p style={{ fontSize: 12, color: "#8a8072", lineHeight: 1.7, padding: "6px 0" }}>Empty — for now. Miss or mark a question <i>shaky</i> anywhere on the site and it files here for spaced review: tomorrow, then six days, then widening intervals.</p>;
+  if (!due.length) {
+    const next = cards.map(c => c.due).sort()[0];
+    return <div style={{ padding: "6px 0" }}>
+      <div style={{ fontSize: 10, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Docket clear</div>
+      <p style={{ fontSize: 12, color: "#8a8072", lineHeight: 1.7 }}>{cards.length} card{cards.length === 1 ? "" : "s"} in circulation · next due {next}.</p>
+    </div>;
+  }
+  return <div>
+    <div style={{ fontSize: 9, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 10 }}>{due.length} due today · from {CAT_LABELS[card.from] || card.from}</div>
+    <p style={{ fontFamily: "'Instrument Serif',serif", fontSize: 17, color: "#262421", lineHeight: 1.45, marginBottom: 12 }}>{card.front}</p>
+    <Redacted revealed={rev} onReveal={() => setRev(true)}>{card.back}</Redacted>
+    {rev && <div style={{ marginTop: 12 }}>
+      <GradeBar done={false} onGrade={g => grade({ missed: 1, shaky: 3, solid: 5 }[g])} />
+    </div>}
+    <SourceLine>SM-2 scheduling · misses return tomorrow, solids widen the interval</SourceLine>
+  </div>;
+}
+
+function ErrataColumn() {
+  useLearnTick();
+  const items = lsGet("mjb_errata", []);
+  const saveRule = (i, rule) => { const e = lsGet("mjb_errata", []); if (e[i]) { e[i] = { ...e[i], rule }; lsSet("mjb_errata", e); } };
+  if (!items.length) return <p style={{ fontSize: 12, color: "#8a8072", lineHeight: 1.7, padding: "6px 0" }}>No corrections on record. When you miss a question, it is filed here — with room for a one-line rule so the same mistake isn't made twice.</p>;
+  return <div>
+    {items.slice(0, 6).map((e, i) => <div key={`${e.d}-${i}`} style={{ borderTop: i ? "1px solid #efe4d2" : "none", padding: "9px 0" }}>
+      <div style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 4 }}>
+        <span style={{ color: "#990f3d" }}>Correction</span><span style={{ color: "#a2977f" }}> · {e.d} · {e.src}</span>
+      </div>
+      <div style={{ fontSize: 11.5, color: "#33302c", lineHeight: 1.55, marginBottom: 5 }}>{e.prompt.length > 110 ? e.prompt.slice(0, 110) + "…" : e.prompt}</div>
+      <input defaultValue={e.rule} onBlur={ev => saveRule(i, ev.target.value.trim())} placeholder="Rule for next time…" style={{ ...S.input, fontSize: 11, padding: "5px 9px", fontStyle: "italic", background: "transparent", border: "none", borderBottom: "1px dotted #ddcfb8", borderRadius: 0 }} />
+    </div>)}
+    {items.length > 6 && <div style={{ fontSize: 9, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, marginTop: 8 }}>+ {items.length - 6} earlier corrections on file</div>}
+  </div>;
+}
+
+// Watchlist signal cheat-sheet, restructured as drillable cue/read pairs
+const SIGNALS = [
+  { cue: "TLT drops while SPY stays flat", read: "Rates are rising without an equity read-through yet — financing is getting more expensive, and deal flow tends to slow." },
+  { cue: "GLD and TLT spike together", read: "Classic risk-off: money is running to safety on both fronts at once — the market is scared." },
+  { cue: "IWM diverges from SPY", read: "Small-cap sentiment is moving on its own — a read on domestic risk appetite and the middle-market PE pipeline." },
+  { cue: "QQQ outpaces SPY", read: "Growth and tech rotation — long-duration equities are being bid, usually on falling rate expectations." },
+  { cue: "JPM moves hard on earnings", read: "A read-through on credit conditions and investment-banking activity — the banks report first and set the tone." },
+  { cue: "UUP grinds higher", read: "The dollar is strengthening — pressure on multinational earnings, commodities, and anything emerging-market." },
+  { cue: "NVDA gaps on guidance", read: "An AI capex cycle signal — hyperscaler spending intentions ripple through the entire tech supply chain." },
+  { cue: "TLT and SPY rise together", read: "Goldilocks — rates falling while equities climb, the market pricing easier policy without a growth scare." },
+];
+function QCard({ q, src, done }) {
+  const [rev, setRev] = useState(false);
+  const [marked, setMarked] = useState(false);
+  return <div>
+    <p style={{ fontFamily: "'Instrument Serif',serif", fontSize: 16, color: "#262421", lineHeight: 1.45, marginBottom: 10 }}>{q.q}</p>
+    <Redacted revealed={rev} onReveal={() => setRev(true)}>{q.a}</Redacted>
+    {rev && <div style={{ marginTop: 10 }}>
+      <GradeBar done={marked || done} onGrade={g => { recordSelfGrade({ src, qid: q.id, grade: g, front: q.q, back: q.a }); setMarked(true); }} />
+    </div>}
+  </div>;
+}
+const DrillStation = ({ n, done, children }) => <div style={{ borderTop: "1px solid #efe4d2", padding: "13px 0 11px" }}>
+  <div style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2.5, textTransform: "uppercase", marginBottom: 8, color: done ? "#0d6d56" : "#a2977f" }}>Station {n}{done ? " · cleared" : ""}</div>
+  {children}
+</div>;
+const DRILL_EPOCH = Math.floor(Date.UTC(2026, 6, 1) / 86400000); // Edition No. 1 = July 1, 2026
+function DailyDrill({ onGoPuzzle }) {
+  useLearnTick();
+  const bank = useTechBank();
+  const [sigRev, setSigRev] = useState(false);
+  const [sigMarked, setSigMarked] = useState(false);
+  if (!bank.length) return <AwaitingWire />;
+  const day = Math.floor(Date.now() / 86400000);
+  const no = day - DRILL_EPOCH + 1;
+  const att = lsGet("mjb_attempts", []).filter(a => a.d === todayISO());
+  const r = mulberry32(day * 11 + 5);
+  const qotdId = bank[day % bank.length].id;
+  const picks = [1, 2, 3].map(dd => { const pool = bank.filter(x => x.d === dd && x.id !== qotdId); return pool.length ? pool[Math.floor(r() * pool.length)] : null; }).filter(Boolean);
+  const sigIdx = day % SIGNALS.length, sig = SIGNALS[sigIdx];
+  const done = {
+    tech: picks.map(p => att.some(a => a.src === "drill" && a.qid === p.id)),
+    sig: att.some(a => a.src === "signals" && a.qid === String(sigIdx)),
+    ripple: att.some(a => a.src === "ripple" && String(a.qid).endsWith(`-${day}`)),
+    puzzle: att.some(a => a.src === "puzzle" && a.qid === String(day)),
+  };
+  const total = picks.length + 3;
+  const solved = done.tech.filter(Boolean).length + (done.sig ? 1 : 0) + (done.ripple ? 1 : 0) + (done.puzzle ? 1 : 0);
+  return <div>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap", marginBottom: 4 }}>
+      <span style={{ fontFamily: "'Instrument Serif',serif", fontSize: 17, color: "#262421" }}>The Daily Drill, No. {no}</span>
+      <span style={{ fontSize: 9, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, textTransform: "uppercase", color: solved === total ? "#0d6d56" : "#8a8072" }}>{solved === total ? "Edition put to bed ∎" : `${solved} of ${total} stations cleared`}</span>
+    </div>
+    <p style={{ fontSize: 10.5, color: "#8a8072", fontStyle: "italic", marginBottom: 10 }}>Six stations, mixed on purpose — naming the method is half the interview.</p>
+    {picks.map((p, i) => <DrillStation key={p.id} n={i + 1} done={done.tech[i]}><QCard q={p} src="drill" done={done.tech[i]} /></DrillStation>)}
+    <DrillStation n={4} done={done.sig}>
+      <p style={{ fontFamily: "'Instrument Serif',serif", fontSize: 16, color: "#262421", lineHeight: 1.45, marginBottom: 10 }}>{sig.cue} — what is the tape telling you?</p>
+      <Redacted revealed={sigRev} onReveal={() => setSigRev(true)}>{sig.read}</Redacted>
+      {sigRev && <div style={{ marginTop: 10 }}>
+        <GradeBar done={sigMarked || done.sig} onGrade={g => { recordSelfGrade({ src: "signals", qid: String(sigIdx), grade: g, front: `${sig.cue} — what is the tape telling you?`, back: sig.read }); setSigMarked(true); }} />
+      </div>}
+    </DrillStation>
+    <DrillStation n={5} done={done.ripple}><ThreeStatementRipple /></DrillStation>
+    <DrillStation n={6} done={done.puzzle}>
+      <p style={{ fontSize: 12.5, color: "#4a443c", lineHeight: 1.7 }}>Today's paper LBO is waiting at the <button onClick={onGoPuzzle} style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "#0d6d56", fontSize: 12.5, fontFamily: "inherit", textDecoration: "underline dotted", textUnderlineOffset: 3 }}>Puzzle Corner</button> — work it on paper and check it there.</p>
+    </DrillStation>
+    <SourceLine>One edition per day, same for every reader · stations drawn from the house generators · interleaved on purpose</SourceLine>
+  </div>;
+}
+
+// ============ MACRO DATA (FRED + US TREASURY) ============
+function useFred(ids) {
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    let on = true;
+    (async () => {
+      try {
+        const key = `mjb_fred_${ids.replace(/[^A-Z0-9]/g, "")}`;
+        const cached = cacheGet(key, 360);
+        if (cached) { if (on) setData(cached); return; }
+        const r = await fetch(`/api/fred?id=${ids}`);
+        if (!r.ok) throw 0;
+        const d = await r.json();
+        if (d && !d.error && on) { setData(d); cacheSet(key, d); }
+      } catch {}
+    })();
+    return () => { on = false; };
+  }, [ids]);
+  return data;
+}
+
+function MacroLedger() {
+  const d = useFred("CPIAUCSL,UNRATE,FEDFUNDS,DGS10,MORTGAGE30US");
+  const monthLabel = iso => { const [y, m] = iso.split("-"); return new Date(+y, +m - 1, 1).toLocaleDateString("en-US", { month: "short", year: "numeric" }); };
+  const dayLabel = iso => { const [y, m, dd] = iso.split("-"); return new Date(+y, +m - 1, +dd).toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
+  const rows = [];
+  if (d) {
+    const cpi = d.CPIAUCSL || [];
+    if (cpi.length > 14) {
+      const yoy = (cpi[cpi.length - 1][1] / cpi[cpi.length - 13][1] - 1) * 100;
+      const prior = (cpi[cpi.length - 2][1] / cpi[cpi.length - 14][1] - 1) * 100;
+      rows.push({ label: "CPI inflation", sub: "year over year", v: `${yoy.toFixed(1)}%`, delta: yoy - prior, ds: `${Math.abs(yoy - prior).toFixed(1)}pp`, asof: monthLabel(cpi[cpi.length - 1][0]) });
+    }
+    const simple = (key, label, sub, fmt, dfmt, dateFn) => {
+      const s = d[key] || [];
+      if (s.length < 2) return;
+      const delta = s[s.length - 1][1] - s[s.length - 2][1];
+      rows.push({ label, sub, v: fmt(s[s.length - 1][1]), delta, ds: dfmt(Math.abs(delta)), asof: dateFn(s[s.length - 1][0]) });
+    };
+    simple("UNRATE", "Unemployment", "U-3 rate", v => `${v.toFixed(1)}%`, x => `${x.toFixed(1)}pp`, monthLabel);
+    simple("FEDFUNDS", "Fed funds", "effective, monthly avg", v => `${v.toFixed(2)}%`, x => `${(x * 100).toFixed(0)}bp`, monthLabel);
+    simple("DGS10", "10-year Treasury", "constant maturity", v => `${v.toFixed(2)}%`, x => `${(x * 100).toFixed(0)}bp`, dayLabel);
+    simple("MORTGAGE30US", "30-year mortgage", "weekly avg", v => `${v.toFixed(2)}%`, x => `${(x * 100).toFixed(0)}bp`, dayLabel);
+  }
+  if (!rows.length) return <p style={{ color: "#8a8072", fontSize: 12, textAlign: "center", padding: "12px 0", lineHeight: 1.6 }}>The monthly numbers every morning meeting references — CPI, unemployment, Fed funds, the 10-year, mortgage rates — each with its release dateline.<br /><span style={{ fontSize: 10, color: "#a2977f" }}>Live via FRED in production</span></p>;
+  return <div>
+    {rows.map((r, i) => <div key={r.label} style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "8px 2px", borderTop: i ? "1px solid #efe4d2" : "none" }}>
+      <div style={{ flex: 1, minWidth: 0 }}><span style={{ fontSize: 12.5, color: "#33302c", fontWeight: 600 }}>{r.label}</span><span style={{ fontSize: 10, color: "#8a8072", marginLeft: 8 }}>{r.sub}</span></div>
+      <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 13, color: "#262421", textAlign: "right" }}>{r.v}</span>
+      <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, minWidth: 62, textAlign: "right", color: Math.abs(r.delta) < 0.005 ? "#8a8072" : r.delta > 0 ? "#990f3d" : "#0d6d56" }}>{Math.abs(r.delta) < 0.005 ? "unch" : `${r.delta > 0 ? "▲" : "▼"} ${r.ds}`}</span>
+      <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 8.5, color: "#a2977f", minWidth: 58, textAlign: "right", letterSpacing: 0.5 }}>{r.asof}</span>
+    </div>)}
+    <SourceLine>Source: FRED, Federal Reserve Bank of St. Louis · rising prints in claret, easing in teal · 12-hr cache</SourceLine>
+  </div>;
+}
+
+function CreditStrip() {
+  const d = useFred("BAMLH0A0HYM2,T10YIE,T10Y2Y");
+  if (!d) return null;
+  const items = [];
+  const push = (key, label, fmt) => {
+    const s = d[key] || [];
+    if (s.length < 2) return;
+    const v = s[s.length - 1][1], delta = v - s[s.length - 2][1];
+    items.push({ label, v: fmt(v), up: delta > 0.0001, flat: Math.abs(delta) <= 0.0001 });
+  };
+  push("BAMLH0A0HYM2", "HY", v => `${Math.round(v * 100)}bp`);
+  push("T10YIE", "BE10", v => `${v.toFixed(2)}%`);
+  push("T10Y2Y", "2s10s", v => `${v >= 0 ? "+" : ""}${Math.round(v * 100)}bp`);
+  if (!items.length) return null;
+  return <>{items.map(x => <span key={x.label} style={{ display: "inline-flex", gap: 6 }}>
+    <span style={{ color: "#7d7568" }}>{x.label}</span>
+    <span style={{ color: "#cfc5b4" }}>{x.v}</span>
+    {!x.flat && <span style={{ color: x.up ? "#e07a70" : "#3ecf8e" }}>{x.up ? "▲" : "▼"}</span>}
+  </span>)}</>;
+}
+
+// US Treasury daily par yield curve — keyless, CORS-open, browser-direct.
+const TENORS = [[1, "1M"], [3, "3M"], [6, "6M"], [12, "1Y"], [24, "2Y"], [36, "3Y"], [60, "5Y"], [84, "7Y"], [120, "10Y"], [240, "20Y"], [360, "30Y"]];
+function useTreasury() {
+  const [rows, setRows] = useState(null);
+  useEffect(() => {
+    let on = true;
+    (async () => {
+      try {
+        const cached = cacheGet("mjb_tsy_curve", 720);
+        if (cached) { if (on) setRows(cached); return; }
+        const y = new Date().getFullYear();
+        const url = yy => `https://home.treasury.gov/resource-center/data-chart-center/interest-rates/daily-treasury-rates.csv/${yy}/all?type=daily_treasury_yield_curve&field_tdr_date_value=${yy}&page&_format=csv`;
+        const texts = await Promise.all([y, y - 1].map(yy => fetch(url(yy)).then(r => r.ok ? r.text() : "").catch(() => "")));
+        const all = [];
+        for (const t of texts) {
+          if (!t) continue;
+          const lines = t.trim().split("\n");
+          const header = (lines[0].match(/("[^"]*"|[^,]+)/g) || []).map(s => s.replace(/"/g, "").trim());
+          const cols = header.map(h => { const m = h.match(/^([\d.]+)\s*(Mo|Yr)$/i); return m ? Math.round(parseFloat(m[1]) * (/yr/i.test(m[2]) ? 12 : 1)) : null; });
+          for (const line of lines.slice(1)) {
+            const cells = (line.match(/("[^"]*"|[^,]+)/g) || []).map(s => s.replace(/"/g, "").trim());
+            const dm = cells[0] && cells[0].match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+            if (!dm) continue;
+            const p = {};
+            cols.forEach((mo, i) => { if (mo) { const v = parseFloat(cells[i]); if (!isNaN(v)) p[mo] = v; } });
+            if (p[24] != null && p[120] != null) all.push({ date: `${dm[3]}-${dm[1]}-${dm[2]}`, p });
+          }
+        }
+        if (!all.length) return;
+        all.sort((a, b) => a.date.localeCompare(b.date));
+        if (on) { setRows(all); cacheSet("mjb_tsy_curve", all); }
+      } catch {}
+    })();
+    return () => { on = false; };
+  }, []);
+  return rows;
+}
+
+function RatesPlate() {
+  const rows = useTreasury();
+  if (!rows || rows.length < 2) return <p style={{ color: "#8a8072", fontSize: 12, textAlign: "center", padding: "12px 0", lineHeight: 1.6 }}>Today's full Treasury par curve against one month and one year ago, with the 2s10s dateline.<br /><span style={{ fontSize: 10, color: "#a2977f" }}>Awaiting the Treasury wire</span></p>;
+  const latest = rows[rows.length - 1];
+  const mAgo = rows.length > 22 ? rows[rows.length - 22] : null;
+  const yAgo = rows.length > 251 ? rows[rows.length - 251] : rows[0];
+  const curves = [
+    { row: latest, color: "#262421", w: 1.8, label: `Today (${latest.date.slice(5)})` },
+    mAgo && { row: mAgo, color: "#b8ab97", w: 1.2, label: "1 month ago" },
+    yAgo && yAgo !== mAgo && { row: yAgo, color: "#0d6d56", w: 1.2, dash: "5 4", label: "1 year ago" },
+  ].filter(Boolean);
+  const vals = curves.flatMap(c => TENORS.map(([m]) => c.row.p[m]).filter(v => v != null));
+  const lo = Math.floor(Math.min(...vals) * 2) / 2 - 0.25, hi = Math.ceil(Math.max(...vals) * 2) / 2 + 0.25;
+  const W = 560, H = 180, PL = 34, PB = 22, PT = 8;
+  const x = i => PL + (i / (TENORS.length - 1)) * (W - PL - 10);
+  const yy = v => PT + (1 - (v - lo) / (hi - lo)) * (H - PT - PB);
+  const path = row => TENORS.map(([m], i) => row.p[m] == null ? null : `${i === 0 || row.p[TENORS[i - 1][0]] == null ? "M" : "L"}${x(i).toFixed(1)},${yy(row.p[m]).toFixed(1)}`).filter(Boolean).join(" ");
+  const spread = latest.p[120] - latest.p[24];
+  let streak = 0;
+  for (let i = rows.length - 1; i >= 0; i--) { const s = rows[i].p[120] - rows[i].p[24]; if ((s >= 0) === (spread >= 0)) streak++; else break; }
+  const gridVals = []; for (let v = Math.ceil(lo * 2) / 2; v <= hi; v += 0.5) gridVals.push(+v.toFixed(2));
+  return <div>
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }} role="img" aria-label="US Treasury par yield curve, today versus one month and one year ago">
+      {gridVals.map(v => <g key={v}><line x1={PL} x2={W - 10} y1={yy(v)} y2={yy(v)} stroke="#e9ddc9" strokeWidth="0.7" /><text x={PL - 5} y={yy(v) + 3} textAnchor="end" fontSize="8" fill="#a2977f" fontFamily="'JetBrains Mono',monospace">{v.toFixed(1)}</text></g>)}
+      {TENORS.map(([m, l], i) => <text key={m} x={x(i)} y={H - 8} textAnchor="middle" fontSize="8" fill="#8a8072" fontFamily="'JetBrains Mono',monospace">{l}</text>)}
+      {curves.map(c => <path key={c.label} d={path(c.row)} fill="none" stroke={c.color} strokeWidth={c.w} strokeDasharray={c.dash || "none"} strokeLinejoin="round" strokeLinecap="round" />)}
+      {TENORS.map(([m], i) => latest.p[m] == null ? null : <circle key={m} cx={x(i)} cy={yy(latest.p[m])} r="1.9" fill="#262421" />)}
+    </svg>
+    <div style={{ display: "flex", gap: 16, flexWrap: "wrap", margin: "8px 0 2px" }}>
+      {curves.map(c => <span key={c.label} style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 9, color: "#6f675c", fontFamily: "'JetBrains Mono',monospace" }}><span style={{ width: 16, borderTop: `2px ${c.dash ? "dashed" : "solid"} ${c.color}` }} />{c.label}</span>)}
+    </div>
+    <p style={{ fontSize: 11.5, color: "#4a443c", marginTop: 8, lineHeight: 1.6 }}>The 2s10s spread is <span style={{ fontFamily: "'JetBrains Mono',monospace", color: spread >= 0 ? "#0d6d56" : "#990f3d", fontWeight: 600 }}>{spread >= 0 ? "+" : ""}{Math.round(spread * 100)}bp</span> — {spread >= 0 ? "positive" : "inverted"} for {streak} consecutive session{streak === 1 ? "" : "s"}.</p>
+    <SourceLine>Source: U.S. Department of the Treasury, daily par yield curve · as of {latest.date} · fetched directly, cached 12 hrs</SourceLine>
+  </div>;
+}
+
 function PuzzleCorner() {
-  const [seed, setSeed] = useState(20260702);
+  const [seed, setSeed] = useState(() => Math.floor(Date.now() / 86400000)); // today's edition; "New problem" deals more
   const [ans, setAns] = useState({ eq: "", exit: "", mom: "", irr: "" });
   const [checked, setChecked] = useState(false);
   const r = mulberry32(seed);
@@ -852,7 +1349,7 @@ function PuzzleCorner() {
       </div>)}
     </div>
     <div style={{ display: "flex", gap: 10, marginBottom: checked ? 14 : 0 }}>
-      <button onClick={() => setChecked(true)} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "7px 18px" }}>Check</button>
+      <button onClick={() => { setChecked(true); recordDrillResult({ src: "puzzle", qid: String(seed), ok: Object.values(grade).every(Boolean), front: `Paper LBO: $${E0}M EBITDA at ${entry.toFixed(1)}x, ${debtPct}% debt, EBITDA to $${EN}M, exit ${exitM.toFixed(1)}x — equity check, exit equity, MoM, IRR?`, back: `Equity $${Eq0.toFixed(0)}M → $${EqN.toFixed(0)}M · ${mom.toFixed(2)}x MoM · ~${irr.toFixed(1)}% IRR`, given: `${ans.eq} / ${ans.exit} / ${ans.mom} / ${ans.irr}` }); }} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "7px 18px" }}>Check</button>
       <button onClick={fresh} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "7px 18px", color: "#6f675c", border: "1px solid #ddcfb8" }}>New problem</button>
     </div>
     {checked && <div style={{ borderTop: "1px solid #e9ddc9", paddingTop: 12 }}>
@@ -868,7 +1365,7 @@ function PuzzleCorner() {
 }
 
 // ============ MAIN ============
-function SettingsPanel({ apiKey, setApiKey, finnhubKey, setFinnhubKey, open, onClose }) {
+function SettingsPanel({ apiKey, setApiKey, finnhubKey, setFinnhubKey, desk, setDesk, open, onClose }) {
   const [input, setInput] = useState(apiKey || "");
   const [fhInput, setFhInput] = useState(finnhubKey || "");
   const [show, setShow] = useState(false);
@@ -894,6 +1391,13 @@ function SettingsPanel({ apiKey, setApiKey, finnhubKey, setFinnhubKey, open, onC
         <input type={show?"text":"password"} value={fhInput} onChange={e=>setFhInput(e.target.value)} placeholder="Finnhub API key..." style={{width:"100%",background:"#f6eee1",border:"1px solid #e9ddc9",borderRadius:8,padding:"10px 12px",color:"#33302c",fontSize:12,fontFamily:"'JetBrains Mono',monospace",outline:"none"}} />
         <p style={{fontSize:10,color:"#8a8072",marginTop:6}}>Powers real-time stock prices. Free at finnhub.io — sign up and copy your key.</p>
       </div>
+      <div style={{marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,borderTop:"1px solid #efe4d2",paddingTop:16}}>
+        <div>
+          <label style={{fontSize:10,color:"#8a8072",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:1.5,display:"block",marginBottom:4}}>Desk Mode</label>
+          <p style={{fontSize:10,color:"#8a8072",lineHeight:1.5}}>The editor's private study ledgers — review docket, errata, edition streak. Stored in this browser only.</p>
+        </div>
+        <button onClick={()=>setDesk(!desk)} style={{background:desk?"#0d6d5615":"#f6eee1",border:`1px solid ${desk?"#0d6d5630":"#e9ddc9"}`,borderRadius:8,padding:"8px 16px",color:desk?"#0d6d56":"#8a8072",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",fontWeight:600,flexShrink:0}}>{desk?"ON":"OFF"}</button>
+      </div>
       <p style={{fontSize:9,color:"#a2977f",marginBottom:16}}>Both keys stored locally in your browser only. Never committed to code.</p>
       <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
         <button onClick={clear} style={{background:"none",border:"1px solid #b2342b20",borderRadius:8,padding:"8px 16px",color:"#b2342b",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>Clear All</button>
@@ -906,6 +1410,8 @@ function SettingsPanel({ apiKey, setApiKey, finnhubKey, setFinnhubKey, open, onC
 export default function App() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem("mb_api_key") || "");
   const [finnhubKey, setFinnhubKey] = useState(() => localStorage.getItem("mb_finnhub_key") || "");
+  const [desk, setDeskRaw] = useState(() => { try { return localStorage.getItem("mjb_desk") === "1"; } catch { return false; } });
+  const setDesk = v => { setDeskRaw(v); try { localStorage.setItem("mjb_desk", v ? "1" : "0"); } catch {} };
   const [showSettings, setShowSettings] = useState(false);
   const { prices, live: pricesLive, asOf } = usePrices(TICKERS, finnhubKey);
   const [tab, setTabRaw] = useState(() => { try { const valid = ["home", "projects", "markets", "news", "recruiter"]; const path = window.location.pathname.replace(/\/+$/, "").slice(1); if (valid.includes(path)) return path; const q = new URLSearchParams(window.location.search).get("tab"); return valid.includes(q) ? q : "home"; } catch { return "home"; } }), [hovP, setHovP] = useState(null), [cmd, setCmd] = useState(false), [showHero, setShowHero] = useState(() => { try { return !sessionStorage.getItem("mb_intro"); } catch { return true; } }), [mounted, setMounted] = useState(false);
@@ -929,7 +1435,7 @@ export default function App() {
   return <div style={S.root}>
     {showHero && <Hero />}
     <Cmd open={cmd} onClose={() => setCmd(false)} onNav={t => setTab(t)} />
-    <SettingsPanel apiKey={apiKey} setApiKey={setApiKey} finnhubKey={finnhubKey} setFinnhubKey={setFinnhubKey} open={showSettings} onClose={() => setShowSettings(false)} />
+    <SettingsPanel apiKey={apiKey} setApiKey={setApiKey} finnhubKey={finnhubKey} setFinnhubKey={setFinnhubKey} desk={desk} setDesk={setDesk} open={showSettings} onClose={() => setShowSettings(false)} />
     <div className="bg-fx" style={{ position: "fixed", top: -200, right: -100, width: 900, height: 900, background: "radial-gradient(circle,rgba(13,109,86,0.045) 0%,transparent 55%)", pointerEvents: "none", animation: "breathe 8s ease-in-out infinite" }} />
     <div className="bg-fx" style={{ position: "fixed", bottom: -100, left: -100, width: 700, height: 700, background: "radial-gradient(circle,rgba(31,90,158,0.035) 0%,transparent 55%)", pointerEvents: "none", animation: "breathe 10s ease-in-out infinite", animationDelay: "2s" }} />
     <div className="bg-fx" style={{ position: "fixed", top: "30%", right: -100, width: 600, height: 600, background: "radial-gradient(circle,rgba(109,84,158,0.025) 0%,transparent 55%)", pointerEvents: "none", animation: "breathe 12s ease-in-out infinite", animationDelay: "4s" }} />
@@ -937,7 +1443,7 @@ export default function App() {
 
     <div className="status-bar" style={{ background: "#2b2825", padding: "7px 32px", display: "flex", justifyContent: "space-between", fontSize: 9, fontFamily: "JetBrains Mono, monospace", color: "#cfc5b4", letterSpacing: 1, position: "relative", zIndex: 2 }}>
       <span>WALTON COLLEGE OF BUSINESS · UNIVERSITY OF ARKANSAS · DALLAS–FORT WORTH, TX</span>
-      {pricesLive && <span className="statusbar-quotes" style={{ display: "flex", gap: 18 }}>{["SPY", "QQQ", "TLT", "GLD"].map(sym => { const t = prices.find(p => p.symbol === sym); if (!t || t.price === "—") return null; const up = parseFloat(t.change) >= 0; return <span key={sym} style={{ display: "inline-flex", gap: 6 }}><span style={{ color: "#7d7568" }}>{sym}</span><span style={{ color: "#cfc5b4" }}>{t.price}</span><span style={{ color: up ? "#3ecf8e" : "#e07a70" }}>{up ? "+" : "−"}{Math.abs(parseFloat(t.change)).toFixed(2)}%</span></span>; })}</span>}
+      <span className="statusbar-quotes" style={{ display: "flex", gap: 18 }}>{pricesLive && ["SPY", "QQQ", "TLT", "GLD"].map(sym => { const t = prices.find(p => p.symbol === sym); if (!t || t.price === "—") return null; const up = parseFloat(t.change) >= 0; return <span key={sym} style={{ display: "inline-flex", gap: 6 }}><span style={{ color: "#7d7568" }}>{sym}</span><span style={{ color: "#cfc5b4" }}>{t.price}</span><span style={{ color: up ? "#3ecf8e" : "#e07a70" }}>{up ? "+" : "−"}{Math.abs(parseFloat(t.change)).toFixed(2)}%</span></span>; })}<CreditStrip /></span>
       <span><span style={{ color: "#3ecf8e" }}>●</span> OPEN TO OPPORTUNITIES · IB / PE / WEALTH MANAGEMENT / CORPORATE FINANCE</span>
     </div>
 
@@ -974,6 +1480,25 @@ export default function App() {
         <Kicker n="03" t="Markets & Data" />
         <MacroTape />
         <QuoteLookup />
+        {desk && <EditionStrip />}
+        {desk && <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
+          <section style={{ ...S.card, animation: "fadeUp 0.5s ease both" }}>
+            <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> The Review Docket<Info text="Spaced repetition over everything you've missed on this site. Cards are scheduled with the SM-2 algorithm: misses return tomorrow, solid answers push the next review further out. Private — lives in this browser's storage only." /></h2>
+            <ReviewDocket />
+          </section>
+          <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.06s both" }}>
+            <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> Errata & Corrections<Info text="Every missed question is filed as a correction, newspaper-style, with room for a one-line rule so the same mistake isn't made twice. Private to this browser." /></h2>
+            <ErrataColumn />
+          </section>
+        </div>}
+        <div style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease both" }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#6d549e" }}>◆</span> Question of the Day<Info text="One technical interview question per day from the house bank — same edition for every reader, like a crossword. Reveal the answer, then grade yourself honestly. Grades never leave your browser." /></h2>
+          <QOTD />
+        </div>
+        <div style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease 0.05s both" }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#b0741e" }}>◆</span> The Daily Drill<Info text="One dated edition per day: six stations mixed across every drill generator on the site — technicals at rising difficulty, a tape-signal check, a three-statement ripple, and the paper LBO. Interleaving is deliberate: identifying WHICH method applies is the skill interviews test. Same edition for every reader; marks stay in your browser." /></h2>
+          <DailyDrill onGoPuzzle={() => goAnchor("projects", "puzzle-corner")} />
+        </div>
         <div style={{ marginBottom: 24, animation: "fadeUp 0.5s ease both", padding: "20px 24px", background: "linear-gradient(135deg, rgba(255,253,249,0.9), rgba(251,245,236,0.7))", borderRadius: 10, border: "1px solid #e3d5bf", boxShadow: "0 4px 20px rgba(64,52,32,0.07)" }}><Clock /></div>
         <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
           <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.08s both" }}>
@@ -1001,6 +1526,16 @@ export default function App() {
         <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
           <EarningsCal apiKey={apiKey} />
           <EconCalendar apiKey={apiKey} />
+        </div>
+        <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
+          <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.44s both" }}>
+            <h2 style={S.cardTitle}><span style={{ color: "#1f5a9e" }}>◆</span> The Rates Page<Info text="Today's full Treasury par yield curve drawn against one month and one year ago, straight from the Treasury's daily data. The 2s10s dateline tracks how long the curve has held its shape — the single highest-signal fixed-income read of the morning." link="https://home.treasury.gov/policy-issues/financing-the-government/interest-rate-statistics" linkLabel="Treasury interest-rate statistics" /></h2>
+            <RatesPlate />
+          </section>
+          <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.48s both" }}>
+            <h2 style={S.cardTitle}><span style={{ color: "#b0741e" }}>◆</span> Macro Ledger<Info text="The prints every interview and morning meeting references — CPI, unemployment, Fed funds, the 10-year, the 30-year mortgage — each with its change from the prior reading and release dateline. The econ calendar says CPI is due; this shows the print." link="https://fred.stlouisfed.org" linkLabel="FRED" /></h2>
+            <MacroLedger />
+          </section>
         </div>
         <div style={{ ...S.card, animation: "fadeUp 0.5s ease 0.4s both" }}>
           <h2 style={S.cardTitle}><span style={{ color: "#6d549e" }}>◆</span> Portfolio Allocation<Info text="Sample asset allocation by weight — illustrative, not investment advice. Hover the donut to see individual holdings." link="https://www.investopedia.com/terms/a/assetallocation.asp" linkLabel="Asset allocation basics" /><span style={{ marginLeft: "auto", fontSize: 8, padding: "3px 8px", borderRadius: 8, background: "rgba(176,116,30,0.08)", color: "#b0741e", border: "1px solid rgba(176,116,30,0.25)", letterSpacing: 1 }}>SAMPLE</span></h2>
@@ -1056,6 +1591,16 @@ export default function App() {
           <div id="puzzle-corner" style={S.card}>
             <h2 style={S.cardTitle}><span style={{ color: "#b0741e" }}>◆</span> Puzzle Corner — The Paper LBO<Info text="The classic private equity interview warm-up, generated fresh every time. Work it on paper, enter your answers, and check against the full worked solution." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="projects" id="puzzle-corner" /></span></h2>
             <PuzzleCorner />
+          </div>
+        </div>
+        <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16, alignItems: "start" }}>
+          <div id="ripple-drill" style={S.card}>
+            <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> Drill — The Three-Statement Ripple<Info text="The most-asked technical question in IB interviews: perturb one line item and trace it through the income statement, cash flow statement, and balance sheet. Seeded generator, ten scenario types, checked cell by cell against the worked ripple." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="projects" id="ripple-drill" /></span></h2>
+            <ThreeStatementRipple />
+          </div>
+          <div id="technicals-desk" style={S.card}>
+            <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> The Technicals Desk<Info text="A house bank of original interview technical questions across the eight canonical categories. Browse by category, reveal the answer set in ink, and grade yourself. Grades stay in your browser." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="projects" id="technicals-desk" /></span></h2>
+            <TechnicalsDesk />
           </div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(min(360px,100%),1fr))", gap: 14 }}>{PROJECTS.map((p, i) => <div key={i} style={{ ...S.pCard, ...(hovP === i ? { border: "1px solid #0d6d5650", transform: "translateY(-6px) scale(1.01)", boxShadow: "0 20px 50px rgba(13,109,86,0.12), 0 0 0 1px rgba(13,109,86,0.15), 0 0 40px rgba(13,109,86,0.05)" } : {}), animation: "fadeUp 0.5s ease both", animationDelay: `${i * 0.07}s` }} onMouseEnter={() => setHovP(i)} onMouseLeave={() => setHovP(null)}>
