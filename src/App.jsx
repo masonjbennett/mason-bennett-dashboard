@@ -792,7 +792,7 @@ function ReadingLedger() {
     (async () => {
       try {
         const cached = cacheGet("mjb_letters", 60); if (cached) { if (on) setItems(cached); return; }
-        const r = await fetch("/api/rss?src=netinterest,thediff,transcript,apricitas");
+        const r = await fetch("/api/rss?src=netinterest,klement,transcript,apricitas");
         if (!r.ok) return;
         const d = await r.json();
         if (d.items && d.items.length && on) { setItems(d.items); cacheSet("mjb_letters", d.items); }
@@ -800,7 +800,7 @@ function ReadingLedger() {
     })();
     return () => { on = false; };
   }, []);
-  if (!items) return <p style={{ color: "#8a8072", fontSize: 12, textAlign: "center", padding: "12px 0", lineHeight: 1.6 }}>The serious-reading rack — latest issues of Net Interest, The Diff, The Transcript, and Apricitas, straight from their feeds.<br /><span style={{ fontSize: 10, color: "#a2977f" }}>Live in production</span></p>;
+  if (!items) return <p style={{ color: "#8a8072", fontSize: 12, textAlign: "center", padding: "12px 0", lineHeight: 1.6 }}>The serious-reading rack — latest issues of Net Interest, Klement on Investing, The Transcript, and Apricitas, straight from their feeds.<br /><span style={{ fontSize: 10, color: "#a2977f" }}>Live in production</span></p>;
   const pubs = {};
   items.forEach(x => { (pubs[x.label] = pubs[x.label] || []).push(x); });
   const rows = Object.entries(pubs)
@@ -1980,7 +1980,7 @@ export default function App() {
           <FilingsWire />
         </div>
         <div id="reading-ledger" style={{ ...S.card, marginTop: 16 }}>
-          <h2 style={S.cardTitle}><span style={{ color: "#1f5a9e" }}>◆</span> The Reading Ledger<Info text="The serious-reading rack: latest issue titles from Net Interest, The Diff, The Transcript, and Apricitas Economics via their public feeds. Titles link to the publication; racks that go dormant hide themselves." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="news" id="reading-ledger" /></span></h2>
+          <h2 style={S.cardTitle}><span style={{ color: "#1f5a9e" }}>◆</span> The Reading Ledger<Info text="The serious-reading rack: latest issue titles from Net Interest, Klement on Investing, The Transcript, and Apricitas Economics via their public feeds. Titles link to the publication; racks that go dormant hide themselves." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="news" id="reading-ledger" /></span></h2>
           <ReadingLedger />
         </div>
         {desk && <CirculationAudit />}

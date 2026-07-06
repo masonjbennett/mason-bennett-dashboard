@@ -12,7 +12,8 @@ const SOURCES = {
   reuters: { label: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com%20business%20when:1d&hl=en-US&gl=US&ceid=US:en", paywall: false, priority: 0 },
   // Newsletters (Substack /feed convention) — excluded from the default wire; fetched by the Reading Ledger.
   netinterest: { label: "Net Interest", url: "https://www.netinterest.co/feed", paywall: false, priority: 9, letter: true },
-  thediff: { label: "The Diff", url: "https://www.thediff.co/feed", paywall: false, priority: 9, letter: true },
+  // The Diff's feeds froze (custom domain Nov 2022, Substack Feb 2025) — replaced with a live daily
+  klement: { label: "Klement on Investing", url: "https://klementoninvesting.substack.com/feed", paywall: false, priority: 9, letter: true },
   transcript: { label: "The Transcript", url: "https://thetranscript.substack.com/feed", paywall: false, priority: 9, letter: true },
   apricitas: { label: "Apricitas Economics", url: "https://www.apricitas.io/feed", paywall: false, priority: 9, letter: true },
 };
