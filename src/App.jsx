@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 
 // ============ CONFIG ============
 const TICKERS = [
@@ -294,7 +295,7 @@ function Info({ text, link, linkLabel }) {
   const leave = () => { timer.current = setTimeout(() => setShow(false), 400); };
   return <span style={{ position: "relative", display: "inline-flex", marginLeft: 6 }} onMouseEnter={enter} onMouseLeave={leave}>
     <span style={{ width: 15, height: 15, borderRadius: 8, background: show ? "rgba(13,109,86,0.15)" : "rgba(111,103,92,0.1)", border: `1px solid ${show ? "rgba(13,109,86,0.3)" : "rgba(111,103,92,0.2)"}`, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 9, color: show ? "#0d6d56" : "#8a8072", cursor: "help", fontFamily: "'JetBrains Mono',monospace", fontWeight: 600, transition: "all 0.2s" }}>?</span>
-    {show && <div onMouseEnter={enter} onMouseLeave={leave} style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", background: "#fffdf9", border: "1px solid #e3d5bf", borderRadius: 12, padding: "14px 18px", fontSize: 11, color: "#4a443c", lineHeight: 1.7, width: 300, maxHeight: "70vh", overflowY: "auto", zIndex: 200, boxShadow: "0 12px 40px rgba(64,52,32,0.14), 0 0 0 1px rgba(13,109,86,0.05)", fontFamily: "'Space Grotesk',sans-serif", textTransform: "none", letterSpacing: 0, fontWeight: 400, animation: "fadeIn 0.15s ease", cursor: "default" }}>{text}{link && <a href={link} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 10, fontSize: 10, color: "#0d6d56", textDecoration: "none", fontFamily: "'JetBrains Mono',monospace", padding: "4px 10px", borderRadius: 6, background: "rgba(13,109,86,0.06)", border: "1px solid rgba(13,109,86,0.15)", transition: "all 0.2s" }} onMouseEnter={e=>{e.currentTarget.style.background="rgba(13,109,86,0.12)";e.currentTarget.style.borderColor="rgba(13,109,86,0.3)"}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(13,109,86,0.06)";e.currentTarget.style.borderColor="rgba(13,109,86,0.15)"}}>{linkLabel || "Learn more"} ↗</a>}</div>}
+    {show && createPortal(<div onMouseEnter={enter} onMouseLeave={leave} style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%, -50%)", background: "#fffdf9", border: "1px solid #e3d5bf", borderRadius: 12, padding: "14px 18px", fontSize: 11, color: "#4a443c", lineHeight: 1.7, width: 300, maxHeight: "70vh", overflowY: "auto", zIndex: 200, boxShadow: "0 12px 40px rgba(64,52,32,0.14), 0 0 0 1px rgba(13,109,86,0.05)", fontFamily: "'Space Grotesk',sans-serif", textTransform: "none", letterSpacing: 0, fontWeight: 400, animation: "fadeIn 0.15s ease", cursor: "default" }}>{text}{link && <a href={link} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 10, fontSize: 10, color: "#0d6d56", textDecoration: "none", fontFamily: "'JetBrains Mono',monospace", padding: "4px 10px", borderRadius: 6, background: "rgba(13,109,86,0.06)", border: "1px solid rgba(13,109,86,0.15)", transition: "all 0.2s" }} onMouseEnter={e=>{e.currentTarget.style.background="rgba(13,109,86,0.12)";e.currentTarget.style.borderColor="rgba(13,109,86,0.3)"}} onMouseLeave={e=>{e.currentTarget.style.background="rgba(13,109,86,0.06)";e.currentTarget.style.borderColor="rgba(13,109,86,0.15)"}}>{linkLabel || "Learn more"} ↗</a>}</div>, document.body)}
   </span>;
 }
 
@@ -909,6 +910,7 @@ function FirstCall({ prices, live, apiKey }) {
     <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
       <span style={{ fontSize: 9, fontFamily: "'JetBrains Mono',monospace", color: "#0d6d56", letterSpacing: 3, textTransform: "uppercase" }}>The 7 O'Clock Note</span>
       <span style={{ fontFamily: "'Instrument Serif',serif", fontSize: 15, color: "#262421" }}>{now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</span>
+      <Info text="The morning first-call sheet: overnight tape, top wire stories, the next data prints, overnight 8-Ks, and everything due on the desk. Appears on trading days until the 9:30 open, then retires for the day. With your API key set, Claude writes the two-sentence top call once per morning — private, never shown to visitors." />
       <span style={{ marginLeft: "auto", fontSize: 9, fontFamily: "'JetBrains Mono',monospace", color: "#8a8072", letterSpacing: 1 }}>OPENS IN {Math.floor(toOpen / 60)}H {String(toOpen % 60).padStart(2, "0")}M</span>
     </div>
     {tape.length > 0 && <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "#6f675c", display: "flex", gap: 14, flexWrap: "wrap", marginTop: 6 }}>{tape.map(p => <span key={p.symbol}>{p.symbol} {p.price} <span style={{ color: parseFloat(p.change) >= 0 ? "#0d6d56" : "#b2342b" }}>{parseFloat(p.change) >= 0 ? "▲" : "▼"}{Math.abs(parseFloat(p.change)).toFixed(2)}%</span></span>)}</div>}
@@ -969,6 +971,7 @@ function LateEdition({ prices, live }) {
     <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 8 }}>
       <span style={{ fontSize: 9, fontFamily: "'JetBrains Mono',monospace", color: "#990f3d", letterSpacing: 3, textTransform: "uppercase" }}>Late Edition</span>
       <span style={{ fontFamily: "'Instrument Serif',serif", fontSize: 15, color: "#262421" }}>The bell has rung.</span>
+      <Info text="Appears after the 4pm close on trading days: the closing tape, the biggest mover on the house list, and the morning's calls graded against what actually happened. Filing the one-sentence lesson stamps it into the Market Diary and puts the day's edition to bed." />
       {closes.length > 0 && <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "#6f675c", display: "inline-flex", gap: 12, flexWrap: "wrap" }}>{closes.map(p => <span key={p.symbol}>{p.symbol} {p.price} <span style={{ color: parseFloat(p.change) >= 0 ? "#0d6d56" : "#b2342b" }}>{parseFloat(p.change) >= 0 ? "▲" : "▼"}{Math.abs(parseFloat(p.change)).toFixed(2)}%</span></span>)}</span>}
     </div>
     {movers[0] && <div style={{ fontSize: 11, color: "#4a443c", marginBottom: 8 }}>Mover of the house list: <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 600 }}>{movers[0].symbol}</span> {parseFloat(movers[0].change) >= 0 ? "up" : "down"} {Math.abs(parseFloat(movers[0].change)).toFixed(2)}% on the day.</div>}
@@ -1715,6 +1718,7 @@ function EditionStrip() {
     <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
       <span style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#0d6d56", letterSpacing: 3, textTransform: "uppercase" }}>The Desk</span>
       <span style={{ fontFamily: "'Instrument Serif',serif", fontSize: 16, color: "#262421" }}>{total ? `Edition No. ${total}` : "Edition No. 1 awaits"}</span>
+      <Info text="Completing any daily unit — the Question of the Day, a drill, a docket review, a filed call — puts the day's edition 'to bed' and fills its ink square. The streak counts NYSE trading days only: weekends and market holidays are free, and one missed trading day per week is quietly forgiven as a press holiday." />
       {streak > 1 && <span style={{ fontSize: 10, color: "#6f675c" }}>{streak} consecutive trading days{ed[todayISO()] ? "" : " — today still open"}</span>}
       {total > 0 && streak <= 1 && <span style={{ fontSize: 10, color: "#8a8072" }}>{ed[todayISO()] ? "today is put to bed" : "today's edition is still open"}</span>}
     </div>
