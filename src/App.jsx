@@ -632,7 +632,7 @@ function EconCalendar({ apiKey }) {
 // ============ NOTES ============
 // Market Diary — the notes card upgraded: every entry is datelined AND stamped with the tape
 // at the moment of writing. Tagged entries; "question" entries resurface after 30 days.
-const DIARY_TAGS = [["note", "#6f675c"], ["thesis", "#0d6d56"], ["macro", "#1f5a9e"], ["earnings", "#b0741e"], ["mistake", "#b2342b"], ["question", "#6d549e"]];
+const DIARY_TAGS = [["note", "#6f675c"], ["thesis", "#0d6d56"], ["macro", "#1f5a9e"], ["earnings", "#b0741e"], ["mistake", "#b2342b"], ["question", "#6d549e"], ["lesson", "#b3551d"]];
 function MarketDiary({ prices, live }) {
   const [entries, setEntries] = useState(() => {
     let d = lsGet("mjb_diary", null);
@@ -797,6 +797,112 @@ function PositionsLedger() {
       </div>)}
     </div>}
     <SourceLine>Paper only — fills simulated at the last trade, no spread or commissions · marks via the live tape, 5-min cache · the book lives in this browser</SourceLine>
+  </div>;
+}
+
+// ============ BENNETT VS. THE TAPE + THE LATE EDITION ============
+// Three fixed daily calls, filed before the 4pm bell and graded automatically:
+// SPY direction and QQQ/IWM leadership resolve from the closing tape the same
+// evening; the 10-year resolves from the Treasury CSV once the day's row lands.
+const etNow = () => new Date(new Date().toLocaleString("en-US", { timeZone: "America/New_York" }));
+const isAfterCloseET = () => { const d = etNow(); return isTradingDay(d) && d.getHours() * 60 + d.getMinutes() >= 960; };
+const isBeforeCloseET = () => { const d = etNow(); return isTradingDay(d) && d.getHours() * 60 + d.getMinutes() < 960; };
+const BVT_QS = [
+  { k: "spy", q: "Where does SPY close?", opts: [["up", "Up on the day"], ["down", "Down on the day"]] },
+  { k: "lead", q: "Growth or small caps — which leads?", opts: [["QQQ", "QQQ leads"], ["IWM", "IWM leads"]] },
+  { k: "teny", q: "The 10-year yield closes…", opts: [["higher", "Higher than yesterday"], ["lower", "Lower than yesterday"]] },
+];
+function resolvePredictions(prices, live) {
+  const ps = lsGet("mjb_predictions", []);
+  let changed = false;
+  const t = todayISO(), afterClose = isAfterCloseET();
+  ps.forEach(p => {
+    if (p.correct !== undefined || p.voided) return;
+    if (p.k === "teny") {
+      const rows = cacheGet("mjb_tsy_curve", 1e9) || [];
+      const i = rows.findIndex(r => r.date === p.d);
+      if (i > 0 && rows[i].p[120] != null && rows[i - 1].p[120] != null) {
+        p.actual = rows[i].p[120] > rows[i - 1].p[120] ? "higher" : "lower";
+        p.correct = p.actual === p.guess; changed = true;
+      } else if (p.d < addDaysISO(-7)) { p.voided = true; changed = true; }
+    } else if (p.d === t && afterClose && live && prices) {
+      if (p.k === "spy") { const s = prices.find(x => x.symbol === "SPY"); if (s && s.price !== "—") { p.actual = parseFloat(s.change) >= 0 ? "up" : "down"; p.correct = p.actual === p.guess; changed = true; } }
+      if (p.k === "lead") { const q = prices.find(x => x.symbol === "QQQ"), iw = prices.find(x => x.symbol === "IWM"); if (q && iw && q.price !== "—" && iw.price !== "—") { p.actual = parseFloat(q.change) >= parseFloat(iw.change) ? "QQQ" : "IWM"; p.correct = p.actual === p.guess; changed = true; } }
+    } else if (p.d < t) { p.voided = true; changed = true; } // the close was never taken — no grade, no credit
+  });
+  if (changed) { lsSet("mjb_predictions", ps); learnPing(); }
+}
+function BennettVsTape({ prices, live }) {
+  useLearnTick();
+  const [, force] = useState(0);
+  useEffect(() => { resolvePredictions(prices, live); }, [prices, live]);
+  const t = todayISO();
+  const preds = lsGet("mjb_predictions", []);
+  const todays = k => preds.find(p => p.d === t && p.k === k);
+  const guess = (k, g) => { const ps = lsGet("mjb_predictions", []); if (ps.some(p => p.d === t && p.k === k)) return; ps.unshift({ d: t, k, guess: g }); if (ps.length > 400) ps.length = 400; lsSet("mjb_predictions", ps); recordEdition("tape"); force(x => x + 1); learnPing(); };
+  const resolved = preds.filter(p => p.correct !== undefined);
+  const byK = {}; resolved.forEach(p => { const b = byK[p.k] = byK[p.k] || { n: 0, r: 0 }; b.n++; if (p.correct) b.r++; });
+  const rates = BVT_QS.map(q => ({ ...q, ...byK[q.k] })).filter(x => x.n);
+  const worst = rates.length > 1 ? rates.reduce((a, b) => (a.r / a.n <= b.r / b.n ? a : b)) : null;
+  const open = isBeforeCloseET();
+  return <div>
+    {open ? BVT_QS.map(q => { const g = todays(q.k); return <div key={q.k} style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "6px 0", borderTop: "1px solid #efe4d2", flexWrap: "wrap" }}>
+      <span style={{ fontSize: 12, color: "#33302c", flex: 1, minWidth: 170 }}>{q.q}</span>
+      {g ? <span style={{ fontSize: 9.5, fontFamily: "'JetBrains Mono',monospace", color: "#0d6d56", letterSpacing: 1 }}>FILED: {g.guess.toUpperCase()}</span>
+        : <span style={{ display: "inline-flex", gap: 12 }}>{q.opts.map(([v, l]) => <button key={v} onClick={() => guess(q.k, v)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 10, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, textTransform: "uppercase", color: "#1f5a9e", textDecoration: "underline dotted", textUnderlineOffset: 3 }}>{l}</button>)}</span>}
+    </div>; }) : <p style={{ fontSize: 11.5, color: "#8a8072", lineHeight: 1.7, padding: "4px 0" }}>The window is closed — calls are filed before the 4pm bell on trading days. {preds.some(p => p.d === t) ? "Today's grades print in the Late Edition below the bell." : "Come back at the open."}</p>}
+    {rates.length > 0 && <div style={{ borderTop: "1px solid #ddcfb8", marginTop: 10, paddingTop: 8 }}>
+      <div style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#8a8072", letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>Calibration</div>
+      <div style={{ display: "flex", gap: 18, flexWrap: "wrap" }}>
+        {rates.map(x => <span key={x.k} style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10.5, color: worst && worst.k === x.k && x.r / x.n < 0.5 ? "#990f3d" : "#33302c" }}>
+          <span style={{ fontSize: 8.5, color: "#8a8072", letterSpacing: 1 }}>{x.k.toUpperCase()} </span>{Math.round(x.r / x.n * 100)}% <span style={{ color: "#a2977f", fontSize: 8.5 }}>({x.r}/{x.n})</span>
+        </span>)}
+      </div>
+    </div>}
+    <SourceLine>Filed before the bell, graded by the tape · misses teach calibration, not shame · private to this browser</SourceLine>
+  </div>;
+}
+
+function LateEdition({ prices, live }) {
+  useLearnTick();
+  const [line, setLine] = useState("");
+  const [, force] = useState(0);
+  useEffect(() => { resolvePredictions(prices, live); }, [prices, live]);
+  if (!isAfterCloseET()) return null;
+  const t = todayISO();
+  const lessonFiled = lsGet("mjb_diary", []).some(e => e.tag === "lesson" && e.d === t);
+  const preds = lsGet("mjb_predictions", []).filter(p => p.d === t);
+  const closes = live && prices ? ["SPY", "QQQ", "TLT", "GLD"].map(s => prices.find(p => p.symbol === s)).filter(p => p && p.price !== "—") : [];
+  const movers = live && prices ? [...prices].filter(p => p.price !== "—").sort((a, b) => Math.abs(parseFloat(b.change)) - Math.abs(parseFloat(a.change))) : [];
+  const fileLesson = () => {
+    if (!line.trim()) return;
+    const d = lsGet("mjb_diary", []);
+    const st = {}; const s = live && prices ? prices.find(p => p.symbol === "SPY") : null;
+    if (s && s.price !== "—") { st.spy = parseFloat(s.price); st.chg = parseFloat(s.change); }
+    d.unshift({ id: Date.now(), d: t, time: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }), text: line.trim(), tag: "lesson", stamp: st });
+    lsSet("mjb_diary", d);
+    recordEdition("late");
+    setLine(""); force(x => x + 1); learnPing();
+  };
+  return <div style={{ border: "1px solid #33302c", outline: "1px solid #33302c", outlineOffset: -4, borderRadius: 2, padding: "14px 18px", marginBottom: 16, background: "#fffdf9" }}>
+    <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", marginBottom: 8 }}>
+      <span style={{ fontSize: 9, fontFamily: "'JetBrains Mono',monospace", color: "#990f3d", letterSpacing: 3, textTransform: "uppercase" }}>Late Edition</span>
+      <span style={{ fontFamily: "'Instrument Serif',serif", fontSize: 15, color: "#262421" }}>The bell has rung.</span>
+      {closes.length > 0 && <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "#6f675c", display: "inline-flex", gap: 12, flexWrap: "wrap" }}>{closes.map(p => <span key={p.symbol}>{p.symbol} {p.price} <span style={{ color: parseFloat(p.change) >= 0 ? "#0d6d56" : "#b2342b" }}>{parseFloat(p.change) >= 0 ? "▲" : "▼"}{Math.abs(parseFloat(p.change)).toFixed(2)}%</span></span>)}</span>}
+    </div>
+    {movers[0] && <div style={{ fontSize: 11, color: "#4a443c", marginBottom: 8 }}>Mover of the house list: <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 600 }}>{movers[0].symbol}</span> {parseFloat(movers[0].change) >= 0 ? "up" : "down"} {Math.abs(parseFloat(movers[0].change)).toFixed(2)}% on the day.</div>}
+    {preds.length > 0 && <div style={{ marginBottom: 8 }}>
+      {preds.map(p => { const q = BVT_QS.find(x => x.k === p.k); return <div key={p.k} style={{ display: "flex", gap: 8, alignItems: "baseline", fontSize: 11, padding: "2px 0" }}>
+        <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, fontWeight: 700, color: p.correct === undefined ? "#8a8072" : p.correct ? "#0d6d56" : "#b2342b", minWidth: 14 }}>{p.correct === undefined ? "…" : p.correct ? "✓" : "✗"}</span>
+        <span style={{ color: "#4a443c" }}>{q ? q.q : p.k} <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 9.5, color: "#8a8072" }}>called {String(p.guess).toUpperCase()}{p.actual ? ` · tape says ${String(p.actual).toUpperCase()}` : " · awaiting data"}</span></span>
+      </div>; })}
+    </div>}
+    {lessonFiled
+      ? <div style={{ fontSize: 10, fontFamily: "'JetBrains Mono',monospace", color: "#0d6d56", letterSpacing: 1.5, textTransform: "uppercase" }}>Today's edition is put to bed ∎</div>
+      : <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          <input value={line} onChange={e => setLine(e.target.value)} onKeyDown={e => e.key === "Enter" && fileLesson()} placeholder="What did today teach? One sentence." style={{ ...S.input, flex: 1, minWidth: 200, fontSize: 12 }} />
+          <button onClick={fileLesson} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "7px 16px" }}>File & put to bed</button>
+        </div>}
   </div>;
 }
 
@@ -2071,6 +2177,7 @@ export default function App() {
         <QuoteLookup />
         {desk && <EditionStrip />}
         {desk && <TodaysDesk />}
+        {desk && <LateEdition prices={prices} live={pricesLive} />}
         {desk && <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
           <section style={{ ...S.card, animation: "fadeUp 0.5s ease both" }}>
             <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> The Review Docket<Info text="Spaced repetition over everything you've missed on this site. Cards are scheduled with the SM-2 algorithm: misses return tomorrow, solid answers push the next review further out. Private — lives in this browser's storage only." /></h2>
@@ -2083,6 +2190,10 @@ export default function App() {
           <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.1s both" }}>
             <h2 style={S.cardTitle}><span style={{ color: "#b3551d" }}>◆</span> Notices & Alerts<Info text="File a rule — a price cross or a daily-move threshold — and the page opens with a NOTICES box when it fires, persisting until you mark it read. Checked on load against the live tape; no push infrastructure, no server. Private to this browser." /></h2>
             <Notices prices={prices} live={pricesLive} />
+          </section>
+          <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.14s both" }}>
+            <h2 style={S.cardTitle}><span style={{ color: "#1f5a9e" }}>◆</span> Bennett vs. the Tape<Info text="Three calls filed before the 4pm bell — SPY's direction, QQQ-vs-IWM leadership, and the 10-year — graded automatically against the closing tape and the Treasury's own data. The running calibration table is the point: having a view and being scored on it. Private to this browser." /></h2>
+            <BennettVsTape prices={prices} live={pricesLive} />
           </section>
         </div>}
         <div style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease both" }}>
