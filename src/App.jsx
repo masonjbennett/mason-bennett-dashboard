@@ -1676,6 +1676,123 @@ function ThreeStatementRipple() {
   </div>;
 }
 
+// The Debt Ledger — seeded cash-sweep waterfall. Flat EBITDA, interest on the beginning
+// balance, mandatory amortization off the original loan, then a sweep of what remains.
+function DebtLedger() {
+  const [seed, setSeed] = useState(() => Math.floor(Date.now() / 86400000));
+  const [ans, setAns] = useState({ d1: "", d3: "", lev: "" });
+  const [checked, setChecked] = useState(false);
+  let P = null;
+  for (let k = 0; k < 12 && !P; k++) {
+    const r = mulberry32(seed * 13 + 7 + k * 101);
+    const E = [80, 100, 120, 150, 200][Math.floor(r() * 5)];
+    const mult = [2.5, 3, 3.5, 4][Math.floor(r() * 4)];
+    const conv = [50, 60, 70][Math.floor(r() * 3)];
+    const rate = [5, 10][Math.floor(r() * 2)];
+    const amortPct = [5, 10][Math.floor(r() * 2)];
+    const sweepPct = [50, 100][Math.floor(r() * 2)];
+    const D0 = E * mult, FCF = E * conv / 100, amort = D0 * amortPct / 100;
+    let d = D0; const years = []; let ok = true;
+    for (let y = 1; y <= 3; y++) {
+      const interest = d * rate / 100;
+      const avail = FCF - interest;
+      if (avail < amort) { ok = false; break; }
+      const sweep = Math.min((avail - amort) * sweepPct / 100, d - amort);
+      const end = d - amort - sweep;
+      years.push({ y, begin: d, interest, avail, amort, sweep, end });
+      d = end;
+    }
+    if (ok && d > 0) P = { E, mult, conv, rate, amortPct, sweepPct, D0, FCF, amort, years };
+  }
+  if (!P) return null;
+  const fmt = v => Number.isInteger(+v.toFixed(4)) ? String(Math.round(v)) : v.toFixed(1);
+  const lev3 = P.years[2].end / P.E;
+  const num = s => parseFloat(String(s).replace(/[$,x\s]/gi, ""));
+  const grade = { d1: Math.abs(num(ans.d1) - P.years[0].end) <= 1, d3: Math.abs(num(ans.d3) - P.years[2].end) <= 1, lev: Math.abs(num(ans.lev) - lev3) <= 0.06 };
+  const fields = [["d1", "Ending debt, Year 1 ($M)", fmt(P.years[0].end)], ["d3", "Ending debt, Year 3 ($M)", fmt(P.years[2].end)], ["lev", "Leverage at exit (x)", `${lev3.toFixed(2)}x`]];
+  const fresh = () => { setSeed(s => s + 1); setAns({ d1: "", d3: "", lev: "" }); setChecked(false); };
+  const check = () => {
+    setChecked(true);
+    recordDrillResult({ src: "debt", qid: String(seed), ok: Object.values(grade).every(Boolean), front: `Cash sweep: $${P.D0}M loan at ${P.rate}%, EBITDA $${P.E}M, ${P.conv}% conversion, ${P.amortPct}% mandatory amort, ${P.sweepPct}% sweep — ending debt Y1/Y3 and exit leverage?`, back: `Y1 $${fmt(P.years[0].end)}M · Y3 $${fmt(P.years[2].end)}M · ${lev3.toFixed(2)}x`, given: `${ans.d1} / ${ans.d3} / ${ans.lev}` });
+  };
+  return <div>
+    <p style={{ fontSize: 12.5, color: "#4a443c", lineHeight: 1.8, marginBottom: 6 }}>
+      A sponsor puts a <b>${P.D0}M term loan</b> ({P.mult.toFixed(1)}x) on a business with flat <b>${P.E}M EBITDA</b>, of which <b>{P.conv}%</b> converts to free cash flow before debt service. The loan pays <b>{P.rate}% interest</b> on the beginning balance, amortizes <b>{P.amortPct}% of the original principal</b> per year, and <b>{P.sweepPct}% of remaining cash</b> sweeps to prepayment. Work three years on paper:
+    </p>
+    <p style={{ fontSize: 9.5, color: "#a2977f", marginBottom: 14 }}>Order of operations each year: interest first, then mandatory amortization, then the sweep.</p>
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+      {fields.map(([k, label, sol]) => <div key={k} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ fontSize: 10.5, color: "#6f675c", width: 170, flexShrink: 0 }}>{label}</span>
+        <input value={ans[k]} onChange={e => { setAns(p => ({ ...p, [k]: e.target.value })); setChecked(false); }} style={{ ...S.input, width: 92, fontFamily: "'JetBrains Mono',monospace", fontSize: 12, padding: "6px 10px", textAlign: "right" }} />
+        {checked && <span style={{ fontSize: 12, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: grade[k] ? "#0d6d56" : "#b2342b" }}>{grade[k] ? "✓" : `✗ ${sol}`}</span>}
+      </div>)}
+    </div>
+    <div style={{ display: "flex", gap: 10, marginBottom: checked ? 14 : 0 }}>
+      <button onClick={check} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "7px 18px" }}>Check</button>
+      <button onClick={fresh} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "7px 18px", color: "#6f675c", border: "1px solid #ddcfb8" }}>New problem</button>
+    </div>
+    {checked && <div style={{ borderTop: "1px solid #e9ddc9", paddingTop: 12 }}>
+      <div style={{ fontSize: 8, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 2, marginBottom: 8 }}>The waterfall, worked</div>
+      {P.years.map(y => <div key={y.y} style={{ fontSize: 11, color: "#4a443c", fontFamily: "'JetBrains Mono',monospace", lineHeight: 2 }}>
+        Y{y.y}: FCF {fmt(P.FCF)} − interest {fmt(y.interest)} = {fmt(y.avail)} → amort {fmt(y.amort)}, sweep {fmt(y.sweep)} → debt {fmt(y.begin)} → {fmt(y.end)}
+      </div>)}
+      <div style={{ fontSize: 11, color: "#4a443c", fontFamily: "'JetBrains Mono',monospace", lineHeight: 2 }}>Exit leverage = {fmt(P.years[2].end)} ÷ {P.E} = {lev3.toFixed(2)}x</div>
+    </div>}
+    <p style={{ fontSize: 9, color: "#a2977f", marginTop: 12, lineHeight: 1.6 }}>Debt schedules are where LBO models actually get lost. Interest on beginning balance, flat EBITDA, no fees or taxes. Fresh numbers daily.</p>
+  </div>;
+}
+
+// The Coupon Desk — bond arithmetic a desk expects done in your head.
+function CouponDesk() {
+  const [seed, setSeed] = useState(() => Math.floor(Date.now() / 86400000));
+  const [ans, setAns] = useState({ cy: "", chg: "", np: "" });
+  const [checked, setChecked] = useState(false);
+  const r = mulberry32(seed * 17 + 3);
+  const c = [3, 4, 5, 6][Math.floor(r() * 4)];
+  const price = [88, 90, 92, 94, 96, 102, 104][Math.floor(r() * 7)];
+  const [M, D] = [[5, 4.4], [7, 6.1], [10, 8.2]][Math.floor(r() * 3)];
+  const bp = [25, 50, 75, 100][Math.floor(r() * 4)];
+  const up = r() < 0.5; // rates rise?
+  const cy = c / price * 100;
+  const chg = (up ? -1 : 1) * D * bp / 100;
+  const newP = price * (1 + chg / 100);
+  const discount = price < 100;
+  const num = s => parseFloat(String(s).replace(/[$,%\s]/g, "").replace(/−/g, "-"));
+  const grade = { cy: Math.abs(num(ans.cy) - cy) <= 0.05, chg: Math.abs(num(ans.chg) - chg) <= 0.05, np: Math.abs(num(ans.np) - newP) <= 0.2 };
+  const fields = [["cy", "Current yield (%)", `${cy.toFixed(2)}%`], ["chg", "Approx. price change (%)", `${chg >= 0 ? "+" : "−"}${Math.abs(chg).toFixed(2)}%`], ["np", "New approx. price", newP.toFixed(2)]];
+  const fresh = () => { setSeed(s => s + 1); setAns({ cy: "", chg: "", np: "" }); setChecked(false); };
+  const check = () => {
+    setChecked(true);
+    recordDrillResult({ src: "coupon", qid: String(seed), ok: Object.values(grade).every(Boolean), front: `${M}-year ${c}% coupon bond at ${price}.00, modified duration ${D}, rates ${up ? "rise" : "fall"} ${bp}bp — current yield, price change, new price?`, back: `CY ${cy.toFixed(2)}% · Δ ${chg >= 0 ? "+" : ""}${chg.toFixed(2)}% · ${newP.toFixed(2)}`, given: `${ans.cy} / ${ans.chg} / ${ans.np}` });
+  };
+  return <div>
+    <p style={{ fontSize: 12.5, color: "#4a443c", lineHeight: 1.8, marginBottom: 6 }}>
+      A <b>{M}-year bond</b> pays a <b>{c}% annual coupon</b> and trades at <b>{price}.00</b> (per 100 par). Its modified duration is <b>≈ {D}</b>. Rates {up ? <b>rise {bp}bp</b> : <b>fall {bp}bp</b>} across the curve. Work it on paper:
+    </p>
+    <p style={{ fontSize: 9.5, color: "#a2977f", marginBottom: 14 }}>Use the duration approximation: %Δprice ≈ −duration × Δyield. Decreases are negative.</p>
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
+      {fields.map(([k, label, sol]) => <div key={k} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ fontSize: 10.5, color: "#6f675c", width: 170, flexShrink: 0 }}>{label}</span>
+        <input value={ans[k]} onChange={e => { setAns(p => ({ ...p, [k]: e.target.value })); setChecked(false); }} style={{ ...S.input, width: 92, fontFamily: "'JetBrains Mono',monospace", fontSize: 12, padding: "6px 10px", textAlign: "right" }} />
+        {checked && <span style={{ fontSize: 12, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: grade[k] ? "#0d6d56" : "#b2342b" }}>{grade[k] ? "✓" : `✗ ${sol}`}</span>}
+      </div>)}
+    </div>
+    <div style={{ display: "flex", gap: 10, marginBottom: checked ? 14 : 0 }}>
+      <button onClick={check} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "7px 18px" }}>Check</button>
+      <button onClick={fresh} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "7px 18px", color: "#6f675c", border: "1px solid #ddcfb8" }}>New problem</button>
+    </div>
+    {checked && <div style={{ borderTop: "1px solid #e9ddc9", paddingTop: 12 }}>
+      <div style={{ fontSize: 8, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 2, marginBottom: 8 }}>Worked solution</div>
+      {[`Current yield = ${c} ÷ ${price} = ${cy.toFixed(2)}%`,
+        `%Δprice ≈ −${D} × ${up ? "+" : "−"}${(bp / 100).toFixed(2)}% = ${chg >= 0 ? "+" : "−"}${Math.abs(chg).toFixed(2)}%`,
+        `New price ≈ ${price} × (1 ${chg >= 0 ? "+" : "−"} ${Math.abs(chg / 100).toFixed(4)}) = ${newP.toFixed(2)}`,
+        discount ? `Trading at a discount: coupon ${c}% < current yield ${cy.toFixed(2)}% < YTM — the pull to par adds return beyond the coupon.` : `Trading at a premium: YTM < current yield ${cy.toFixed(2)}% < coupon ${c}% — part of each coupon is really return OF capital.`
+      ].map((s, i) => <div key={i} style={{ fontSize: 11, color: "#4a443c", fontFamily: "'JetBrains Mono',monospace", lineHeight: 2 }}>{i + 1}. {s}</div>)}
+    </div>}
+    <p style={{ fontSize: 9, color: "#a2977f", marginTop: 12, lineHeight: 1.6 }}>The arithmetic that separates watching the 10-year from understanding it. Annual coupons, linear duration approximation. Fresh numbers daily.</p>
+  </div>;
+}
+
 function EditionStrip() {
   useLearnTick();
   const ed = lsGet("mjb_editions", {});
@@ -2379,6 +2496,16 @@ export default function App() {
           <div id="technicals-desk" style={S.card}>
             <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> The Technicals Desk<Info text="A house bank of original interview technical questions across the eight canonical categories. Browse by category, reveal the answer set in ink, and grade yourself. Grades stay in your browser." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="projects" id="technicals-desk" /></span></h2>
             <TechnicalsDesk />
+          </div>
+        </div>
+        <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16, alignItems: "start" }}>
+          <div id="debt-ledger" style={S.card}>
+            <h2 style={S.cardTitle}><span style={{ color: "#6d549e" }}>◆</span> Drill — The Debt Ledger<Info text="The hard-mode drill between paper LBOs and real models: a seeded term loan with mandatory amortization and a cash sweep. Work the three-year waterfall on paper — interest, amort, sweep, in that order — and check the ending balances and exit leverage against the worked schedule." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="projects" id="debt-ledger" /></span></h2>
+            <DebtLedger />
+          </div>
+          <div id="coupon-desk" style={S.card}>
+            <h2 style={S.cardTitle}><span style={{ color: "#b3551d" }}>◆</span> Drill — The Coupon Desk<Info text="Bond arithmetic drilled as mental math: current yield, the duration approximation for a rate shock, and the new price — plus the premium/discount yield ordering that interviews love. Seeded fresh daily." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="projects" id="coupon-desk" /></span></h2>
+            <CouponDesk />
           </div>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(min(360px,100%),1fr))", gap: 14 }}>{PROJECTS.map((p, i) => <div key={i} style={{ ...S.pCard, ...(hovP === i ? { border: "1px solid #0d6d5650", transform: "translateY(-6px) scale(1.01)", boxShadow: "0 20px 50px rgba(13,109,86,0.12), 0 0 0 1px rgba(13,109,86,0.15), 0 0 40px rgba(13,109,86,0.05)" } : {}), animation: "fadeUp 0.5s ease both", animationDelay: `${i * 0.07}s` }} onMouseEnter={() => setHovP(i)} onMouseLeave={() => setHovP(null)}>
