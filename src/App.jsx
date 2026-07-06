@@ -2285,6 +2285,16 @@ function PuzzleCorner() {
   const [seed, setSeed] = useState(() => Math.floor(Date.now() / 86400000)); // today's edition; "New problem" deals more
   const [ans, setAns] = useState({ eq: "", exit: "", mom: "", irr: "" });
   const [checked, setChecked] = useState(false);
+  // Fading scaffold: 3 consecutive clean solves promote a level, any miss demotes one.
+  const [scaf, setScaf] = useState(() => (lsGet("mjb_scaffold", {}).puzzle || { m: 0, streak: 0 }));
+  const bumpScaffold = allOk => {
+    const next = allOk
+      ? (scaf.streak + 1 >= 3 ? { m: Math.min(4, scaf.m + 1), streak: 0 } : { m: scaf.m, streak: scaf.streak + 1 })
+      : { m: Math.max(0, scaf.m - 1), streak: 0 };
+    setScaf(next);
+    const all = lsGet("mjb_scaffold", {}); all.puzzle = next; lsSet("mjb_scaffold", all);
+    return next;
+  };
   const r = mulberry32(seed);
   const pick = arr => arr[Math.floor(r() * arr.length)];
   const E0 = pick([50, 75, 100, 125, 150, 200]);
@@ -2298,11 +2308,26 @@ function PuzzleCorner() {
   const num = s => parseFloat(String(s).replace(/[$,%x\s]/gi, ""));
   const grade = { eq: Math.abs(num(ans.eq) - Eq0) <= Math.max(1, Eq0 * 0.01), exit: Math.abs(num(ans.exit) - EqN) <= Math.max(1, EqN * 0.01), mom: Math.abs(num(ans.mom) - mom) <= 0.06, irr: Math.abs(num(ans.irr) - irr) <= 1.2 };
   const fields = [["eq", "Equity check ($M)", `${Eq0.toFixed(0)}`], ["exit", "Exit equity ($M)", `${EqN.toFixed(0)}`], ["mom", "Multiple of money (x)", `${mom.toFixed(2)}x`], ["irr", "5-yr IRR (%)", `${irr.toFixed(1)}%`]];
-  const fresh = () => { setSeed(s => s + 1); setAns({ eq: "", exit: "", mom: "", irr: "" }); setChecked(false); };
+  const [scafMsg, setScafMsg] = useState("");
+  const fresh = () => { setSeed(s => s + 1); setAns({ eq: "", exit: "", mom: "", irr: "" }); setChecked(false); setScafMsg(""); };
+  const STEPS = [
+    [`Entry EV = ${entry.toFixed(1)}x × $${E0}M`, `= $${EV0.toFixed(0)}M`],
+    [`Debt = ${debtPct}% × entry EV`, `= $${D.toFixed(0)}M → equity check $${Eq0.toFixed(0)}M`],
+    [`Exit EV = ${exitM.toFixed(1)}x × $${EN}M`, `= $${EVN.toFixed(0)}M`],
+    [`Exit equity = exit EV − debt`, `= $${EqN.toFixed(0)}M`],
+    [`MoM = exit equity ÷ equity check; IRR ≈ MoM^(1/5) − 1`, null],
+  ];
   return <div>
     <p style={{ fontSize: 12.5, color: "#4a443c", lineHeight: 1.8, marginBottom: 14 }}>
       A sponsor buys a company generating <b>${E0}M of EBITDA</b> at <b>{entry.toFixed(1)}x</b>, financed with <b>{debtPct}% debt</b> (interest-only, no paydown). Over five years EBITDA grows to <b>${EN}M</b> and the sponsor exits at <b>{exitM.toFixed(1)}x</b>. Work it on paper:
     </p>
+    {scaf.m < 4 ? <div style={{ border: "1px solid #e9ddc9", borderRadius: 8, background: "#f6eee1", padding: "8px 12px", marginBottom: 14 }}>
+      <div style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#8a8072", letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>Scaffold · level {scaf.m} of 4 · three clean solves fade it a step</div>
+      {STEPS.map(([f, v], i) => <div key={i} style={{ fontSize: 10.5, fontFamily: "'JetBrains Mono',monospace", color: "#6f675c", lineHeight: 1.9, display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
+        <span>{i + 1}. {f}</span>
+        {v && (i < 3 - scaf.m ? <span style={{ color: "#33302c" }}>{v}</span> : <span style={{ display: "inline-block", width: 54, height: 9, background: "#262421", borderRadius: 1, alignSelf: "center" }} title="Set in ink — earn the level or work it yourself" />)}
+      </div>)}
+    </div> : <div style={{ fontSize: 9, fontFamily: "'JetBrains Mono',monospace", color: "#0d6d56", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 14 }}>Scaffold retired — worked cold. A miss brings it back.</div>}
     <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
       {fields.map(([k, label, sol]) => <div key={k} style={{ display: "flex", alignItems: "center", gap: 10 }}>
         <span style={{ fontSize: 10.5, color: "#6f675c", width: 150, flexShrink: 0 }}>{label}</span>
@@ -2311,9 +2336,10 @@ function PuzzleCorner() {
       </div>)}
     </div>
     <div style={{ display: "flex", gap: 10, marginBottom: checked ? 14 : 0 }}>
-      <button onClick={() => { setChecked(true); recordDrillResult({ src: "puzzle", qid: String(seed), ok: Object.values(grade).every(Boolean), front: `Paper LBO: $${E0}M EBITDA at ${entry.toFixed(1)}x, ${debtPct}% debt, EBITDA to $${EN}M, exit ${exitM.toFixed(1)}x — equity check, exit equity, MoM, IRR?`, back: `Equity $${Eq0.toFixed(0)}M → $${EqN.toFixed(0)}M · ${mom.toFixed(2)}x MoM · ~${irr.toFixed(1)}% IRR`, given: `${ans.eq} / ${ans.exit} / ${ans.mom} / ${ans.irr}` }); }} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "7px 18px" }}>Check</button>
+      <button onClick={() => { if (checked) return; setChecked(true); const allOk = Object.values(grade).every(Boolean); const prev = scaf; const next = bumpScaffold(allOk); setScafMsg(allOk ? (next.m > prev.m ? `Clean solve — the scaffold fades to level ${next.m} of 4.` : `Clean solve ${next.streak} of 3 — the scaffold fades at three.`) : (prev.m > 0 || prev.streak > 0 ? `A miss — the scaffold ${next.m < prev.m ? `returns to level ${next.m}` : "stays up"} and the count resets.` : "")); recordDrillResult({ src: "puzzle", qid: String(seed), ok: allOk, front: `Paper LBO: $${E0}M EBITDA at ${entry.toFixed(1)}x, ${debtPct}% debt, EBITDA to $${EN}M, exit ${exitM.toFixed(1)}x — equity check, exit equity, MoM, IRR?`, back: `Equity $${Eq0.toFixed(0)}M → $${EqN.toFixed(0)}M · ${mom.toFixed(2)}x MoM · ~${irr.toFixed(1)}% IRR`, given: `${ans.eq} / ${ans.exit} / ${ans.mom} / ${ans.irr}` }); }} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "7px 18px" }}>Check</button>
       <button onClick={fresh} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "7px 18px", color: "#6f675c", border: "1px solid #ddcfb8" }}>New problem</button>
     </div>
+    {checked && scafMsg && <div style={{ fontSize: 9.5, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, color: scafMsg.startsWith("Clean") ? "#0d6d56" : "#b0741e", marginBottom: 10 }}>{scafMsg.toUpperCase()}</div>}
     {checked && <div style={{ borderTop: "1px solid #e9ddc9", paddingTop: 12 }}>
       <div style={{ fontSize: 8, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 2, marginBottom: 8 }}>Worked solution</div>
       {[`Entry EV = ${entry.toFixed(1)}x × $${E0}M = $${EV0.toFixed(0)}M`,
