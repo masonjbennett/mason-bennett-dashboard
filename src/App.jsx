@@ -83,14 +83,6 @@ const LINKS = [
   { label: "Resume", url: "/resume.pdf", ic: "cv" },
   { label: "Email", url: "mailto:bennettmasonj@gmail.com", ic: "@" },
 ];
-const NEWS_CATS = [
-  { id: "markets", label: "Markets", q: "stock market news today", color: "#0d6d56", count: 15 },
-  { id: "macro", label: "Macro & Fed", q: "Federal Reserve interest rates economic policy", color: "#1f5a9e", count: 5 },
-  { id: "deals", label: "M&A / PE", q: "mergers acquisitions private equity deals", color: "#7d5fb2", count: 10 },
-  { id: "tech", label: "Tech", q: "Big Tech earnings technology sector news", color: "#6d549e", count: 15 },
-  { id: "crypto", label: "Crypto", q: "Bitcoin cryptocurrency market", color: "#b0741e", count: 10 },
-  { id: "global", label: "Global", q: "global economy geopolitics trade", color: "#990f3d", count: 10 },
-];
 const SRC_GUIDE = `SOURCE RULES: PRIORITIZE: Reuters, Bloomberg, CNBC, FT, WSJ, AP, MarketWatch, Barron's, Yahoo Finance, SEC.gov. EXCLUDE: partisan outlets, opinion blogs, editorials, social media. Prefer factual reporting over commentary.`;
 const QLINKS = [
   { n: "Bloomberg", u: "https://bloomberg.com" }, { n: "Reuters", u: "https://reuters.com" },
@@ -101,15 +93,6 @@ const QLINKS = [
   { n: "PitchBook", u: "https://pitchbook.com" },
 ];
 const SRC_URLS = { "Reuters": "https://reuters.com", "Bloomberg": "https://bloomberg.com", "CNBC": "https://cnbc.com", "Wall Street Journal": "https://wsj.com", "WSJ": "https://wsj.com", "Financial Times": "https://ft.com", "FT": "https://ft.com", "MarketWatch": "https://marketwatch.com", "AP": "https://apnews.com", "Yahoo Finance": "https://finance.yahoo.com", "Barron's": "https://barrons.com", "Seeking Alpha": "https://seekingalpha.com" };
-
-// ============ SMART REFRESH ============
-function getSmartInterval() {
-  const now = new Date(), h = now.getHours(), m = now.getMinutes(), d = now.getDay();
-  const mktOpen = d > 0 && d < 6 && ((h === 9 && m >= 30) || (h > 9 && h < 16));
-  const pre = d > 0 && d < 6 && h >= 7 && (h < 9 || (h === 9 && m < 30));
-  if (mktOpen || pre) return { interval: 30, label: "30m (market)" };
-  return { interval: 120, label: "2h (off-hours)" };
-}
 
 // ============ API ============
 function apiHeaders(key) { return { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }; }
@@ -157,12 +140,6 @@ async function callAPI(key, body) {
 function cacheGet(key, maxAgeMin = 30) { try { const c = JSON.parse(localStorage.getItem(key)); if (c && Date.now() - c.ts < maxAgeMin * 60000) return c.data; } catch {} return null; }
 function cacheSet(key, data) { try { localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })); } catch {} }
 
-async function fetchNews(cat, key) {
-  if (!key) return null;
-  const cached = cacheGet(`mb_news_${cat.id}`, 30);
-  if (cached) return cached;
-  try { const d = await callAPI(key, { model: "claude-sonnet-4-20250514", max_tokens: 3000, tools: [{ type: "web_search_20250305", name: "web_search" }], messages: [{ role: "user", content: `Search for the latest ${cat.q}.\n${SRC_GUIDE}\nReturn ONLY a JSON array of top ${cat.count} articles: [{"title":"...","source":"...","summary":"one sentence","url":"...","time":"relative"}]. Raw JSON only.` }] }); const raw = extractText(d); if (!raw) return null; const match = raw.match(/\[[\s\S]*\]/); const result = match ? JSON.parse(match[0]) : JSON.parse(raw); if (result) cacheSet(`mb_news_${cat.id}`, result); return result; } catch (e) { console.error("News fetch error:", e); return null; }
-}
 async function fetchBriefing(type, key, forceRefresh = false) {
   const p = { morning: `Senior equity research analyst morning briefing. Search latest market news. Cover: 1) Overnight global markets 2) Macro/Fed developments 3) Pre-market sector moves 4) M&A/deals 5) What to watch today.\n${SRC_GUIDE}\nCite sources inline [Reuters]. End with ---SOURCES--- then JSON: [{"name":"...","url":"..."}]. Plain paragraphs, no markdown.`, close: `Senior equity research analyst close briefing. Search today's results. Cover: 1) Index closes with % 2) Session drivers 3) Stock movers 4) After-hours 5) Tomorrow watch.\n${SRC_GUIDE}\nCite inline [Reuters]. End with ---SOURCES--- then JSON: [{"name":"...","url":"..."}]. Plain paragraphs, no markdown.` };
   if (!key) return null;
@@ -1013,14 +990,6 @@ return <div style={{...S.card,background:"linear-gradient(135deg,#f6eee1,#fdf8f0
 {soWhat&&showSW&&<div style={{display:"flex",flexDirection:"column",gap:8}}>{soWhat.map((item,i)=><div key={i} style={{padding:"12px 14px",borderRadius:10,background:"#f6eee1",border:"1px solid #e9ddc9",animation:"fadeUp 0.4s ease both",animationDelay:`${i*0.06}s`}}><div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:8}}><span style={{color:"#7d5fb2",fontSize:10,fontFamily:"'JetBrains Mono',monospace",fontWeight:700}}>{String(i+1).padStart(2,"0")}</span><h4 style={{color:"#33302c",fontSize:14,fontWeight:600}}>{item.headline}</h4></div><div style={{paddingLeft:24}}><p style={{color:"#6f675c",fontSize:12,marginBottom:8,lineHeight:1.5}}>{item.development}</p>{[["WHY IT MATTERS","#0d6d56",item.why_it_matters],["WHO AFFECTED","#1f5a9e",item.who_affected],["SECOND ORDER","#b0741e",item.second_order]].map(([l,c,t])=><div key={l} style={{display:"flex",gap:8,marginBottom:5}}><span style={{color:c,fontSize:9,fontFamily:"'JetBrains Mono',monospace",fontWeight:700,minWidth:80,flexShrink:0,paddingTop:2}}>{l}</span><span style={{color:"#4a443c",fontSize:12,lineHeight:1.5}}>{t}</span></div>)}<div style={{marginTop:8,padding:"6px 10px",borderRadius:6,background:"#7d5fb206",border:"1px solid #7d5fb212",display:"flex",alignItems:"baseline",gap:8}}><span style={{color:"#7d5fb2",fontSize:9,fontFamily:"'JetBrains Mono',monospace",fontWeight:700}}>TAKEAWAY</span><span style={{color:"#33302c",fontSize:12,lineHeight:1.5}}>{item.takeaway}</span></div></div></div>)}</div>}
 </div>}
 </div>}
-</div>;}
-
-// ============ NEWS FEED ============
-function NewsFeed({apiKey}){const[articles,setArticles]=useState({}),[loading,setLoading]=useState({}),[activeCat,setActiveCat]=useState("markets"),[lastFetch,setLastFetch]=useState({});const[auto,setAuto]=useState(true),[cd,setCd]=useState(()=>getSmartInterval().interval),[fetchingAll,setFetchingAll]=useState(false),[si,setSi]=useState(()=>getSmartInterval());useEffect(()=>{const iv=setInterval(()=>setSi(getSmartInterval()),60000);return()=>clearInterval(iv)},[]);const fetchCat=useCallback(async cat=>{if(!apiKey)return;setLoading(p=>({...p,[cat.id]:true}));const r=await fetchNews(cat,apiKey);if(r){setArticles(p=>({...p,[cat.id]:r}));setLastFetch(p=>({...p,[cat.id]:new Date()}))}setLoading(p=>({...p,[cat.id]:false}))},[apiKey]);const fetchAll=useCallback(async()=>{setFetchingAll(true);for(let i=0;i<NEWS_CATS.length;i++){await fetchCat(NEWS_CATS[i]);if(i<NEWS_CATS.length-1)await delay(1500);}setFetchingAll(false);setCd(getSmartInterval().interval)},[fetchCat]);useEffect(()=>{if(!auto)return;const iv=setInterval(()=>{setSi(getSmartInterval());setCd(c=>{if(c<=1){fetchAll();return getSmartInterval().interval}return c-1})},60000);return()=>clearInterval(iv)},[auto,fetchAll]);const cat=NEWS_CATS.find(c=>c.id===activeCat),arts=articles[activeCat],total=Object.values(articles).reduce((s,a)=>s+(a?a.length:0),0);
-return <div><Briefings apiKey={apiKey}/><div style={{height:16}}/>
-<div style={{...S.card,marginBottom:14,display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:12}}><div><h2 style={{color:"#33302c",fontSize:20,fontFamily:"'Instrument Serif',serif",marginBottom:3}}>Live News Feed</h2><p style={{color:"#8a8072",fontSize:10,fontFamily:"'JetBrains Mono',monospace"}}>AI web search · {total} articles · {Object.keys(articles).length}/{NEWS_CATS.length}</p></div><div style={{display:"flex",alignItems:"center",gap:10}}><div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:10,color:"#8a8072",fontFamily:"'JetBrains Mono',monospace"}}>Auto</span><button onClick={()=>setAuto(!auto)} style={{width:36,height:20,borderRadius:10,border:"none",cursor:"pointer",background:auto?"#0d6d56":"#e9ddc9",position:"relative",transition:"background 0.3s"}}><div style={{width:16,height:16,borderRadius:8,background:"#fff",position:"absolute",top:2,left:auto?18:2,transition:"left 0.3s cubic-bezier(0.34,1.56,0.64,1)"}}/></button></div><span style={{fontSize:9,color:"#8a8072",fontFamily:"'JetBrains Mono',monospace",padding:"3px 8px",borderRadius:6,background:"#f6eee1",border:"1px solid #e9ddc9"}}>{si.label}</span>{auto&&<span style={{fontSize:10,color:"#6f675c",fontFamily:"'JetBrains Mono',monospace"}}>{cd}m</span>}<button onClick={fetchAll} disabled={fetchingAll} style={{...S.btn,opacity:fetchingAll?0.5:1}}>{fetchingAll?"⟳...":"⟳ Fetch All"}</button></div></div>
-<div style={{display:"flex",gap:5,marginBottom:14,flexWrap:"wrap"}}>{NEWS_CATS.map(c=><button key={c.id} onClick={()=>{setActiveCat(c.id);if(!articles[c.id]&&!loading[c.id])fetchCat(c)}} style={{background:activeCat===c.id?`${c.color}12`:"#f6eee1",border:`1px solid ${activeCat===c.id?`${c.color}30`:"#e9ddc9"}`,color:activeCat===c.id?c.color:"#8a8072",fontSize:11,padding:"7px 14px",borderRadius:8,cursor:"pointer",fontWeight:500,transition:"all 0.2s",display:"flex",alignItems:"center",gap:7}}><span style={{width:5,height:5,borderRadius:3,background:articles[c.id]?c.color:"#e9ddc9",animation:loading[c.id]?"pulse 1s infinite":"none"}}/>{c.label}<span style={{fontSize:9,opacity:0.4}}>({c.count})</span></button>)}</div>
-<div style={S.card}>{!arts&&!loading[activeCat]&&<div style={{textAlign:"center",padding:"50px 20px"}}><p style={{color:"#6f675c",marginBottom:14}}>No {cat.label} articles yet</p><button onClick={()=>fetchCat(cat)} style={{...S.btn,padding:"10px 24px"}}>Fetch {cat.label}</button></div>}{loading[activeCat]&&!arts&&<div style={{display:"flex",flexDirection:"column",gap:14,padding:8}}>{[1,2,3,4,5].map(i=><div key={i} style={{padding:"10px 0",animation:"shimmer 1.5s infinite",animationDelay:`${i*0.12}s`}}><div style={{height:13,width:`${55+Math.random()*35}%`,background:"#e9ddc9",borderRadius:5,marginBottom:8}}/><div style={{height:10,width:`${30+Math.random()*40}%`,background:"#efe4d2",borderRadius:5}}/></div>)}</div>}{arts&&<div><div style={{display:"flex",justifyContent:"space-between",marginBottom:12}}><span style={{fontSize:10,color:cat.color,fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:2}}>{cat.label} · {arts.length}</span><button onClick={()=>fetchCat(cat)} style={{background:"none",border:"none",color:"#8a8072",fontSize:10,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>↻</button></div>{arts.map((a,i)=><a key={i} href={a.url||"#"} target="_blank" rel="noopener noreferrer" style={{display:"block",padding:"10px 10px",borderRadius:8,textDecoration:"none",transition:"all 0.15s",borderLeft:"2px solid transparent"}} onMouseEnter={e=>{e.currentTarget.style.background="#e9ddc918";e.currentTarget.style.borderLeftColor=cat.color+"50"}} onMouseLeave={e=>{e.currentTarget.style.background="transparent";e.currentTarget.style.borderLeftColor="transparent"}}><div style={{display:"flex",gap:10,alignItems:"baseline"}}><span style={{color:`${cat.color}35`,fontSize:9,fontFamily:"'JetBrains Mono',monospace",minWidth:16}}>{String(i+1).padStart(2,"0")}</span><div style={{flex:1}}><h3 style={{color:"#33302c",fontSize:13,fontWeight:500,lineHeight:1.5,marginBottom:4}}>{a.title}</h3><p style={{color:"#6f675c",fontSize:11,lineHeight:1.4,marginBottom:4}}>{a.summary}</p><div style={{display:"flex",gap:14,fontSize:9,fontFamily:"'JetBrains Mono',monospace"}}><span style={{color:cat.color}}>{a.source}</span><span style={{color:"#8a8072"}}>{a.time}</span></div></div></div></a>)}</div>}</div>
 </div>;}
 
 // ============ LBO SANDBOX ============
@@ -2342,7 +2311,7 @@ export default function App() {
           <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> The Standing Wire<Info text="An always-on headline wire from official feeds — Reuters, WSJ, CNBC, MarketWatch, Yahoo Finance. Front Page groups the same story across outlets into one line, Techmeme-style; The River is the raw chronological tape. Every headline links to the publisher. No key required." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="news" id="standing-wire" /></span></h2>
           <StandingWire desk={desk} />
         </div>
-        <NewsFeed apiKey={apiKey} />
+        <Briefings apiKey={apiKey} />
         <div id="filings-wire" style={{ ...S.card, marginTop: 16 }}>
           <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> Filings Wire<Info text="Material corporate events straight from the primary source: 8-K material-event reports, SC 13D activist stakes, and S-1 IPO registrations, live from SEC EDGAR's current-filings feed. Public-domain data; every line links to the filing itself on sec.gov." link="https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent" linkLabel="EDGAR latest filings" /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="news" id="filings-wire" /></span></h2>
           <FilingsWire />
