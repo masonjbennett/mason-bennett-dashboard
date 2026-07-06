@@ -1793,6 +1793,103 @@ function CouponDesk() {
   </div>;
 }
 
+// Redline the Exhibit — the inverted drill: a finished exhibit with ONE planted error,
+// internally consistent so it must be caught on principle, not arithmetic mismatch.
+// Reviewing models for errors is the actual analyst job; no prep product drills it.
+function buildRedline(seed) {
+  const r = mulberry32(seed * 23 + 11);
+  const pick = a => a[Math.floor(r() * a.length)];
+  if (r() < 0.5) {
+    // Unlevered FCF build
+    const EBIT = pick([100, 200, 400]), DA = pick([20, 40, 50]), capex = pick([30, 60, 80]), nwc = pick([10, 20]), intExp = pick([20, 30]);
+    const t = 0.25, NOPAT = EBIT * (1 - t);
+    const err = pick(["interest", "dasign", "nwcsign", "taxbase"]);
+    const rows = [["EBIT", EBIT]];
+    let flawIdx, correct, why;
+    if (err === "interest") {
+      const pre = EBIT - intExp, tax = pre * t;
+      rows.push([`Less: interest expense`, -intExp], ["Pre-tax income", pre], [`Less: taxes (25%)`, -tax], ["NOPAT", pre - tax], ["Plus: D&A", DA], ["Less: capex", -capex], ["Less: increase in NWC", -nwc], ["Unlevered FCF", pre - tax + DA - capex - nwc]);
+      flawIdx = 1; correct = "remove this line entirely";
+      why = "Unlevered free cash flow is measured before any financing: interest belongs to the debt holders' claim, not to the operations being valued. Deducting it here double-counts financing when the cash flows are later discounted at WACC. Tax EBIT directly and never let interest into the build.";
+    } else if (err === "dasign") {
+      rows.push([`Less: taxes (25%)`, -(EBIT * t)], ["NOPAT", NOPAT], ["Less: D&A", -DA], ["Less: capex", -capex], ["Less: increase in NWC", -nwc], ["Unlevered FCF", NOPAT - DA - capex - nwc]);
+      flawIdx = 3; correct = `Plus: D&A  +${DA}`;
+      why = "D&A was already deducted on the way to EBIT, and no cash left the building when it was — so it must be ADDED BACK after taxing, not subtracted again. Subtracting it here removes the same non-cash charge twice.";
+    } else if (err === "nwcsign") {
+      rows.push([`Less: taxes (25%)`, -(EBIT * t)], ["NOPAT", NOPAT], ["Plus: D&A", DA], ["Less: capex", -capex], ["Plus: increase in NWC", nwc], ["Unlevered FCF", NOPAT + DA - capex + nwc]);
+      flawIdx = 5; correct = `Less: increase in NWC  −${nwc}`;
+      why = "Working capital GROWING absorbs cash — receivables and inventory build faster than payables. An increase in net working capital is a use of cash and must be subtracted. Adding it treats tied-up cash as if it were freed.";
+    } else {
+      const wrongTax = (EBIT + DA) * t;
+      rows.push([`Less: taxes (25%)`, -wrongTax], ["NOPAT", EBIT - wrongTax], ["Plus: D&A", DA], ["Less: capex", -capex], ["Less: increase in NWC", -nwc], ["Unlevered FCF", EBIT - wrongTax + DA - capex - nwc]);
+      flawIdx = 1; correct = `Less: taxes (25%)  −${EBIT * t}`;
+      why = `Taxes here were computed on EBITDA (${EBIT} + ${DA}), but the depreciation shield is real: the tax authority sees income AFTER D&A. Tax EBIT — 25% × ${EBIT} = ${EBIT * t} — or the build overstates the government's take and understates FCF.`;
+    }
+    return { title: "Exhibit A — Unlevered Free Cash Flow build ($M)", rows, flawIdx, correct, why };
+  }
+  // Paper-LBO bridge
+  const E0 = pick([80, 100, 120]), entry = pick([8, 9, 10]), debtPct = pick([50, 60]), gf = pick([1.25, 1.5]), exitX = entry + pick([0, 1]);
+  const EV0 = E0 * entry, D = EV0 * debtPct / 100, Q0 = EV0 - D, EN = E0 * gf, EVN = exitX * EN;
+  const err = pick(["evexit", "eqcheck", "mombase", "exitbase"]);
+  let rows, flawIdx, correct, why;
+  if (err === "evexit") {
+    rows = [["Entry EBITDA", E0], [`Entry EV (${entry.toFixed(1)}x)`, EV0], [`Debt (${debtPct}%)`, D], ["Equity check", Q0], ["Exit EBITDA", EN], [`Exit EV (${exitX.toFixed(1)}x)`, EVN], ["Exit equity", EVN], ["Multiple of money", +(EVN / Q0).toFixed(2)]];
+    flawIdx = 6; correct = `Exit equity = ${EVN} − ${D} = ${EVN - D}`;
+    why = "The debt doesn't vanish at exit — the lenders are repaid before the sponsor sees a dollar. Exit equity is exit ENTERPRISE value less net debt. Taking EV as the equity proceeds is the single most common paper-LBO error, and it flatters the multiple of money badly.";
+  } else if (err === "eqcheck") {
+    rows = [["Entry EBITDA", E0], [`Entry EV (${entry.toFixed(1)}x)`, EV0], [`Debt (${debtPct}%)`, D], ["Equity check", EV0 + D], ["Exit EBITDA", EN], [`Exit EV (${exitX.toFixed(1)}x)`, EVN], ["Exit equity", EVN - D], ["Multiple of money", +((EVN - D) / (EV0 + D)).toFixed(2)]];
+    flawIdx = 3; correct = `Equity check = ${EV0} − ${D} = ${Q0}`;
+    why = "Sources must equal uses: the purchase price is funded by debt PLUS equity, so the sponsor's check is EV minus the debt raised — not EV plus it. Adding debt to EV confuses what the company costs with how the cost is split.";
+  } else if (err === "mombase") {
+    rows = [["Entry EBITDA", E0], [`Entry EV (${entry.toFixed(1)}x)`, EV0], [`Debt (${debtPct}%)`, D], ["Equity check", Q0], ["Exit EBITDA", EN], [`Exit EV (${exitX.toFixed(1)}x)`, EVN], ["Exit equity", EVN - D], ["Multiple of money", +((EVN - D) / EV0).toFixed(2)]];
+    flawIdx = 7; correct = `MoM = ${EVN - D} ÷ ${Q0} = ${((EVN - D) / Q0).toFixed(2)}x`;
+    why = "Multiple of money is measured on the sponsor's EQUITY — cash out over cash in. Dividing exit equity by entry enterprise value mixes claims: the denominator must be the equity check, not the whole purchase price. This error understates returns and hides what leverage did.";
+  } else {
+    const wrongEVN = exitX * E0;
+    rows = [["Entry EBITDA", E0], [`Entry EV (${entry.toFixed(1)}x)`, EV0], [`Debt (${debtPct}%)`, D], ["Equity check", Q0], ["Exit EBITDA", EN], [`Exit EV (${exitX.toFixed(1)}x)`, wrongEVN], ["Exit equity", wrongEVN - D], ["Multiple of money", +((wrongEVN - D) / Q0).toFixed(2)]];
+    flawIdx = 5; correct = `Exit EV = ${exitX.toFixed(1)}x × ${EN} = ${EVN}`;
+    why = `The exit multiple applies to EXIT-year EBITDA (${EN}), not the EBITDA the sponsor bought (${E0}). Using the entry-year figure throws away the growth the whole hold period generated — the model literally forgets why the deal worked.`;
+  }
+  return { title: "Exhibit B — Paper LBO bridge ($M)", rows, flawIdx, correct, why };
+}
+function RedlineExhibit() {
+  const [seed, setSeed] = useState(() => Math.floor(Date.now() / 86400000));
+  const [pickIdx, setPickIdx] = useState(null);
+  const [done, setDone] = useState(false);
+  const X = buildRedline(seed);
+  const fmtV = v => typeof v === "number" ? (v < 0 ? `(${Math.abs(+v.toFixed(2))})` : String(+v.toFixed(2))) : v;
+  const fresh = () => { setSeed(s => s + 1); setPickIdx(null); setDone(false); };
+  const submit = () => {
+    if (pickIdx === null || done) return;
+    setDone(true);
+    recordDrillResult({ src: "redline", qid: String(seed), ok: pickIdx === X.flawIdx, front: `Redline: find the planted error in "${X.title}"`, back: `Flawed line: "${X.rows[X.flawIdx][0]}" — ${X.correct}`, given: `picked "${X.rows[pickIdx][0]}"` });
+  };
+  return <div>
+    <p style={{ fontSize: 12.5, color: "#4a443c", lineHeight: 1.8, marginBottom: 6 }}>One line of this finished exhibit is wrong <b>on principle</b> — the arithmetic is internally consistent with the mistake, so a calculator won't save you. Mark the flawed line and submit the redline.</p>
+    <div style={{ fontSize: 9, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, textTransform: "uppercase", margin: "10px 0 6px" }}>{X.title}</div>
+    <div style={{ border: "1px solid #33302c", outline: "1px solid #33302c", outlineOffset: -4, borderRadius: 2, padding: "10px 6px", background: "#fffdf9", marginBottom: 12 }}>
+      {X.rows.map(([label, val], i) => {
+        const isFlaw = done && i === X.flawIdx, isPick = i === pickIdx;
+        return <button key={i} onClick={() => { if (!done) { setPickIdx(i); } }} disabled={done} style={{ display: "flex", width: "100%", justifyContent: "space-between", gap: 12, alignItems: "baseline", background: isFlaw ? "rgba(178,52,43,0.06)" : isPick && !done ? "rgba(13,109,86,0.06)" : "none", border: "none", borderLeft: `2px solid ${isFlaw ? "#b2342b" : isPick ? "#0d6d56" : "transparent"}`, cursor: done ? "default" : "pointer", padding: "5px 10px", textAlign: "left" }}>
+          <span style={{ fontSize: 12, color: "#33302c", textDecoration: isFlaw ? "line-through #b2342b" : "none" }}>{label}</span>
+          <span style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 12, color: isFlaw ? "#b2342b" : "#33302c", textDecoration: isFlaw ? "line-through #b2342b" : "none" }}>{fmtV(val)}</span>
+        </button>;
+      })}
+    </div>
+    <div style={{ display: "flex", gap: 10, marginBottom: done ? 14 : 0, alignItems: "center", flexWrap: "wrap" }}>
+      <button onClick={submit} disabled={pickIdx === null || done} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "7px 18px", opacity: pickIdx === null || done ? 0.5 : 1 }}>Submit the redline</button>
+      <button onClick={fresh} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "7px 18px", color: "#6f675c", border: "1px solid #ddcfb8" }}>New exhibit</button>
+      {pickIdx === null && !done && <span style={{ fontSize: 9.5, color: "#a2977f" }}>Click the line you'd flag.</span>}
+    </div>
+    {done && <div style={{ borderTop: "1px solid #e9ddc9", paddingTop: 12 }}>
+      <div style={{ fontSize: 10, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, textTransform: "uppercase", marginBottom: 6, color: pickIdx === X.flawIdx ? "#0d6d56" : "#b2342b" }}>{pickIdx === X.flawIdx ? "Caught it — the redline stands" : `Missed — you flagged "${X.rows[pickIdx][0]}", which is sound`}</div>
+      <div style={{ fontSize: 11.5, color: "#33302c", fontFamily: "'JetBrains Mono',monospace", marginBottom: 6 }}>Correction: {X.correct}</div>
+      <p style={{ fontSize: 12, color: "#4a443c", lineHeight: 1.7 }}>{X.why}</p>
+    </div>}
+    <p style={{ fontSize: 9, color: "#a2977f", marginTop: 12, lineHeight: 1.6 }}>Reviewing a model for errors is the actual first-year job. Eight planted-error types across two exhibit families, seeded fresh daily.</p>
+  </div>;
+}
+
 function EditionStrip() {
   useLearnTick();
   const ed = lsGet("mjb_editions", {});
@@ -2507,6 +2604,10 @@ export default function App() {
             <h2 style={S.cardTitle}><span style={{ color: "#b3551d" }}>◆</span> Drill — The Coupon Desk<Info text="Bond arithmetic drilled as mental math: current yield, the duration approximation for a rate shock, and the new price — plus the premium/discount yield ordering that interviews love. Seeded fresh daily." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="projects" id="coupon-desk" /></span></h2>
             <CouponDesk />
           </div>
+        </div>
+        <div id="redline" style={{ ...S.card, marginBottom: 16 }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> Drill — Redline the Exhibit<Info text="The inverted drill: a completed exhibit contains exactly one planted error, propagated consistently so it must be caught on principle rather than arithmetic. Click the flawed line, submit the redline, and the correction prints in proofreader's red ink. Model review is the actual analyst job — nothing else drills it." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="projects" id="redline" /></span></h2>
+          <RedlineExhibit />
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(min(360px,100%),1fr))", gap: 14 }}>{PROJECTS.map((p, i) => <div key={i} style={{ ...S.pCard, ...(hovP === i ? { border: "1px solid #0d6d5650", transform: "translateY(-6px) scale(1.01)", boxShadow: "0 20px 50px rgba(13,109,86,0.12), 0 0 0 1px rgba(13,109,86,0.15), 0 0 40px rgba(13,109,86,0.05)" } : {}), animation: "fadeUp 0.5s ease both", animationDelay: `${i * 0.07}s` }} onMouseEnter={() => setHovP(i)} onMouseLeave={() => setHovP(null)}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}><span style={{ fontSize: 9, color: "#8a8072", fontFamily: "JetBrains Mono, monospace", letterSpacing: 1 }}>PROJECT_{String(i + 1).padStart(2, "0")}{p.completed && <span style={{ marginLeft: 8, color: "#a2977f" }}>· {p.completed}</span>}</span><div style={{ display: "flex", alignItems: "center", gap: 6 }}>{p.updated && <span style={{ fontSize: 8, color: "#a2977f", fontFamily: "JetBrains Mono, monospace" }}>Updated {p.updated}</span>}<span style={{ fontSize: 9, padding: "3px 10px", borderRadius: 20, background: p.status === "In Progress" ? "#b0741e08" : "#0d6d5608", color: p.status === "In Progress" ? "#b0741e" : "#0d6d56", fontFamily: "JetBrains Mono, monospace" }}>{p.status}</span></div></div>
