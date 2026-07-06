@@ -630,7 +630,175 @@ function EconCalendar({ apiKey }) {
 }
 
 // ============ NOTES ============
-function Notes(){const[notes,setNotes]=useState(()=>{try{const s=localStorage.getItem("mb_notes");return s?JSON.parse(s):[];}catch{return[];}});const[input,setInput]=useState("");const updateNotes=n=>{setNotes(n);localStorage.setItem("mb_notes",JSON.stringify(n))};const add=()=>{if(!input.trim())return;updateNotes([{text:input.trim(),time:new Date().toLocaleString(),id:Date.now()},...notes]);setInput("")};const rm=id=>updateNotes(notes.filter(n=>n.id!==id));return <section style={S.card}><h2 style={S.cardTitle}><span style={{color:"#990f3d"}}>◆</span> Quick Notes<Info text="Scratch pad for trade ideas, research questions, and reminders. Notes persist in browser localStorage across sessions." /></h2><div style={{display:"flex",gap:8,marginBottom:notes.length?10:0}}><input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>e.key==="Enter"&&add()} placeholder="Trade idea, research note, reminder..." style={{flex:1,background:"#f6eee1",border:"1px solid #e9ddc9",borderRadius:8,padding:"8px 12px",color:"#33302c",fontSize:12,fontFamily:"'Space Grotesk',sans-serif",outline:"none"}}/><button onClick={add} style={{...S.btn,padding:"8px 16px"}}>Add</button></div>{notes.length===0&&<p style={{color:"#8a8072",fontSize:11,textAlign:"center",padding:"8px 0"}}>Jot down ideas, questions, or reminders</p>}{notes.map(n=><div key={n.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 10px",borderRadius:6,background:"#f6eee1",border:"1px solid #e9ddc9",marginBottom:4}}><div><div style={{color:"#33302c",fontSize:12}}>{n.text}</div><div style={{color:"#8a8072",fontSize:9,fontFamily:"'JetBrains Mono',monospace",marginTop:1}}>{n.time}</div></div><button onClick={()=>rm(n.id)} style={{background:"none",border:"none",color:"#8a8072",cursor:"pointer",fontSize:14,padding:"4px 8px"}}>×</button></div>)}</section>;}
+// Market Diary — the notes card upgraded: every entry is datelined AND stamped with the tape
+// at the moment of writing. Tagged entries; "question" entries resurface after 30 days.
+const DIARY_TAGS = [["note", "#6f675c"], ["thesis", "#0d6d56"], ["macro", "#1f5a9e"], ["earnings", "#b0741e"], ["mistake", "#b2342b"], ["question", "#6d549e"]];
+function MarketDiary({ prices, live }) {
+  const [entries, setEntries] = useState(() => {
+    let d = lsGet("mjb_diary", null);
+    if (d === null) {
+      // one-time migration from the old Quick Notes card
+      const old = lsGet("mb_notes", []);
+      d = old.map(n => ({ id: n.id, d: "", time: n.time, text: n.text, tag: "note", stamp: {} }));
+      lsSet("mjb_diary", d);
+      try { localStorage.removeItem("mb_notes"); } catch {}
+    }
+    return d;
+  });
+  const [input, setInput] = useState("");
+  const [tag, setTag] = useState("note");
+  const save = n => { setEntries(n); lsSet("mjb_diary", n); };
+  const stampNow = () => {
+    const st = {};
+    if (live && prices) { const s = prices.find(p => p.symbol === "SPY"); if (s && s.price !== "—") { st.spy = parseFloat(s.price); st.chg = parseFloat(s.change); } }
+    try { const c = cacheGet("mjb_tsy_curve", 1440); if (c && c.length && c[c.length - 1].p[120] != null) st.tenY = c[c.length - 1].p[120]; } catch {}
+    return st;
+  };
+  const add = () => {
+    if (!input.trim()) return;
+    save([{ id: Date.now(), d: todayISO(), time: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }), text: input.trim(), tag, stamp: stampNow() }, ...entries]);
+    setInput(""); setTag("note");
+  };
+  const rm = id => save(entries.filter(n => n.id !== id));
+  const resolve = id => save(entries.map(n => n.id === id ? { ...n, resolved: true } : n));
+  const openQs = entries.filter(n => n.tag === "question" && !n.resolved && n.d && n.d <= addDaysISO(-30));
+  const stampStr = st => [st.spy ? `SPY ${st.spy.toFixed(2)} ${st.chg >= 0 ? "+" : "−"}${Math.abs(st.chg).toFixed(2)}%` : "", st.tenY ? `10Y ${st.tenY.toFixed(2)}%` : ""].filter(Boolean).join(" · ");
+  const tagColor = t => (DIARY_TAGS.find(x => x[0] === t) || DIARY_TAGS[0])[1];
+  return <section style={S.card}>
+    <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> Market Diary<Info text="A dated journal that stamps each entry with the tape at the moment of writing — SPY and the 10-year — so you can reread what you thought next to what the market was doing. Tag entries; open questions resurface after 30 days. Lives in this browser only." /></h2>
+    {openQs.length > 0 && <div style={{ marginBottom: 10, padding: "8px 12px", borderRadius: 8, background: "rgba(109,84,158,0.06)", border: "1px solid rgba(109,84,158,0.25)" }}>
+      {openQs.slice(0, 2).map(q => <div key={q.id} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "2px 0" }}>
+        <span style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#6d549e", letterSpacing: 1.5, flexShrink: 0 }}>STILL OPEN?</span>
+        <span style={{ fontSize: 11.5, color: "#4a443c", flex: 1, lineHeight: 1.5 }}>{q.text}</span>
+        <button onClick={() => resolve(q.id)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 9, fontFamily: "'JetBrains Mono',monospace", color: "#0d6d56", padding: 0, textDecoration: "underline dotted", textUnderlineOffset: 2, flexShrink: 0 }}>RESOLVED</button>
+      </div>)}
+    </div>}
+    <div style={{ display: "flex", gap: 6, marginBottom: entries.length ? 10 : 0, flexWrap: "wrap" }}>
+      <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === "Enter" && add()} placeholder="What do you think, and why —" style={{ flex: 1, minWidth: 160, background: "#f6eee1", border: "1px solid #e9ddc9", borderRadius: 8, padding: "8px 12px", color: "#33302c", fontSize: 12, fontFamily: "'Space Grotesk',sans-serif", outline: "none" }} />
+      <select value={tag} onChange={e => setTag(e.target.value)} style={{ ...S.input, width: "auto", fontSize: 10, padding: "6px 8px", fontFamily: "'JetBrains Mono',monospace" }}>{DIARY_TAGS.map(([t]) => <option key={t} value={t}>{t}</option>)}</select>
+      <button onClick={add} style={{ ...S.btn, padding: "8px 16px" }}>File</button>
+    </div>
+    {entries.length === 0 && <p style={{ color: "#8a8072", fontSize: 11, textAlign: "center", padding: "8px 0" }}>Theses, questions, mistakes — filed with the tape they were written against.</p>}
+    {entries.slice(0, 8).map(n => <div key={n.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, padding: "7px 10px", borderRadius: 6, background: "#f6eee1", border: "1px solid #e9ddc9", marginBottom: 4 }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ color: "#33302c", fontSize: 12, lineHeight: 1.55 }}>{n.text}{n.resolved && <span style={{ fontSize: 8.5, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", marginLeft: 6 }}>RESOLVED</span>}</div>
+        <div style={{ color: "#8a8072", fontSize: 8.5, fontFamily: "'JetBrains Mono',monospace", marginTop: 2, letterSpacing: 0.5 }}>
+          <span style={{ color: tagColor(n.tag), textTransform: "uppercase", letterSpacing: 1.5 }}>{n.tag}</span>
+          {" · "}{n.d || ""}{n.time ? ` ${n.time}` : ""}{stampStr(n.stamp || {}) ? ` · ${stampStr(n.stamp)}` : ""}
+        </div>
+      </div>
+      <button onClick={() => rm(n.id)} style={{ background: "none", border: "none", color: "#8a8072", cursor: "pointer", fontSize: 14, padding: "0 4px", flexShrink: 0 }}>×</button>
+    </div>)}
+    {entries.length > 8 && <div style={{ fontSize: 9, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, marginTop: 4 }}>+ {entries.length - 8} earlier entries on file</div>}
+  </section>;
+}
+
+// Positions Ledger — the paper book. Fills at the live quote at click time; every buy requires a
+// one-line thesis. Cost basis is stored at trade time, so no historical data is needed. Desk-only.
+function PositionsLedger() {
+  const [book, setBook] = useState(() => lsGet("mjb_paper", { cash: 100000, positions: [], blotter: [] }));
+  const [form, setForm] = useState({ t: "", sh: "", thesis: "" });
+  const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [marks, setMarks] = useState({});
+  const save = b => { setBook(b); lsSet("mjb_paper", b); };
+  const held = book.positions.map(p => p.ticker).join(",");
+  useEffect(() => {
+    if (!held) return;
+    let on = true;
+    (async () => {
+      try {
+        const cached = cacheGet("mjb_paper_marks", 5); if (cached) { if (on) setMarks(cached); return; }
+        const r = await fetch(`/api/quotes?symbols=${held}`);
+        if (!r.ok) return;
+        const d = await r.json();
+        const m = {}; held.split(",").forEach(t => { if (d[t] && d[t].c) m[t] = d[t].c; });
+        if (on && Object.keys(m).length) { setMarks(m); cacheSet("mjb_paper_marks", m); }
+      } catch {}
+    })();
+    return () => { on = false; };
+  }, [held]);
+  const trade = async action => {
+    setMsg(""); setBusy(true);
+    try {
+      const t = form.t.trim().toUpperCase(), sh = Math.floor(+form.sh), thesis = form.thesis.trim();
+      if (!/^[A-Z.]{1,10}$/.test(t) || !(sh > 0)) return setMsg("A ticker and a whole-share count, please.");
+      if (action === "buy" && thesis.length < 8) return setMsg("No thesis, no fill — one honest line first.");
+      let px = null;
+      try { const r = await fetch(`/api/quotes?symbols=${t}`); if (r.ok) { const d = await r.json(); if (d[t] && d[t].c) px = d[t].c; } } catch {}
+      if (!px) return setMsg("No fill — quote unavailable (unknown ticker, or the wire is down).");
+      const b = { cash: book.cash, positions: [...book.positions], blotter: [...book.blotter] };
+      const i = b.positions.findIndex(p => p.ticker === t);
+      if (action === "buy") {
+        const cost = px * sh;
+        if (cost > b.cash) return setMsg(`Insufficient cash — cost $${cost.toFixed(0)} against $${b.cash.toFixed(0)} available.`);
+        b.cash -= cost;
+        if (i < 0) b.positions.push({ ticker: t, shares: sh, basis: px, entryDate: todayISO(), thesis });
+        else { const p = b.positions[i]; b.positions[i] = { ...p, basis: (p.basis * p.shares + cost) / (p.shares + sh), shares: p.shares + sh, thesis: thesis || p.thesis }; }
+      } else {
+        if (i < 0 || b.positions[i].shares < sh) return setMsg("The book doesn't hold that many shares.");
+        b.cash += px * sh;
+        const p = b.positions[i];
+        if (p.shares === sh) b.positions.splice(i, 1); else b.positions[i] = { ...p, shares: p.shares - sh };
+      }
+      b.blotter.unshift({ d: todayISO(), time: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }), action, ticker: t, shares: sh, price: px, thesis: action === "buy" ? thesis : "" });
+      if (b.blotter.length > 60) b.blotter.length = 60;
+      save(b);
+      setForm({ t: "", sh: "", thesis: "" });
+      try { localStorage.removeItem("mjb_paper_marks"); } catch {}
+    } finally { setBusy(false); }
+  };
+  const reset = () => {
+    if (!confirmReset) { setConfirmReset(true); return; }
+    const arch = lsGet("mjb_paper_archive", []);
+    arch.unshift({ closed: todayISO(), book });
+    lsSet("mjb_paper_archive", arch);
+    save({ cash: 100000, positions: [], blotter: [] });
+    setConfirmReset(false);
+  };
+  const mark = p => marks[p.ticker] || null;
+  const mv = book.positions.reduce((s, p) => s + p.shares * (mark(p) || p.basis), 0);
+  const fmt$ = v => `$${v.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+  return <div>
+    <div style={{ display: "flex", gap: 18, flexWrap: "wrap", alignItems: "baseline", marginBottom: 12, fontFamily: "'JetBrains Mono',monospace" }}>
+      <span style={{ fontSize: 12, color: "#33302c" }}><span style={{ fontSize: 8.5, color: "#8a8072", letterSpacing: 1.5 }}>BOOK </span>{fmt$(book.cash + mv)}</span>
+      <span style={{ fontSize: 12, color: "#33302c" }}><span style={{ fontSize: 8.5, color: "#8a8072", letterSpacing: 1.5 }}>CASH </span>{fmt$(book.cash)}</span>
+      <span style={{ fontSize: 12, color: book.cash + mv >= 100000 ? "#0d6d56" : "#b2342b" }}><span style={{ fontSize: 8.5, color: "#8a8072", letterSpacing: 1.5 }}>SINCE OPEN </span>{book.cash + mv >= 100000 ? "+" : "−"}{Math.abs((book.cash + mv) / 100000 - 1).toLocaleString(undefined, { style: "percent", minimumFractionDigits: 2 })}</span>
+      <button onClick={reset} onBlur={() => setConfirmReset(false)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", fontSize: 8.5, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, textTransform: "uppercase", color: confirmReset ? "#b2342b" : "#8a8072", textDecoration: "underline dotted", textUnderlineOffset: 3 }}>{confirmReset ? "Click again — archives this book" : "Reset the book"}</button>
+    </div>
+    {book.positions.length === 0 && <p style={{ color: "#8a8072", fontSize: 12, textAlign: "center", padding: "10px 0", lineHeight: 1.7 }}>An empty book and $100,000 of paper. Every buy requires a one-line thesis — the ledger is a journal wearing a P&L.</p>}
+    {book.positions.map((p, i) => {
+      const m = mark(p), pnl = m ? (m - p.basis) * p.shares : null, pct = m ? (m / p.basis - 1) * 100 : null;
+      return <div key={p.ticker} style={{ borderTop: i ? "1px solid #efe4d2" : "1px solid #ddcfb8", padding: "8px 2px" }}>
+        <div style={{ display: "flex", gap: 12, alignItems: "baseline", fontFamily: "'JetBrains Mono',monospace", fontSize: 11.5, flexWrap: "wrap" }}>
+          <span style={{ color: "#0d6d56", fontWeight: 700, minWidth: 44 }}>{p.ticker}</span>
+          <span style={{ color: "#6f675c" }}>{p.shares} sh @ {p.basis.toFixed(2)}</span>
+          <span style={{ color: "#33302c" }}>{m ? `last ${m.toFixed(2)}` : "mark pending"}</span>
+          {pnl != null && <span style={{ color: pnl >= 0 ? "#0d6d56" : "#b2342b", fontWeight: 600, marginLeft: "auto" }}>{pnl >= 0 ? "+" : "−"}${Math.abs(pnl).toFixed(0)} ({pct >= 0 ? "+" : "−"}{Math.abs(pct).toFixed(1)}%)</span>}
+        </div>
+        <div style={{ fontSize: 10.5, color: "#8a8072", fontStyle: "italic", marginTop: 2, lineHeight: 1.5 }}>“{p.thesis}” <span style={{ fontStyle: "normal", fontSize: 8, fontFamily: "'JetBrains Mono',monospace" }}>— {p.entryDate}</span></div>
+      </div>;
+    })}
+    <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 12 }}>
+      <input value={form.t} onChange={e => setForm({ ...form, t: e.target.value })} placeholder="Ticker" style={{ ...S.input, width: 66, fontSize: 10.5, padding: "6px 8px", fontFamily: "'JetBrains Mono',monospace" }} />
+      <input value={form.sh} onChange={e => setForm({ ...form, sh: e.target.value })} placeholder="Shares" style={{ ...S.input, width: 60, fontSize: 10.5, padding: "6px 8px", fontFamily: "'JetBrains Mono',monospace", textAlign: "right" }} />
+      <input value={form.thesis} onChange={e => setForm({ ...form, thesis: e.target.value })} placeholder="Thesis — required to buy" style={{ ...S.input, flex: 1, minWidth: 150, fontSize: 11, padding: "6px 9px" }} />
+      <button onClick={() => trade("buy")} disabled={busy} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "6px 14px", opacity: busy ? 0.5 : 1 }}>Buy</button>
+      <button onClick={() => trade("sell")} disabled={busy} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "6px 14px", color: "#b2342b", border: "1px solid #b2342b30", opacity: busy ? 0.5 : 1 }}>Sell</button>
+    </div>
+    {msg && <div style={{ marginTop: 8, fontSize: 10.5, color: "#b2342b" }}>{msg}</div>}
+    {book.blotter.length > 0 && <div style={{ marginTop: 12, borderTop: "1px solid #ddcfb8", paddingTop: 8 }}>
+      <div style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#8a8072", letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>Blotter</div>
+      {book.blotter.slice(0, 6).map((x, i) => <div key={i} style={{ display: "flex", gap: 10, alignItems: "baseline", fontFamily: "'JetBrains Mono',monospace", fontSize: 10, padding: "2px 0" }}>
+        <span style={{ color: "#a2977f", fontSize: 8, minWidth: 92 }}>{x.d} {x.time}</span>
+        <span style={{ color: x.action === "buy" ? "#0d6d56" : "#b2342b", textTransform: "uppercase", letterSpacing: 1, minWidth: 32 }}>{x.action}</span>
+        <span style={{ color: "#33302c" }}>{x.shares} {x.ticker} @ {x.price.toFixed(2)}</span>
+      </div>)}
+    </div>}
+    <SourceLine>Paper only — fills simulated at the last trade, no spread or commissions · marks via the live tape, 5-min cache · the book lives in this browser</SourceLine>
+  </div>;
+}
 
 // ============ HERO + CMD ============
 function Hero(){const[ph,setPh]=useState(0);useEffect(()=>{const timers=[setTimeout(()=>setPh(1),350),setTimeout(()=>setPh(2),1000),setTimeout(()=>setPh(3),1800),setTimeout(()=>setPh(4),2600)];return()=>timers.forEach(clearTimeout)},[]);return <div style={{position:"fixed",inset:0,background:"#faf3ea",zIndex:9999,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",transition:"opacity 1s ease",opacity:ph>=4?0:1,pointerEvents:ph>=4?"none":"all"}} onClick={()=>setPh(4)}><div style={{position:"absolute",width:600,height:600,borderRadius:"50%",background:"radial-gradient(circle,rgba(13,109,86,0.06) 0%,transparent 70%)",animation:"breathe 4s ease-in-out infinite"}}/><div style={{position:"absolute",width:400,height:400,borderRadius:"50%",background:"radial-gradient(circle,rgba(31,90,158,0.04) 0%,transparent 70%)",animation:"breathe 5s ease-in-out infinite",animationDelay:"1s",left:"35%",top:"55%"}}/><div style={{position:"absolute",top:0,left:0,right:0,height:10,background:"#2b2825"}}/><div style={{position:"absolute",top:10,left:0,right:0,height:2,background:"#0d6d56",transform:ph>=1?"scaleX(1)":"scaleX(0)",transition:"transform 1.2s cubic-bezier(0.4,0,0.2,1)"}}/><div style={{position:"relative",textAlign:"center"}}><div style={{fontSize:12,fontFamily:"'JetBrains Mono',monospace",color:"#0d6d56",letterSpacing:8,textTransform:"uppercase",marginBottom:28,opacity:ph>=1?1:0,transform:`translateY(${ph>=1?0:10}px)`,transition:"all 0.8s cubic-bezier(0.4,0,0.2,1)"}}>masonjbennett.com</div><div style={{width:360,maxWidth:"72vw",margin:"0 auto 26px",borderTop:"1px solid #33302c",borderBottom:"1px solid #33302c",height:5,transform:ph>=2?"scaleX(1)":"scaleX(0)",transition:"transform 0.9s cubic-bezier(0.4,0,0.2,1)"}}/><h1 className="hero-name" style={{fontSize:72,fontWeight:400,fontFamily:"'Instrument Serif',serif",color:"#262421",lineHeight:1,marginBottom:18,opacity:ph>=2?1:0,transform:`translateY(${ph>=2?0:20}px) scale(${ph>=2?1:0.95})`,transition:"all 1s cubic-bezier(0.4,0,0.2,1)",letterSpacing:"-0.02em"}}>Mason J. Bennett</h1><p className="hero-sub" style={{fontSize:15,color:"#6f675c",letterSpacing:2,opacity:ph>=3?1:0,transform:`translateY(${ph>=3?0:10}px)`,transition:"all 0.8s cubic-bezier(0.4,0,0.2,1)",fontFamily:"'Space Grotesk',sans-serif"}}>M.S. Finance '26 · University of Arkansas · Dallas–Fort Worth, TX</p><div style={{width:60,margin:"26px auto 0",borderTop:"1px solid #0d6d56",transform:ph>=3?"scaleX(1)":"scaleX(0)",transition:"transform 0.8s cubic-bezier(0.4,0,0.2,1)"}}/><div style={{display:"flex",gap:16,marginTop:24,justifyContent:"center",opacity:ph>=3?1:0,transform:`translateY(${ph>=3?0:10}px)`,transition:"all 0.8s cubic-bezier(0.4,0,0.2,1) 0.2s"}}>{["IB","PE","WM","CF"].map(t=><span key={t} style={{fontSize:10,padding:"4px 14px",borderRadius:20,border:"1px solid rgba(13,109,86,0.2)",color:"#0d6d56",fontFamily:"'JetBrains Mono',monospace",letterSpacing:2,background:"rgba(13,109,86,0.05)"}}>{t}</span>)}</div></div><div style={{position:"absolute",bottom:36,fontSize:9,color:"#a2977f",fontFamily:"'JetBrains Mono',monospace",letterSpacing:3,textTransform:"uppercase",opacity:ph>=1&&ph<4?0.8:0,transition:"opacity 1.2s"}}>click anywhere to skip</div></div>;}
@@ -1942,7 +2110,7 @@ export default function App() {
               <h2 style={S.cardTitle}><span style={{ color: "#1f5a9e" }}>◆</span> Quick Links<Info text="One-click access to essential finance platforms — Bloomberg, Reuters, EDGAR, TradingView, and more." /></h2>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>{QLINKS.map(s => <a key={s.n} href={s.u} target="_blank" rel="noopener noreferrer" style={{...S.chip, boxShadow: "0 2px 6px rgba(64,52,32,0.05)"}} onMouseEnter={e => { e.currentTarget.style.borderColor = "#0d6d5640"; e.currentTarget.style.color = "#0d6d56"; e.currentTarget.style.background = "rgba(13,109,86,0.06)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(13,109,86,0.08)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={e => { e.currentTarget.style.borderColor = "#e9ddc9"; e.currentTarget.style.color = "#6f675c"; e.currentTarget.style.background = "rgba(255,253,249,0.85)"; e.currentTarget.style.boxShadow = "0 2px 6px rgba(64,52,32,0.05)"; e.currentTarget.style.transform = "none"; }}>{s.n}</a>)}</div>
             </section>
-            <div style={{ animation: "fadeUp 0.5s ease 0.16s both" }}><Notes /></div>
+            <div style={{ animation: "fadeUp 0.5s ease 0.16s both" }}><MarketDiary prices={prices} live={pricesLive} /></div>
           </div>
         </div>
         <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
@@ -1963,10 +2131,13 @@ export default function App() {
             <MacroLedger />
           </section>
         </div>
-        <div style={{ ...S.card, animation: "fadeUp 0.5s ease 0.4s both" }}>
+        {desk ? <div style={{ ...S.card, animation: "fadeUp 0.5s ease 0.4s both" }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#6d549e" }}>◆</span> Positions Ledger — The Paper Book<Info text="A paper-trading book marked to the live tape. Fills execute at the last trade when you click; every buy demands a one-line thesis, printed beside the position so your past reasoning confronts your P&L. Reset archives the old book rather than deleting it. Private to this browser." /></h2>
+          <PositionsLedger />
+        </div> : <div style={{ ...S.card, animation: "fadeUp 0.5s ease 0.4s both" }}>
           <h2 style={S.cardTitle}><span style={{ color: "#6d549e" }}>◆</span> Portfolio Allocation<Info text="Sample asset allocation by weight — illustrative, not investment advice. Hover the donut to see individual holdings." link="https://www.investopedia.com/terms/a/assetallocation.asp" linkLabel="Asset allocation basics" /><span style={{ marginLeft: "auto", fontSize: 8, padding: "3px 8px", borderRadius: 8, background: "rgba(176,116,30,0.08)", color: "#b0741e", border: "1px solid rgba(176,116,30,0.25)", letterSpacing: 1 }}>SAMPLE</span></h2>
           <div className="portfolio-layout" style={{ display: "flex", gap: 40, alignItems: "center", flexWrap: "wrap" }}><Donut data={PORTFOLIO} size={200} /><div style={{ flex: 1, minWidth: 300 }}><table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr>{["Ticker", "Name", "Type", "Weight"].map(h => <th key={h} style={{ textAlign: h === "Weight" ? "right" : "left", padding: "10px 12px", fontSize: 9, textTransform: "uppercase", letterSpacing: 2, color: "#8a8072", fontFamily: "JetBrains Mono, monospace", borderBottom: "1px solid #e9ddc9" }}>{h}</th>)}</tr></thead><tbody>{PORTFOLIO.map(p => <tr key={p.ticker} style={{ borderBottom: "1px solid #e9ddc910" }} onMouseEnter={e => e.currentTarget.style.background = "#e9ddc910"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}><td style={{ padding: "12px", fontSize: 13, color: "#0d6d56", fontWeight: 700, fontFamily: "JetBrains Mono, monospace" }}>{p.ticker}</td><td style={{ padding: "12px", fontSize: 13, color: "#6f675c" }}>{p.name}</td><td style={{ padding: "12px" }}><span style={{ fontSize: 10, padding: "3px 10px", borderRadius: 20, background: p.type === "ETF" ? "#1f5a9e10" : p.type === "Crypto" ? "#b0741e10" : "#0d6d5610", color: p.type === "ETF" ? "#1f5a9e" : p.type === "Crypto" ? "#b0741e" : "#0d6d56" }}>{p.type}</span></td><td style={{ padding: "12px", fontFamily: "JetBrains Mono, monospace", fontSize: 13, color: "#6f675c" }}><div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}><div style={{ width: 80, height: 4, background: "#f6eee1", borderRadius: 2, overflow: "hidden" }}><div style={{ width: `${p.weight * 3.3}%`, height: "100%", background: "linear-gradient(90deg,#0d6d56,#1f5a9e)", borderRadius: 2 }} /></div>{p.weight}%</div></td></tr>)}</tbody></table></div></div>
-        </div>
+        </div>}
       </div>}
 
       {tab === "news" && <div style={{ animation: "fadeUp 0.4s ease both" }}><Kicker n="04" t="News & Briefings" />
