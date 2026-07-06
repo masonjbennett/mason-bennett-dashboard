@@ -5,9 +5,9 @@
 const SOURCES = {
   cnbc: { label: "CNBC", url: "https://www.cnbc.com/id/100003114/device/rss/rss.html", paywall: false, priority: 2 },
   cnbcmkts: { label: "CNBC Markets", url: "https://www.cnbc.com/id/20910258/device/rss/rss.html", paywall: false, priority: 2 },
-  wsj: { label: "WSJ Markets", url: "https://feeds.a.dj.com/rss/RSSMarketsMain.xml", paywall: true, priority: 1 },
+  // NOTE: the old feeds.a.dj.com family froze in Jan 2025 — use feeds.content.dowjones.io only
+  wsj: { label: "WSJ Markets", url: "https://feeds.content.dowjones.io/public/rss/RSSMarketsMain", paywall: true, priority: 1 },
   mw: { label: "MarketWatch", url: "https://feeds.content.dowjones.io/public/rss/mw_topstories", paywall: false, priority: 3 },
-  mwpulse: { label: "MarketWatch Pulse", url: "https://feeds.content.dowjones.io/public/rss/mw_marketpulse", paywall: false, priority: 3 },
   yahoo: { label: "Yahoo Finance", url: "https://finance.yahoo.com/news/rssindex", paywall: false, priority: 4 },
   reuters: { label: "Reuters", url: "https://news.google.com/rss/search?q=site:reuters.com%20business%20when:1d&hl=en-US&gl=US&ceid=US:en", paywall: false, priority: 0 },
 };
