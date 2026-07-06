@@ -689,6 +689,8 @@ function clusterWire(items) {
     .sort((a, b) => Math.max(b.lead.ts, ...b.also.map(x => x.ts)) - Math.max(a.lead.ts, ...a.also.map(x => x.ts)));
 }
 const wireAgo = ts => { if (!ts) return ""; const m = Math.max(1, Math.round((Date.now() - ts) / 60000)); return m < 60 ? `${m}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`; };
+// Reading-diet log for the Circulation Audit: which sources Mason actually clicks (ring buffer, local only)
+function logRead(it) { const r = lsGet("mjb_reads", []); r.push({ d: todayISO(), label: it.label }); if (r.length > 500) r.splice(0, r.length - 500); lsSet("mjb_reads", r); }
 function clipHeadline(it) {
   const c = lsGet("mjb_clippings", []);
   if (c.some(x => x.link === it.link)) return;
@@ -743,7 +745,7 @@ function StandingWire({ desk }) {
   const items = wire.items
     .filter(x => !mut.some(k => x.title.toLowerCase().includes(k)))
     .filter(x => { const k = x.title.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
-  const Head = ({ it, size = 15 }) => <a href={it.link} target="_blank" rel="noopener noreferrer" style={{ fontFamily: "'Instrument Serif',serif", fontSize: size, color: "#262421", textDecoration: "none", lineHeight: 1.35 }} onMouseEnter={e => e.currentTarget.style.color = "#0d6d56"} onMouseLeave={e => e.currentTarget.style.color = "#262421"}>{it.title}{it.paywall && <sup style={{ fontSize: 9, color: "#b0741e" }}> †</sup>}</a>;
+  const Head = ({ it, size = 15 }) => <a href={it.link} target="_blank" rel="noopener noreferrer" onClick={() => logRead(it)} style={{ fontFamily: "'Instrument Serif',serif", fontSize: size, color: "#262421", textDecoration: "none", lineHeight: 1.35 }} onMouseEnter={e => e.currentTarget.style.color = "#0d6d56"} onMouseLeave={e => e.currentTarget.style.color = "#262421"}>{it.title}{it.paywall && <sup style={{ fontSize: 9, color: "#b0741e" }}> †</sup>}</a>;
   const Clip = ({ it }) => desk ? <button onClick={() => clipHeadline(it)} title="Clip for the editor's file" style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8072", fontSize: 8, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, padding: 0, textDecoration: "underline dotted", textUnderlineOffset: 2 }}>CLIP</button> : null;
   let body;
   if (mode === "front") {
@@ -754,7 +756,8 @@ function StandingWire({ desk }) {
       <div style={{ fontSize: 8.5, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", marginTop: 3, letterSpacing: 0.5, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "baseline" }}>
         <span style={{ color: "#8a8072", fontWeight: 600 }}>{c.lead.label}</span>
         <span>{wireAgo(c.lead.ts)}</span>
-        {c.also.length > 0 && <span>also: {c.also.slice(0, 4).map((a, j) => <a key={a.link} href={a.link} target="_blank" rel="noopener noreferrer" style={{ color: "#6f675c", textDecoration: "underline dotted", textUnderlineOffset: 2 }}>{a.label}{j < Math.min(c.also.length, 4) - 1 ? " · " : ""}</a>)}</span>}
+        {c.also.length > 0 && <span>also: {c.also.slice(0, 4).map((a, j) => <a key={a.link} href={a.link} target="_blank" rel="noopener noreferrer" onClick={() => logRead(a)} style={{ color: "#6f675c", textDecoration: "underline dotted", textUnderlineOffset: 2 }}>{a.label}{j < Math.min(c.also.length, 4) - 1 ? " · " : ""}</a>)}</span>}
+        {c.also.length === 0 && c.lead.ts > Date.now() - 6 * 3600000 && <span style={{ color: "#990f3d", letterSpacing: 1.5 }}>SOLE SOURCE</span>}
         <Clip it={c.lead} />
       </div>
     </div>);
@@ -777,6 +780,143 @@ function StandingWire({ desk }) {
     {body}
     {desk && <ClippingsBoard />}
     <SourceLine>Sources: Reuters (via Google News) · WSJ† · CNBC · MarketWatch · Yahoo Finance · headlines link to the publisher · † subscription · 10-min cache</SourceLine>
+  </div>;
+}
+
+// The Reading Ledger: latest issue titles from the newsletter rack (Substack /feed convention).
+// Titles + links only — reading happens at the publisher.
+function ReadingLedger() {
+  const [items, setItems] = useState(null);
+  useEffect(() => {
+    let on = true;
+    (async () => {
+      try {
+        const cached = cacheGet("mjb_letters", 60); if (cached) { if (on) setItems(cached); return; }
+        const r = await fetch("/api/rss?src=netinterest,thediff,transcript,apricitas");
+        if (!r.ok) return;
+        const d = await r.json();
+        if (d.items && d.items.length && on) { setItems(d.items); cacheSet("mjb_letters", d.items); }
+      } catch {}
+    })();
+    return () => { on = false; };
+  }, []);
+  if (!items) return <p style={{ color: "#8a8072", fontSize: 12, textAlign: "center", padding: "12px 0", lineHeight: 1.6 }}>The serious-reading rack — latest issues of Net Interest, The Diff, The Transcript, and Apricitas, straight from their feeds.<br /><span style={{ fontSize: 10, color: "#a2977f" }}>Live in production</span></p>;
+  const pubs = {};
+  items.forEach(x => { (pubs[x.label] = pubs[x.label] || []).push(x); });
+  const rows = Object.entries(pubs)
+    .map(([label, xs]) => ({ label, latest: [...xs].sort((a, b) => b.ts - a.ts).slice(0, 2) }))
+    .filter(p => p.latest[0] && p.latest[0].ts > Date.now() - 60 * 86400000)
+    .sort((a, b) => b.latest[0].ts - a.latest[0].ts);
+  return <div>
+    {rows.map((p, i) => <div key={p.label} style={{ borderTop: i ? "1px solid #efe4d2" : "none", padding: "9px 2px" }}>
+      <div style={{ fontSize: 8.5, fontFamily: "'JetBrains Mono',monospace", color: "#1f5a9e", letterSpacing: 2, textTransform: "uppercase", marginBottom: 3 }}>{p.label}</div>
+      {p.latest.map((x, j) => <div key={x.link} style={{ display: "flex", gap: 8, alignItems: "baseline", marginTop: j ? 3 : 0 }}>
+        <a href={x.link} target="_blank" rel="noopener noreferrer" onClick={() => logRead(x)} style={{ fontFamily: j ? "'Space Grotesk',sans-serif" : "'Instrument Serif',serif", fontSize: j ? 11 : 14.5, color: j ? "#6f675c" : "#262421", textDecoration: "none", lineHeight: 1.4, flex: 1 }} onMouseEnter={e => e.currentTarget.style.color = "#0d6d56"} onMouseLeave={e => e.currentTarget.style.color = j ? "#6f675c" : "#262421"}>{x.title}</a>
+        <span style={{ fontSize: 8, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", flexShrink: 0 }}>{wireAgo(x.ts)}</span>
+      </div>)}
+    </div>)}
+    <SourceLine>Substack public feeds · issue titles link to the publication · dormant racks auto-hide after 60 days</SourceLine>
+  </div>;
+}
+
+// Circulation Audit: the reader audited — source mix of Mason's own clicks, last 30 days. Desk-only.
+function CirculationAudit() {
+  const reads = lsGet("mjb_reads", []);
+  const cut = addDaysISO(-30);
+  const recent = reads.filter(x => x.d >= cut);
+  if (recent.length < 5) return null;
+  const tally = {};
+  recent.forEach(x => { tally[x.label] = (tally[x.label] || 0) + 1; });
+  const rows = Object.entries(tally).sort((a, b) => b[1] - a[1]);
+  const top = rows[0], topShare = top[1] / recent.length;
+  const wireLabels = ["Reuters", "WSJ Markets", "CNBC", "MarketWatch", "Yahoo Finance"];
+  const untouched = wireLabels.filter(l => !tally[l]);
+  return <div style={{ ...S.card, marginTop: 16 }}>
+    <h2 style={S.cardTitle}><span style={{ color: "#b0741e" }}>◆</span> Circulation Audit<Info text="The reader, audited: which sources you actually clicked over the last 30 days, computed from this browser's own click log. Flags single-source drift and untouched outlets. Private to you." /></h2>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "4px 22px" }}>
+      {rows.map(([label, n]) => <span key={label} style={{ display: "inline-flex", gap: 7, alignItems: "baseline", fontFamily: "'JetBrains Mono',monospace", fontSize: 10.5 }}>
+        <span style={{ color: "#8a8072", fontSize: 8.5, letterSpacing: 1 }}>{label}</span>
+        <span style={{ color: "#33302c" }}>{Math.round(n / recent.length * 100)}%</span>
+      </span>)}
+    </div>
+    {(topShare > 0.6 || untouched.length > 0) && <div style={{ marginTop: 8, fontSize: 10.5, lineHeight: 1.7 }}>
+      {topShare > 0.6 && <div style={{ color: "#990f3d" }}>Single-source drift: {Math.round(topShare * 100)}% of your reading is {top[0]}.</div>}
+      {untouched.length > 0 && <div style={{ color: "#b0741e" }}>Untouched this month: {untouched.join(" · ")}.</div>}
+    </div>}
+    <SourceLine>{recent.length} clicks in the last 30 days · logged in this browser only · export via localStorage mjb_reads</SourceLine>
+  </div>;
+}
+
+// Today's Desk: the editor's budget line — one focus, up to three items, resets daily with held-over carry. Desk-only.
+function TodaysDesk() {
+  const [st, setSt] = useState(() => {
+    const t = todayISO(); const s = lsGet("mjb_desk_budget", null);
+    if (s && s.d === t) return s;
+    return { d: t, focus: "", todos: (s ? s.todos.filter(x => !x.done).map(x => ({ ...x, held: true })) : []).slice(0, 3) };
+  });
+  const [draft, setDraft] = useState("");
+  const save = next => { setSt(next); lsSet("mjb_desk_budget", next); };
+  return <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", padding: "9px 20px", border: "1px solid #e3d5bf", borderRadius: 10, background: "rgba(255,253,249,0.75)", marginBottom: 16 }}>
+    <span style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#b0741e", letterSpacing: 3, textTransform: "uppercase", flexShrink: 0 }}>Today's Desk</span>
+    <input value={st.focus} onChange={e => save({ ...st, focus: e.target.value })} placeholder="The main thing today —" style={{ background: "transparent", border: "none", outline: "none", fontFamily: "'Instrument Serif',serif", fontSize: 14.5, fontStyle: st.focus ? "normal" : "italic", color: "#262421", flex: 1, minWidth: 180 }} />
+    {st.todos.map((x, i) => <button key={i} onClick={() => { const todos = [...st.todos]; todos[i] = { ...x, done: !x.done }; save({ ...st, todos }); }} title={x.done ? "Reopen" : "Strike through"} style={{ background: "none", border: "1px solid #e9ddc9", borderRadius: 8, padding: "3px 10px", cursor: "pointer", fontSize: 10, color: x.done ? "#a2977f" : "#4a443c", textDecoration: x.done ? "line-through" : "none", fontFamily: "'Space Grotesk',sans-serif" }}>{x.t}{x.held && !x.done ? " (held over)" : ""}</button>)}
+    {st.todos.length < 3 && <input value={draft} onChange={e => setDraft(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && draft.trim()) { save({ ...st, todos: [...st.todos, { t: draft.trim().slice(0, 60), done: false }] }); setDraft(""); } }} placeholder="+ item" style={{ ...S.input, width: 90, fontSize: 10, padding: "4px 8px", background: "transparent" }} />}
+  </div>;
+}
+
+// NOTICES: overnight alert column — rules evaluated against the quotes already fetched. Desk-only.
+function Notices({ prices, live }) {
+  const [, force] = useState(0);
+  const [form, setForm] = useState({ t: "", type: "above", v: "" });
+  useEffect(() => {
+    if (!live || !prices || !prices.length) return;
+    const rls = lsGet("mjb_alerts", []);
+    if (!rls.length) return;
+    const log = lsGet("mjb_notices", []);
+    let changed = false;
+    rls.forEach(r => {
+      const p = prices.find(x => x.symbol === r.t);
+      if (!p || p.price === "—") return;
+      const c = parseFloat(p.price), dp = parseFloat(p.change);
+      const hit = r.type === "above" ? c >= r.v : r.type === "below" ? c <= r.v : Math.abs(dp) >= r.v;
+      const key = `${r.t}:${r.type}:${r.v}:${todayISO()}`;
+      if (hit && !log.some(n => n.key === key)) {
+        log.unshift({ key, d: todayISO(), text: r.type === "move" ? `${r.t} has moved ${Math.abs(dp).toFixed(2)}% today — rule was ±${r.v}%` : `${r.t} at $${c.toFixed(2)} — crossed ${r.type} $${r.v}`, dismissed: false });
+        changed = true;
+      }
+    });
+    if (changed) { if (log.length > 60) log.length = 60; lsSet("mjb_notices", log); force(x => x + 1); }
+  }, [prices, live]);
+  const rules = lsGet("mjb_alerts", []);
+  const open = lsGet("mjb_notices", []).filter(n => !n.dismissed);
+  const dismiss = key => { const log = lsGet("mjb_notices", []); const i = log.findIndex(n => n.key === key); if (i >= 0) { log[i] = { ...log[i], dismissed: true }; lsSet("mjb_notices", log); force(x => x + 1); } };
+  const addRule = () => { const t = form.t.trim().toUpperCase(); const v = parseFloat(form.v); if (!/^[A-Z.]{1,10}$/.test(t) || isNaN(v) || v <= 0) return; const rls = lsGet("mjb_alerts", []); rls.push({ t, type: form.type, v }); lsSet("mjb_alerts", rls); setForm({ t: "", type: form.type, v: "" }); force(x => x + 1); };
+  const delRule = i => { const rls = lsGet("mjb_alerts", []); rls.splice(i, 1); lsSet("mjb_alerts", rls); force(x => x + 1); };
+  return <div>
+    {open.length > 0 && <div style={{ border: "1px solid #33302c", outline: "1px solid #33302c", outlineOffset: -4, borderRadius: 2, padding: "12px 14px", marginBottom: 12, background: "#fffdf9" }}>
+      <div style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#990f3d", letterSpacing: 3, textTransform: "uppercase", marginBottom: 6 }}>Notices</div>
+      {open.map(n => <div key={n.key} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "3px 0" }}>
+        <span style={{ fontSize: 8, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", flexShrink: 0 }}>{n.d}</span>
+        <span style={{ fontSize: 12, color: "#33302c", flex: 1, fontFamily: "'JetBrains Mono',monospace" }}>{n.text}</span>
+        <button onClick={() => dismiss(n.key)} title="Mark read" style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8072", fontSize: 11, padding: 0 }}>×</button>
+      </div>)}
+    </div>}
+    {rules.map((r, i) => <div key={`${r.t}${r.type}${r.v}`} style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "4px 2px", fontFamily: "'JetBrains Mono',monospace", fontSize: 11 }}>
+      <span style={{ color: "#33302c", fontWeight: 600, minWidth: 44 }}>{r.t}</span>
+      <span style={{ color: "#6f675c", flex: 1 }}>{r.type === "move" ? `alert on a daily move ≥ ${r.v}%` : `alert ${r.type} $${r.v}`}</span>
+      <button onClick={() => delRule(i)} title="Remove rule" style={{ background: "none", border: "none", cursor: "pointer", color: "#b2342b", fontSize: 10, padding: 0 }}>×</button>
+    </div>)}
+    <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: rules.length ? 8 : 0 }}>
+      <input value={form.t} onChange={e => setForm({ ...form, t: e.target.value })} placeholder="Ticker" style={{ ...S.input, width: 70, fontSize: 10.5, padding: "5px 8px", fontFamily: "'JetBrains Mono',monospace" }} />
+      <select value={form.type} onChange={e => setForm({ ...form, type: e.target.value })} style={{ ...S.input, width: "auto", fontSize: 10.5, padding: "5px 8px", fontFamily: "'JetBrains Mono',monospace" }}>
+        <option value="above">crosses above $</option>
+        <option value="below">crosses below $</option>
+        <option value="move">daily move ≥ %</option>
+      </select>
+      <input value={form.v} onChange={e => setForm({ ...form, v: e.target.value })} placeholder="Value" style={{ ...S.input, width: 70, fontSize: 10.5, padding: "5px 8px", fontFamily: "'JetBrains Mono',monospace", textAlign: "right" }} />
+      <button onClick={addRule} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "5px 14px" }}>File rule</button>
+    </div>
+    <SourceLine>Checked on page load against the live tape · fired notices persist until marked read · rules stay in this browser</SourceLine>
   </div>;
 }
 
@@ -1762,6 +1902,7 @@ export default function App() {
         <CrossAssetRows />
         <QuoteLookup />
         {desk && <EditionStrip />}
+        {desk && <TodaysDesk />}
         {desk && <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
           <section style={{ ...S.card, animation: "fadeUp 0.5s ease both" }}>
             <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> The Review Docket<Info text="Spaced repetition over everything you've missed on this site. Cards are scheduled with the SM-2 algorithm: misses return tomorrow, solid answers push the next review further out. Private — lives in this browser's storage only." /></h2>
@@ -1770,6 +1911,10 @@ export default function App() {
           <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.06s both" }}>
             <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> Errata & Corrections<Info text="Every missed question is filed as a correction, newspaper-style, with room for a one-line rule so the same mistake isn't made twice. Private to this browser." /></h2>
             <ErrataColumn />
+          </section>
+          <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.1s both" }}>
+            <h2 style={S.cardTitle}><span style={{ color: "#b3551d" }}>◆</span> Notices & Alerts<Info text="File a rule — a price cross or a daily-move threshold — and the page opens with a NOTICES box when it fires, persisting until you mark it read. Checked on load against the live tape; no push infrastructure, no server. Private to this browser." /></h2>
+            <Notices prices={prices} live={pricesLive} />
           </section>
         </div>}
         <div style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease both" }}>
@@ -1834,6 +1979,11 @@ export default function App() {
           <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> Filings Wire<Info text="Material corporate events straight from the primary source: 8-K material-event reports, SC 13D activist stakes, and S-1 IPO registrations, live from SEC EDGAR's current-filings feed. Public-domain data; every line links to the filing itself on sec.gov." link="https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent" linkLabel="EDGAR latest filings" /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="news" id="filings-wire" /></span></h2>
           <FilingsWire />
         </div>
+        <div id="reading-ledger" style={{ ...S.card, marginTop: 16 }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#1f5a9e" }}>◆</span> The Reading Ledger<Info text="The serious-reading rack: latest issue titles from Net Interest, The Diff, The Transcript, and Apricitas Economics via their public feeds. Titles link to the publication; racks that go dormant hide themselves." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="news" id="reading-ledger" /></span></h2>
+          <ReadingLedger />
+        </div>
+        {desk && <CirculationAudit />}
       </div>}
 
       {tab === "projects" && <div style={{ animation: "fadeUp 0.4s ease both" }}>
