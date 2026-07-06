@@ -863,6 +863,87 @@ function BennettVsTape({ prices, live }) {
   </div>;
 }
 
+// The 7 O'Clock Note — the pre-open first-call sheet. Renders on trading days before 9:30 ET,
+// composing the overnight tape, wire leads, calendar, filings, and everything due on the desk.
+// The two-sentence "top call" is Claude-written via the existing key gate, once per morning.
+function FirstCall({ prices, live, apiKey }) {
+  useLearnTick();
+  const [wire, setWire] = useState(() => cacheGet("mjb_wire", 10));
+  const [filings, setFilings] = useState(() => cacheGet("mjb_edgar", 10));
+  const [econ, setEcon] = useState(null);
+  const [ai, setAi] = useState(() => { const c = cacheGet("mjb_firstcall_ai", 1440); return c && c.d === todayISO() ? c.text : null; });
+  const [aiBusy, setAiBusy] = useState(false);
+  const now = etNow(), mins = now.getHours() * 60 + now.getMinutes();
+  const show = isTradingDay(now) && mins < 570;
+  useEffect(() => {
+    if (!show) return;
+    let on = true;
+    if (!wire) (async () => { try { const r = await fetch("/api/rss"); if (!r.ok) return; const d = await r.json(); if (d.items && d.items.length && on) { setWire(d); cacheSet("mjb_wire", d); } } catch {} })();
+    if (!filings) (async () => { try { const r = await fetch("/api/edgar?forms=8-K,13D,S-1"); if (!r.ok) return; const d = await r.json(); if (d.items && d.items.length && on) { setFilings(d.items); cacheSet("mjb_edgar", d.items); } } catch {} })();
+    (async () => { try { const r = await fetch("/econ-2026.json"); if (!r.ok) return; const d = await r.json(); if (on && d.events) setEcon(d.events); } catch {} })();
+    return () => { on = false; };
+  }, [show]);
+  const leads = wire && wire.items ? clusterWire(wire.items).slice(0, 4) : [];
+  const eightKs = (filings || []).filter(f => f.form === "8-K").slice(0, 3);
+  const nextEvents = (econ || []).filter(e => e.date >= todayISO()).slice(0, 3);
+  const tape = live && prices ? ["SPY", "QQQ", "TLT", "GLD"].map(s => prices.find(p => p.symbol === s)).filter(p => p && p.price !== "—") : [];
+  const due = lsGet("mjb_srs", []).filter(c => c.due <= todayISO()).length;
+  const openNotices = lsGet("mjb_notices", []).filter(n => !n.dismissed).length;
+  const budget = lsGet("mjb_desk_budget", null);
+  const held = budget && budget.todos ? budget.todos.filter(x => !x.done && (budget.d !== todayISO() || x.held)).length : 0;
+  const unfiled = BVT_QS.filter(q => !lsGet("mjb_predictions", []).some(p => p.d === todayISO() && p.k === q.k)).length;
+  const writeCall = async () => {
+    if (!apiKey || aiBusy) return;
+    setAiBusy(true);
+    try {
+      const d = await callAPI(apiKey, { model: "claude-sonnet-4-20250514", max_tokens: 300, messages: [{ role: "user", content: `You are writing the "top call" of a private morning first-call note for a finance analyst, before the US open.\nOvernight tape: ${tape.map(p => `${p.symbol} ${p.price} (${p.change}%)`).join(", ") || "unavailable"}.\nOvernight headlines:\n${leads.map(c => `${c.lead.label}: ${c.lead.title}`).join("\n") || "none"}\nUpcoming data: ${nextEvents.map(e => `${e.date} ${e.event}`).join("; ") || "none"}\nWrite EXACTLY 2-3 sentences in confident sell-side morning-note style: what matters most today and why. No advice, no disclaimers, no preamble — start mid-thought like a desk note.` }] });
+      const text = extractText(d);
+      if (text) { setAi(text); cacheSet("mjb_firstcall_ai", { d: todayISO(), text }); }
+    } catch {} finally { setAiBusy(false); }
+  };
+  useEffect(() => { if (show && apiKey && !ai && !aiBusy && (leads.length || tape.length)) writeCall(); }, [show, apiKey, leads.length]);
+  if (!show) return null;
+  const toOpen = 570 - mins;
+  const Sec = ({ label, children }) => <div style={{ minWidth: 0 }}><div style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#8a8072", letterSpacing: 2, textTransform: "uppercase", margin: "8px 0 4px" }}>{label}</div>{children}</div>;
+  return <div style={{ border: "1px solid #33302c", outline: "1px solid #33302c", outlineOffset: -4, borderRadius: 2, padding: "14px 18px", marginBottom: 16, background: "#fffdf9" }}>
+    <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+      <span style={{ fontSize: 9, fontFamily: "'JetBrains Mono',monospace", color: "#0d6d56", letterSpacing: 3, textTransform: "uppercase" }}>The 7 O'Clock Note</span>
+      <span style={{ fontFamily: "'Instrument Serif',serif", fontSize: 15, color: "#262421" }}>{now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</span>
+      <span style={{ marginLeft: "auto", fontSize: 9, fontFamily: "'JetBrains Mono',monospace", color: "#8a8072", letterSpacing: 1 }}>OPENS IN {Math.floor(toOpen / 60)}H {String(toOpen % 60).padStart(2, "0")}M</span>
+    </div>
+    {tape.length > 0 && <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "#6f675c", display: "flex", gap: 14, flexWrap: "wrap", marginTop: 6 }}>{tape.map(p => <span key={p.symbol}>{p.symbol} {p.price} <span style={{ color: parseFloat(p.change) >= 0 ? "#0d6d56" : "#b2342b" }}>{parseFloat(p.change) >= 0 ? "▲" : "▼"}{Math.abs(parseFloat(p.change)).toFixed(2)}%</span></span>)}</div>}
+    {ai && <p style={{ fontSize: 12.5, color: "#33302c", lineHeight: 1.7, margin: "10px 0 2px", borderLeft: "2px solid #0d6d56", paddingLeft: 10 }}>{ai}<span style={{ fontSize: 7.5, fontFamily: "'JetBrains Mono',monospace", color: "#a2977f", letterSpacing: 1, marginLeft: 8 }}>TOP CALL · CLAUDE · PRIVATE</span></p>}
+    {!ai && apiKey && aiBusy && <div style={{ fontSize: 9, fontFamily: "'JetBrains Mono',monospace", color: "#8a8072", letterSpacing: 1.5, margin: "8px 0 0" }}>WRITING THE TOP CALL…</div>}
+    <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 24px" }}>
+      <Sec label="Overnight wire">
+        {leads.length === 0 && <div style={{ fontSize: 10, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5 }}>AWAITING WIRE <span style={{ animation: "blink 1s step-end infinite", color: "#0d6d56" }}>▮</span></div>}
+        {leads.map(c => <div key={c.lead.link} style={{ padding: "2px 0" }}>
+          <a href={c.lead.link} target="_blank" rel="noopener noreferrer" onClick={() => logRead(c.lead)} style={{ fontSize: 11.5, color: "#33302c", textDecoration: "none", lineHeight: 1.45 }} onMouseEnter={e => e.currentTarget.style.color = "#0d6d56"} onMouseLeave={e => e.currentTarget.style.color = "#33302c"}>{c.lead.title}</a>
+          <span style={{ fontSize: 7.5, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", marginLeft: 6, letterSpacing: 0.5 }}>{c.lead.label}</span>
+        </div>)}
+      </Sec>
+      <div>
+        <Sec label="On the calendar">
+          {nextEvents.length === 0 && <span style={{ fontSize: 10.5, color: "#8a8072" }}>Nothing major scheduled.</span>}
+          {nextEvents.map(e => <div key={e.date + e.event} style={{ fontSize: 10.5, color: "#4a443c", fontFamily: "'JetBrains Mono',monospace", padding: "1px 0" }}><span style={{ color: e.date === todayISO() ? "#990f3d" : "#8a8072" }}>{e.date === todayISO() ? "TODAY" : e.date.slice(5)}</span> {e.event} · {e.time}</div>)}
+        </Sec>
+        {eightKs.length > 0 && <Sec label="Overnight 8-Ks">
+          {eightKs.map((f, i) => <div key={i} style={{ fontSize: 10.5, color: "#4a443c", padding: "1px 0", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}><a href={f.link} target="_blank" rel="noopener noreferrer" style={{ color: "#4a443c", textDecoration: "none" }}>{f.title.replace(/^[^-]+-\s*/, "").replace(/\s*\(\d{7,}\)\s*/g, " ").replace(/\((Filer|Subject|Reporting Owner|Reporting)\)/gi, "").trim()}</a></div>)}
+        </Sec>}
+        <Sec label="On the desk">
+          {due + openNotices + held + (unfiled < 3 ? 0 : 0) === 0 && unfiled === 0 ? <span style={{ fontSize: 10.5, color: "#0d6d56" }}>The desk is clear.</span> : <div style={{ fontSize: 10.5, color: "#4a443c", lineHeight: 1.7 }}>
+            {due > 0 && <div>{due} card{due === 1 ? "" : "s"} due in the Review Docket.</div>}
+            {openNotices > 0 && <div>{openNotices} unread notice{openNotices === 1 ? "" : "s"}.</div>}
+            {held > 0 && <div>{held} item{held === 1 ? "" : "s"} held over from yesterday's desk.</div>}
+            {unfiled > 0 && <div>{unfiled} call{unfiled === 1 ? "" : "s"} not yet filed at Bennett vs. the Tape.</div>}
+          </div>}
+        </Sec>
+      </div>
+    </div>
+    {!apiKey && <div style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#a2977f", letterSpacing: 1, marginTop: 8 }}>ADD YOUR ANTHROPIC KEY IN SETTINGS AND THE NOTE WRITES ITS OWN TOP CALL EACH MORNING</div>}
+  </div>;
+}
+
 function LateEdition({ prices, live }) {
   useLearnTick();
   const [line, setLine] = useState("");
@@ -2177,6 +2258,7 @@ export default function App() {
         <QuoteLookup />
         {desk && <EditionStrip />}
         {desk && <TodaysDesk />}
+        {desk && <FirstCall prices={prices} live={pricesLive} apiKey={apiKey} />}
         {desk && <LateEdition prices={prices} live={pricesLive} />}
         {desk && <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
           <section style={{ ...S.card, animation: "fadeUp 0.5s ease both" }}>
