@@ -666,6 +666,120 @@ return <div><Briefings apiKey={apiKey}/><div style={{height:16}}/>
 </div>;}
 
 // ============ LBO SANDBOX ============
+// ============ THE STANDING WIRE ============
+// Keyless headline wire over api/rss.js (official public feeds; headline + link + attribution only).
+const WIRE_STOP = new Set(["the", "a", "an", "of", "to", "in", "on", "for", "and", "as", "at", "by", "with", "after", "amid", "over", "is", "are", "its", "it", "from", "up", "down", "says", "say", "new", "will", "be", "has", "have", "was", "were", "this", "that", "their", "his", "her", "into", "out", "about", "more", "than", "how", "why", "what", "who", "could", "would", "should", "may", "might", "despite", "before", "during"]);
+const wireTokens = t => new Set(t.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter(w => w.length >= 2 && !WIRE_STOP.has(w)));
+function clusterWire(items) {
+  const sorted = [...items].sort((a, b) => (a.priority - b.priority) || (b.ts - a.ts));
+  const toks = sorted.map(i => wireTokens(i.title));
+  const clusters = [];
+  sorted.forEach((it, i) => {
+    let best = -1, bestScore = 0;
+    clusters.forEach((c, ci) => {
+      const a = toks[i], b = toks[c.lead];
+      let inter = 0; a.forEach(w => { if (b.has(w)) inter++; });
+      const overlap = inter / (Math.min(a.size, b.size) || 1);
+      if (inter >= 3 && overlap >= 0.5 && overlap > bestScore) { bestScore = overlap; best = ci; }
+    });
+    if (best >= 0) clusters[best].also.push(i);
+    else clusters.push({ lead: i, also: [] });
+  });
+  return clusters.map(c => ({ lead: sorted[c.lead], also: c.also.map(i => sorted[i]) }))
+    .sort((a, b) => Math.max(b.lead.ts, ...b.also.map(x => x.ts)) - Math.max(a.lead.ts, ...a.also.map(x => x.ts)));
+}
+const wireAgo = ts => { if (!ts) return ""; const m = Math.max(1, Math.round((Date.now() - ts) / 60000)); return m < 60 ? `${m}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`; };
+function clipHeadline(it) {
+  const c = lsGet("mjb_clippings", []);
+  if (c.some(x => x.link === it.link)) return;
+  c.unshift({ title: it.title, link: it.link, label: it.label, d: todayISO(), note: "" });
+  if (c.length > 100) c.length = 100;
+  lsSet("mjb_clippings", c);
+  learnPing();
+}
+function ClippingsBoard() {
+  useLearnTick();
+  const items = lsGet("mjb_clippings", []);
+  const save = (i, note) => { const c = lsGet("mjb_clippings", []); if (c[i]) { c[i] = { ...c[i], note }; lsSet("mjb_clippings", c); } };
+  const drop = i => { const c = lsGet("mjb_clippings", []); c.splice(i, 1); lsSet("mjb_clippings", c); learnPing(); };
+  if (!items.length) return null;
+  return <div style={{ borderTop: "1px solid #ddcfb8", marginTop: 12, paddingTop: 10 }}>
+    <div style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#8a8072", letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Clippings — the editor's file</div>
+    {items.slice(0, 6).map((c, i) => <div key={c.link} style={{ padding: "6px 0", borderTop: i ? "1px solid #efe4d2" : "none" }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
+        <a href={c.link} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11.5, color: "#33302c", textDecoration: "none", flex: 1, lineHeight: 1.5 }}>{c.title}</a>
+        <span style={{ fontSize: 8, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", flexShrink: 0 }}>{c.label} · {c.d}</span>
+        <button onClick={() => drop(i)} title="Discard clipping" style={{ background: "none", border: "none", cursor: "pointer", color: "#b2342b", fontSize: 10, padding: 0 }}>×</button>
+      </div>
+      <input defaultValue={c.note} onBlur={e => save(i, e.target.value.trim())} placeholder="Marginalia — why this one mattered…" style={{ ...S.input, fontSize: 10.5, padding: "3px 7px", fontStyle: "italic", background: "transparent", border: "none", borderBottom: "1px dotted #ddcfb8", borderRadius: 0 }} />
+    </div>)}
+    {items.length > 6 && <div style={{ fontSize: 9, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", marginTop: 6 }}>+ {items.length - 6} more in the file</div>}
+  </div>;
+}
+function StandingWire({ desk }) {
+  const [wire, setWire] = useState(null);
+  const [mode, setMode] = useState("front");
+  const [prefs, setPrefs] = useState(() => lsGet("mjb_wire_prefs", { priority: [], muted: [] }));
+  const [prefsOpen, setPrefsOpen] = useState(false);
+  useEffect(() => {
+    let on = true;
+    (async () => {
+      try {
+        const cached = cacheGet("mjb_wire", 10); if (cached) { if (on) setWire(cached); return; }
+        const r = await fetch("/api/rss");
+        if (!r.ok) return;
+        const d = await r.json();
+        if (d.items && d.items.length && on) { setWire(d); cacheSet("mjb_wire", d); }
+      } catch {}
+    })();
+    return () => { on = false; };
+  }, []);
+  if (!wire) return <p style={{ color: "#8a8072", fontSize: 12, textAlign: "center", padding: "12px 0", lineHeight: 1.6 }}>The always-on headline wire — Reuters, WSJ, CNBC, MarketWatch, and Yahoo Finance, clustered one story per line, no key required.<br /><span style={{ fontSize: 10, color: "#a2977f" }}>AWAITING WIRE — live in production</span></p>;
+  const savePrefs = patch => setPrefs(p => { const next = { ...p, ...patch }; lsSet("mjb_wire_prefs", next); return next; });
+  const mut = (prefs.muted || []).map(s => s.toLowerCase()).filter(Boolean);
+  const pri = (prefs.priority || []).map(s => s.toLowerCase()).filter(Boolean);
+  const isPri = t => pri.some(k => t.toLowerCase().includes(k));
+  const seen = new Set();
+  const items = wire.items
+    .filter(x => !mut.some(k => x.title.toLowerCase().includes(k)))
+    .filter(x => { const k = x.title.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
+  const Head = ({ it, size = 15 }) => <a href={it.link} target="_blank" rel="noopener noreferrer" style={{ fontFamily: "'Instrument Serif',serif", fontSize: size, color: "#262421", textDecoration: "none", lineHeight: 1.35 }} onMouseEnter={e => e.currentTarget.style.color = "#0d6d56"} onMouseLeave={e => e.currentTarget.style.color = "#262421"}>{it.title}{it.paywall && <sup style={{ fontSize: 9, color: "#b0741e" }}> †</sup>}</a>;
+  const Clip = ({ it }) => desk ? <button onClick={() => clipHeadline(it)} title="Clip for the editor's file" style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8072", fontSize: 8, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, padding: 0, textDecoration: "underline dotted", textUnderlineOffset: 2 }}>CLIP</button> : null;
+  let body;
+  if (mode === "front") {
+    const clusters = clusterWire(items);
+    const ordered = [...clusters.filter(c => isPri(c.lead.title)), ...clusters.filter(c => !isPri(c.lead.title))];
+    body = ordered.slice(0, 16).map((c, i) => <div key={c.lead.link} style={{ borderTop: i ? "1px solid #efe4d2" : "none", padding: "9px 2px", borderLeft: isPri(c.lead.title) ? "2px solid #0d6d56" : "2px solid transparent", paddingLeft: 8 }}>
+      <Head it={c.lead} />
+      <div style={{ fontSize: 8.5, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", marginTop: 3, letterSpacing: 0.5, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "baseline" }}>
+        <span style={{ color: "#8a8072", fontWeight: 600 }}>{c.lead.label}</span>
+        <span>{wireAgo(c.lead.ts)}</span>
+        {c.also.length > 0 && <span>also: {c.also.slice(0, 4).map((a, j) => <a key={a.link} href={a.link} target="_blank" rel="noopener noreferrer" style={{ color: "#6f675c", textDecoration: "underline dotted", textUnderlineOffset: 2 }}>{a.label}{j < Math.min(c.also.length, 4) - 1 ? " · " : ""}</a>)}</span>}
+        <Clip it={c.lead} />
+      </div>
+    </div>);
+  } else {
+    body = [...items].sort((a, b) => b.ts - a.ts).slice(0, 40).map((it, i) => <div key={it.link} style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "5px 2px", borderTop: i ? "1px solid #efe4d2" : "none" }}>
+      <span style={{ fontSize: 8, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", flexShrink: 0, minWidth: 52 }}>{wireAgo(it.ts)}</span>
+      <span style={{ fontSize: 8.5, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", flexShrink: 0, minWidth: 84, letterSpacing: 0.5 }}>{it.label}</span>
+      <span style={{ flex: 1 }}><Head it={it} size={12.5} /></span>
+      <Clip it={it} />
+    </div>);
+  }
+  return <div>
+    <div style={{ display: "flex", alignItems: "baseline", gap: 14, marginBottom: 8, flexWrap: "wrap" }}>
+      {[["front", "Front Page"], ["river", "The River"]].map(([k, l]) => <button key={k} onClick={() => setMode(k)} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 9, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, textTransform: "uppercase", color: mode === k ? "#0d6d56" : "#a2977f", borderBottom: mode === k ? "1px solid #0d6d56" : "1px solid transparent" }}>{l}</button>)}
+      {desk && <button onClick={() => setPrefsOpen(!prefsOpen)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 8, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, textTransform: "uppercase", color: "#8a8072", textDecoration: "underline dotted", textUnderlineOffset: 3 }}>Wire desk {prefsOpen ? "▴" : "▾"}</button>}
+    </div>
+    {prefsOpen && desk && <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 10, padding: "8px 10px", background: "#f6eee1", border: "1px solid #e9ddc9", borderRadius: 8 }}>
+      {[["priority", "Priority keywords — float to the top"], ["muted", "Muted keywords — silently dropped"]].map(([k, ph]) => <input key={k} defaultValue={(prefs[k] || []).join(", ")} onBlur={e => savePrefs({ [k]: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })} placeholder={ph} style={{ ...S.input, flex: 1, minWidth: 220, fontSize: 10.5, padding: "6px 9px", fontFamily: "'JetBrains Mono',monospace" }} />)}
+    </div>}
+    {body}
+    {desk && <ClippingsBoard />}
+    <SourceLine>Sources: Reuters (via Google News) · WSJ† · CNBC · MarketWatch · Yahoo Finance · headlines link to the publisher · † subscription · 10-min cache</SourceLine>
+  </div>;
+}
+
 // Damodaran sector anchors — loaded lazily from /damodaran-2026.json (data used with attribution;
 // refreshed each January alongside the econ-json chore)
 let DAMO_CACHE = null;
@@ -1710,7 +1824,12 @@ export default function App() {
         </div>
       </div>}
 
-      {tab === "news" && <div style={{ animation: "fadeUp 0.4s ease both" }}><Kicker n="04" t="News & Briefings" /><NewsFeed apiKey={apiKey} />
+      {tab === "news" && <div style={{ animation: "fadeUp 0.4s ease both" }}><Kicker n="04" t="News & Briefings" />
+        <div id="standing-wire" style={{ ...S.card, marginBottom: 16 }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> The Standing Wire<Info text="An always-on headline wire from official feeds — Reuters, WSJ, CNBC, MarketWatch, Yahoo Finance. Front Page groups the same story across outlets into one line, Techmeme-style; The River is the raw chronological tape. Every headline links to the publisher. No key required." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="news" id="standing-wire" /></span></h2>
+          <StandingWire desk={desk} />
+        </div>
+        <NewsFeed apiKey={apiKey} />
         <div id="filings-wire" style={{ ...S.card, marginTop: 16 }}>
           <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> Filings Wire<Info text="Material corporate events straight from the primary source: 8-K material-event reports, SC 13D activist stakes, and S-1 IPO registrations, live from SEC EDGAR's current-filings feed. Public-domain data; every line links to the filing itself on sec.gov." link="https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent" linkLabel="EDGAR latest filings" /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="news" id="filings-wire" /></span></h2>
           <FilingsWire />
