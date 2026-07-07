@@ -570,9 +570,10 @@ function RegimeIndicator({ apiKey }) {
 function EarningsCal({ apiKey }) {
   const [data, setData] = useState(null), [loading, setLoading] = useState(false), [error, setError] = useState(false), [fetchTime, setFetchTime] = useState(null);
   const load = async () => { if (!apiKey) { setError(true); setLoading(false); return; } setLoading(true); setError(false); const r = await fetchEarnings(apiKey); if (r) { setData(r); setFetchTime(new Date()); } else setError(true); setLoading(false); };
-  // Visitors: real upcoming earnings for the watchlist via the serverless proxy
+  // Real upcoming earnings for the watchlist via the serverless proxy. Loads for
+  // EVERYONE (with or without an Anthropic key) — the AI "Load" button below is an
+  // optional richer refresh, never a prerequisite for seeing the calendar.
   useEffect(() => {
-    if (apiKey) return;
     let c = false;
     (async () => {
       try {
@@ -581,7 +582,7 @@ function EarningsCal({ apiKey }) {
         const r = await fetch(`/api/earnings?symbols=${TICKERS.map(t => t.symbol).join(",")}`);
         if (!r.ok) return;
         const rows = await r.json();
-        if (!Array.isArray(rows) || !rows.length) return;
+        if (!Array.isArray(rows)) return;
         const mapped = rows.map(e => ({ ticker: e.symbol, company: "", date: new Date(e.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }), time: e.hour === "bmo" ? "BMO" : e.hour === "amc" ? "AMC" : "—", est_eps: e.eps != null ? `$${e.eps.toFixed(2)}` : null }));
         if (!c) { setData(mapped); cacheSet("mb_earn_proxy", mapped); }
       } catch {}
@@ -596,11 +597,11 @@ function EarningsCal({ apiKey }) {
         <button onClick={load} disabled={loading} style={{...S.btn,fontSize:10,padding:"4px 10px",opacity:loading?0.5:1}}>{loading?"⟳...":data?"↻":"Load"}</button>
       </div>}
     </div>
-    {!apiKey&&!data&&<p style={{color:"#8a8072",fontSize:12,textAlign:"center",padding:"12px 0",lineHeight:1.6}}>Live earnings calendar — upcoming quarterly reports for major companies with EPS estimates.<br/><span style={{fontSize:10,color:"#a2977f"}}>Powered by Claude AI + web search</span></p>}
-    {apiKey&&!data&&!loading&&!error&&<p style={{color:"#8a8072",fontSize:12,textAlign:"center",padding:"8px 0"}}>Load upcoming earnings reports</p>}
-    {error&&!loading&&apiKey&&<p style={{color:"#b2342b",fontSize:12,textAlign:"center",padding:"8px 0"}}>Failed to load — click Load to retry</p>}
+    {!data&&!loading&&<p style={{color:"#8a8072",fontSize:12,textAlign:"center",padding:"12px 0",lineHeight:1.6}}>Upcoming earnings for the names on the watchlist, with consensus EPS.<br/><span style={{fontSize:10,color:"#a2977f"}}>Live via Finnhub in production</span></p>}
+    {error&&!loading&&apiKey&&<p style={{color:"#b2342b",fontSize:12,textAlign:"center",padding:"8px 0"}}>AI refresh failed — click ↻ to retry</p>}
     {loading&&<div style={{textAlign:"center",padding:"12px 0"}}><div style={{display:"inline-flex",gap:4}}>{[0,1,2].map(i=><div key={i} style={{width:5,height:5,borderRadius:3,background:"#1f5a9e",animation:"pulse 1s infinite",animationDelay:`${i*0.2}s`}}/>)}</div></div>}
-    {data&&<div style={{display:"flex",flexDirection:"column",gap:4}}>{data.map((e,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 10px",borderRadius:6,background:i%2===0?"#f6eee150":"transparent"}}>
+    {data&&data.length===0&&<p style={{color:"#8a8072",fontSize:12,textAlign:"center",padding:"10px 0",lineHeight:1.6}}>No watchlist names report in the next two weeks.</p>}
+    {data&&data.length>0&&<div style={{display:"flex",flexDirection:"column",gap:4}}>{data.map((e,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 10px",borderRadius:6,background:i%2===0?"#f6eee150":"transparent"}}>
       <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{color:"#0d6d56",fontFamily:"'JetBrains Mono',monospace",fontWeight:700,fontSize:12,minWidth:42}}>{e.ticker}</span><span style={{color:"#33302c",fontSize:12}}>{e.company}</span></div>
       <div style={{display:"flex",alignItems:"center",gap:10}}><span style={{color:"#6f675c",fontSize:10,fontFamily:"'JetBrains Mono',monospace"}}>{e.date}</span><span style={{fontSize:9,padding:"2px 8px",borderRadius:10,background:e.time==="BMO"?"#1f5a9e10":"#b0741e10",color:e.time==="BMO"?"#1f5a9e":"#b0741e",fontFamily:"'JetBrains Mono',monospace"}}>{e.time}</span>{e.est_eps&&<span style={{color:"#8a8072",fontSize:10,fontFamily:"'JetBrains Mono',monospace"}}>Est: {e.est_eps}</span>}</div>
     </div>)}</div>}
@@ -627,9 +628,9 @@ function EconCalendar({ apiKey }) {
   const [data, setData] = useState(null), [loading, setLoading] = useState(false), [error, setError] = useState(false), [fetchTime, setFetchTime] = useState(null);
   const load = async () => { if (!apiKey) { setError(true); return; } setLoading(true); setError(false); const r = await fetchEconCal(apiKey); if (r) { setData(r); setFetchTime(new Date()); } else setError(true); setLoading(false); };
   const ic = { high: "#b2342b", medium: "#b0741e", low: "#8a8072" };
-  // Visitors: deterministic calendar from official annual release schedules
+  // Deterministic calendar from the official annual release schedules. Loads for
+  // EVERYONE regardless of key; the AI "Load" button is an optional richer refresh.
   useEffect(() => {
-    if (apiKey) return;
     let c = false;
     (async () => {
       try {
@@ -651,9 +652,8 @@ function EconCalendar({ apiKey }) {
         <button onClick={load} disabled={loading} style={{...S.btn,fontSize:10,padding:"4px 10px",opacity:loading?0.5:1}}>{loading?"⟳...":data?"↻":"Load"}</button>
       </div>}
     </div>
-    {!apiKey&&!data&&<p style={{color:"#8a8072",fontSize:12,textAlign:"center",padding:"12px 0",lineHeight:1.6}}>Live economic calendar — upcoming FOMC, CPI, NFP, GDP, and PPI releases with impact ratings.<br/><span style={{fontSize:10,color:"#a2977f"}}>Powered by Claude AI + web search</span></p>}
-    {apiKey&&!data&&!loading&&!error&&<p style={{color:"#8a8072",fontSize:12,textAlign:"center",padding:"8px 0"}}>Upcoming Fed, CPI, NFP, GDP releases</p>}
-    {error&&!loading&&apiKey&&<p style={{color:"#b2342b",fontSize:12,textAlign:"center",padding:"8px 0"}}>Failed to load — click Load to retry</p>}
+    {!data&&!loading&&<p style={{color:"#8a8072",fontSize:12,textAlign:"center",padding:"12px 0",lineHeight:1.6}}>Upcoming FOMC, CPI, NFP, GDP, and PPI releases with impact ratings.<br/><span style={{fontSize:10,color:"#a2977f"}}>From the official Fed / BLS / BEA schedules</span></p>}
+    {error&&!loading&&apiKey&&<p style={{color:"#b2342b",fontSize:12,textAlign:"center",padding:"8px 0"}}>AI refresh failed — click ↻ to retry</p>}
     {loading&&<div style={{textAlign:"center",padding:"12px 0"}}><div style={{display:"inline-flex",gap:4}}>{[0,1,2].map(i=><div key={i} style={{width:5,height:5,borderRadius:3,background:"#990f3d",animation:"pulse 1s infinite",animationDelay:`${i*0.2}s`}}/>)}</div></div>}
     {data&&<div style={{display:"flex",flexDirection:"column",gap:4}}>{data.map((e,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 10px",borderRadius:8,background:i%2===0?"rgba(64,52,32,0.04)":"transparent",transition:"all 0.2s"}} onMouseEnter={ev=>ev.currentTarget.style.background="rgba(13,109,86,0.03)"} onMouseLeave={ev=>ev.currentTarget.style.background=i%2===0?"rgba(64,52,32,0.04)":"transparent"}>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
