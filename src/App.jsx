@@ -3318,6 +3318,23 @@ export default function App() {
             </div>)}
           </div>
         </div>
+        <div id="model-rack" style={{ ...S.card, marginBottom: 16 }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> The Model Rack<Info text="Clean, blank Excel model skeletons — a paper LBO, a comparable-companies analysis, and an integrated three-statement model. Every cell is formula-driven; the blue sample inputs are yours to overwrite, and the three-statement ties out to the penny. No deal data — just the mechanics. Open in Excel, Google Sheets, or LibreOffice." /><span style={{ marginLeft: "auto", fontSize: 8, color: "#a2977f", letterSpacing: 1 }}>BLANK TEMPLATES · .XLSX</span></h2>
+          <p style={{ fontSize: 11, color: "#8a8072", fontStyle: "italic", margin: "-6px 0 14px" }}>Formula-driven skeletons to download and build in. Overwrite the blue inputs with your own figures.</p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(210px,100%),1fr))", gap: 12 }}>
+            {[
+              { f: "paper-lbo-template.xlsx", t: "Paper LBO", d: "Entry, a five-year build with a cash sweep, exit, and returns — MOIC and IRR." },
+              { f: "comps-template.xlsx", t: "Comparable Companies", d: "A peer EV bridge and trading multiples, with a median-driven implied valuation." },
+              { f: "three-statement-template.xlsx", t: "Three-Statement Model", d: "Income statement, cash flow, and a balance sheet that ties out every year." },
+            ].map(m => <a key={m.f} href={`/models/${m.f}`} download style={{ display: "flex", flexDirection: "column", border: "1px solid #e3d5bf", borderRadius: 10, padding: "16px 16px 14px", textDecoration: "none", background: "linear-gradient(145deg,#fffdf9,#fbf5ec)", boxShadow: "0 2px 8px rgba(64,52,32,0.05)", transition: "all 0.25s cubic-bezier(0.4,0,0.2,1)" }} onMouseEnter={e => { e.currentTarget.style.borderColor = "#0d6d5640"; e.currentTarget.style.boxShadow = "0 6px 18px rgba(13,109,86,0.10)"; e.currentTarget.style.transform = "translateY(-2px)"; }} onMouseLeave={e => { e.currentTarget.style.borderColor = "#e3d5bf"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(64,52,32,0.05)"; e.currentTarget.style.transform = "none"; }}>
+              <div style={{ fontSize: 8.5, fontFamily: "'JetBrains Mono',monospace", color: "#0d6d56", letterSpacing: 2, textTransform: "uppercase" }}>Template</div>
+              <div style={{ fontSize: 18, fontFamily: "'Instrument Serif',serif", color: "#262421", marginTop: 5, lineHeight: 1.1 }}>{m.t}</div>
+              <div style={{ fontSize: 11, color: "#6f675c", lineHeight: 1.55, marginTop: 7, flex: 1 }}>{m.d}</div>
+              <div style={{ fontSize: 9, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, textTransform: "uppercase", marginTop: 14, textDecoration: "underline dotted", textUnderlineOffset: 3 }}>↧ Download (.xlsx)</div>
+            </a>)}
+          </div>
+          <SourceLine>Original blank templates · every figure computed by formula · open in Excel, Google Sheets, or LibreOffice</SourceLine>
+        </div>
         <div id="hca-field" style={{ ...S.card, marginBottom: 16 }}>
           <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> HCA Healthcare — Valuation Football Field<Info text="The classic banker valuation summary, hand-built in React from the GFI pitch: each bar is one valuation method's range from the team's sensitivity tables, with the price target, the price on pitch day, and today's live price drawn as vertical rules." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="projects" id="hca-field" /></span></h2>
           <FootballField />
