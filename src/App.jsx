@@ -264,6 +264,29 @@ function usePrices(tickers, finnhubKey) {
   return { prices: p, live: !!finnhubKey || live, asOf };
 }
 
+// Yahoo daily-close history for sparklines + 52-week strips. GREY-AREA upstream:
+// pure enhancement layer — silent fallback to the day-range bar when unavailable
+// (local dev has no proxy, so this stays null and the watchlist shows RangeBars).
+function useHistory(symbols, range = "1y") {
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    let on = true;
+    (async () => {
+      try {
+        const key = `mjb_hist_${range}_${symbols.replace(/[^A-Z.]/g, "")}`;
+        const cached = cacheGet(key, 180);
+        if (cached) { if (on) setData(cached); return; }
+        const r = await fetch(`/api/history?symbols=${symbols}&range=${range}`);
+        if (!r.ok) throw 0;
+        const d = await r.json();
+        if (d && !d.error && on) { setData(d); cacheSet(key, d); }
+      } catch {}
+    })();
+    return () => { on = false; };
+  }, [symbols, range]);
+  return data;
+}
+
 // Engraved day-range bar: low -> high with a teal tick at the current price
 const RangeBar = ({ h, l, c }) => {
   if (!(h > l) || !(c > 0)) return <span style={{ width: 56 }} />;
@@ -274,6 +297,32 @@ const RangeBar = ({ h, l, c }) => {
       <span style={{ position: "absolute", right: 0, top: -3, width: 1, height: 7, background: "#b8ab97" }} />
       <span style={{ position: "absolute", left: `calc(${p}% - 1.5px)`, top: -4, width: 3, height: 9, background: "#0d6d56", borderRadius: 1 }} />
     </span>
+  </span>;
+};
+
+// One-year close sparkline scaled to the 52-week range: the line shows the trend and
+// its vertical position shows where price sits in its 52-wk band (the faint rules are
+// the 52-wk high/low). Teal if up over the year, claret-red if down.
+const Sparkline = ({ closes, hi52, lo52 }) => {
+  if (!closes || closes.length < 2) return null;
+  const W = 66, H = 20, PAD = 2;
+  const lo = Math.min(typeof lo52 === "number" ? lo52 : Infinity, ...closes);
+  const hi = Math.max(typeof hi52 === "number" ? hi52 : -Infinity, ...closes);
+  const span = hi - lo || 1;
+  const px = i => PAD + (i / (closes.length - 1)) * (W - PAD * 2);
+  const py = v => PAD + (1 - (v - lo) / span) * (H - PAD * 2);
+  const last = closes[closes.length - 1];
+  const up = last >= closes[0];
+  const col = up ? "#0d6d56" : "#b2342b";
+  const dPath = closes.map((v, i) => `${i ? "L" : "M"}${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(" ");
+  const pos = Math.round(((last - lo) / span) * 100);
+  return <span style={{ display: "inline-flex", alignItems: "center", width: W, flexShrink: 0 }} title={`52-wk ${lo.toFixed(2)} – ${hi.toFixed(2)} · at ${pos}% of range · 1-yr ${up ? "up" : "down"}`}>
+    <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} style={{ display: "block", overflow: "visible" }}>
+      <line x1={PAD} x2={W - PAD} y1={py(hi).toFixed(1)} y2={py(hi).toFixed(1)} stroke="#e9ddc9" strokeWidth="0.6" />
+      <line x1={PAD} x2={W - PAD} y1={py(lo).toFixed(1)} y2={py(lo).toFixed(1)} stroke="#e9ddc9" strokeWidth="0.6" />
+      <path d={dPath} fill="none" stroke={col} strokeWidth="1.1" strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={px(closes.length - 1).toFixed(1)} cy={py(last).toFixed(1)} r="1.6" fill={col} />
+    </svg>
   </span>;
 };
 
@@ -2459,6 +2508,53 @@ function MacroLedger() {
   </div>;
 }
 
+// The one-glance risk read: how far the S&P 500 sits below its highest close in the
+// window, how many sessions it has been underwater, and where the VIX ranks in its
+// own recent range. All keyless via FRED (SP500 + VIXCLS), both in the api/fred allowlist.
+function DrawdownMeter() {
+  const d = useFred("SP500,VIXCLS");
+  const sp = (d && d.SP500) || [];
+  const vx = (d && d.VIXCLS) || [];
+  if (sp.length < 30) return <p style={{ color: "#8a8072", fontSize: 12, textAlign: "center", padding: "12px 0", lineHeight: 1.6 }}>How far the S&P 500 sits below its recent peak, how long it has spent underwater, and where the VIX ranks in its own recent range — the one-glance risk read.<br /><span style={{ fontSize: 10, color: "#a2977f" }}>Live via FRED in production</span></p>;
+  const vals = sp.map(r => r[1]);
+  let peakIdx = 0;
+  for (let i = 1; i < vals.length; i++) if (vals[i] >= vals[peakIdx]) peakIdx = i;
+  const peak = vals[peakIdx], curr = vals[vals.length - 1];
+  const dd = (curr / peak - 1) * 100;
+  const atHigh = dd > -0.05;
+  const daysUW = vals.length - 1 - peakIdx;
+  const lo = Math.min(...vals), span = peak - lo || 1;
+  const pos = Math.max(0, Math.min(100, ((curr - lo) / span) * 100));
+  const dayLabel = iso => { const [y, m, dd2] = iso.split("-"); return new Date(+y, +m - 1, +dd2).toLocaleDateString("en-US", { month: "short", day: "numeric" }); };
+  const peakDate = sp[peakIdx][0], asof = sp[sp.length - 1][0];
+  const months = Math.max(1, Math.round((new Date(asof) - new Date(sp[0][0])) / 2.6298e9));
+  let vixNow = null, vixPct = null;
+  if (vx.length > 20) { const vv = vx.map(r => r[1]); vixNow = vv[vv.length - 1]; vixPct = Math.round(vv.filter(v => v <= vixNow).length / vv.length * 100); }
+  const stat = (label, value, sub, color) => <div style={{ minWidth: 90 }}>
+    <div style={{ fontSize: 9, fontFamily: "'JetBrains Mono',monospace", color: "#8a8072", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 5 }}>{label}</div>
+    <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 22, fontWeight: 600, color: color || "#262421", lineHeight: 1 }}>{value}</div>
+    <div style={{ fontSize: 9.5, color: "#a2977f", marginTop: 4 }}>{sub}</div>
+  </div>;
+  const rule = () => <div style={{ width: 1, alignSelf: "stretch", background: "#efe4d2" }} />;
+  return <div>
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 18, alignItems: "stretch" }}>
+      {stat("Off peak", atHigh ? "0.0%" : `${dd.toFixed(1)}%`, atHigh ? "at a window high" : `S&P ${Math.round(curr).toLocaleString()}`, atHigh ? "#0d6d56" : "#b2342b")}
+      {rule()}
+      {stat("Underwater", atHigh ? "0" : String(daysUW), atHigh ? "fresh highs" : `sessions since ${dayLabel(peakDate)}`, "#262421")}
+      {vixNow != null && rule()}
+      {vixNow != null && stat("VIX", vixNow.toFixed(1), `${vixPct}th pctile, ${months}-mo`, vixPct >= 80 ? "#b2342b" : vixPct <= 20 ? "#0d6d56" : "#262421")}
+      <div style={{ flex: 1, minWidth: 150, display: "flex", flexDirection: "column", justifyContent: "center" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 8.5, fontFamily: "'JetBrains Mono',monospace", color: "#a2977f", marginBottom: 4 }}><span>{months}-mo low</span><span>peak</span></div>
+        <div style={{ position: "relative", height: 4, background: "#ece1cd", borderRadius: 2 }}>
+          <div style={{ position: "absolute", left: 0, top: 0, height: "100%", width: `${pos}%`, background: atHigh ? "#0d6d56" : "linear-gradient(90deg,#b2342b,#b0741e)", borderRadius: 2 }} />
+          <span style={{ position: "absolute", left: `calc(${pos}% - 1px)`, top: -3, width: 2, height: 10, background: "#262421" }} />
+        </div>
+      </div>
+    </div>
+    <SourceLine>Source: FRED — S&P 500 (daily close) & CBOE VIX · {months}-month lookback · drawdown measured from the highest close in the window · 12-hr cache</SourceLine>
+  </div>;
+}
+
 function CreditStrip() {
   const d = useFred("BAMLH0A0HYM2,T10YIE,T10Y2Y");
   if (!d) return null;
@@ -2784,6 +2880,7 @@ export default function App() {
   const setDesk = v => { setDeskRaw(v); try { localStorage.setItem("mjb_desk", v ? "1" : "0"); } catch {} };
   const [showSettings, setShowSettings] = useState(false);
   const { prices, live: pricesLive, asOf } = usePrices(TICKERS, finnhubKey);
+  const hist = useHistory(TICKERS.map(t => t.symbol).join(","));
   const [tab, setTabRaw] = useState(() => { try { const valid = ["home", "projects", "markets", "news", "recruiter"]; const path = window.location.pathname.replace(/\/+$/, "").slice(1); if (valid.includes(path)) return path; const q = new URLSearchParams(window.location.search).get("tab"); return valid.includes(q) ? q : "home"; } catch { return "home"; } }), [hovP, setHovP] = useState(null), [cmd, setCmd] = useState(false), [showHero, setShowHero] = useState(() => { try { return !sessionStorage.getItem("mb_intro"); } catch { return true; } }), [mounted, setMounted] = useState(false);
   const setTab = (t) => { setTabRaw(t); try { window.history.pushState({ tab: t }, "", t === "home" ? "/" : `/${t}`); } catch {} window.scrollTo(0, 0); };
   const goAnchor = (t, id) => { setTabRaw(t); try { window.history.pushState({ tab: t }, "", `${t === "home" ? "/" : `/${t}`}#${id}`); } catch {} setTimeout(() => { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); else window.scrollTo(0, 0); }, 80); };
@@ -2907,9 +3004,9 @@ export default function App() {
             {prices.every(p => p.price === "—") && <div style={{ fontSize: 10, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, padding: "8px 0" }}>AWAITING WIRE <span style={{ animation: "blink 1s step-end infinite", color: "#0d6d56" }}>▮</span></div>}
             {prices.map(t => <a key={t.symbol} href={`https://www.tradingview.com/symbols/${t.symbol}/`} target="_blank" rel="noopener noreferrer" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 12px", borderRadius: 10, transition: "all 0.2s", cursor: "pointer", borderLeft: "2px solid transparent", textDecoration: "none" }} onMouseEnter={e => {e.currentTarget.style.background = "rgba(13,109,86,0.04)"; e.currentTarget.style.borderLeftColor = "#0d6d5650";}} onMouseLeave={e => {e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderLeftColor = "transparent";}}>
               <div><span style={{ color: "#33302c", fontWeight: 600, fontSize: 13 }}>{t.symbol}</span><span style={{ color: "#8a8072", fontSize: 11, marginLeft: 8 }}>{t.name}</span></div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}><RangeBar h={t.h} l={t.l} c={parseFloat(t.price)} /><span style={{ color: "#33302c", fontFamily: "JetBrains Mono, monospace", fontSize: 13, minWidth: 60, textAlign: "right" }}>${t.price}</span><span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, minWidth: 58, textAlign: "right", color: parseFloat(t.change) >= 0 ? "#0d6d56" : "#b2342b", fontWeight: 600 }}>{parseFloat(t.change) >= 0 ? "▲" : "▼"} {Math.abs(parseFloat(t.change)).toFixed(2)}%</span></div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>{hist && hist[t.symbol] && hist[t.symbol].closes ? <Sparkline closes={hist[t.symbol].closes} hi52={hist[t.symbol].hi52} lo52={hist[t.symbol].lo52} /> : <RangeBar h={t.h} l={t.l} c={parseFloat(t.price)} />}<span style={{ color: "#33302c", fontFamily: "JetBrains Mono, monospace", fontSize: 13, minWidth: 60, textAlign: "right" }}>${t.price}</span><span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 11, minWidth: 58, textAlign: "right", color: parseFloat(t.change) >= 0 ? "#0d6d56" : "#b2342b", fontWeight: 600 }}>{parseFloat(t.change) >= 0 ? "▲" : "▼"} {Math.abs(parseFloat(t.change)).toFixed(2)}%</span></div>
             </a>)}
-            <SourceLine>Source: Finnhub · 5-min cache{asOf ? ` · as of ${asOf}` : ""}{pricesLive ? "" : " · simulated demo data"}</SourceLine>
+            <SourceLine>Source: Finnhub · 5-min cache{asOf ? ` · as of ${asOf}` : ""}{hist ? " · 1-yr trend via Yahoo Finance" : ""}{pricesLive ? "" : " · simulated demo data"}</SourceLine>
           </section>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.12s both" }}>
@@ -2936,6 +3033,10 @@ export default function App() {
             <h2 style={S.cardTitle}><span style={{ color: "#b0741e" }}>◆</span> Macro Ledger<Info text="The prints every interview and morning meeting references — CPI, unemployment, Fed funds, the 10-year, the 30-year mortgage — each with its change from the prior reading and release dateline. The econ calendar says CPI is due; this shows the print." link="https://fred.stlouisfed.org" linkLabel="FRED" /></h2>
             <MacroLedger />
           </section>
+        </div>
+        <div id="drawdown-meter" style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease 0.52s both" }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#b2342b" }}>◆</span> The Drawdown Meter<Info text="A one-glance risk read from FRED: how far the S&P 500 has fallen from its highest close in the lookback window, how many sessions it has spent below that peak, and where today's VIX ranks against its own recent range. Drawdown and days-underwater use daily S&P 500 closes; the VIX figure is a percentile over the same window." link="https://fred.stlouisfed.org/series/SP500" linkLabel="FRED · S&P 500 series" /></h2>
+          <DrawdownMeter />
         </div>
         {desk ? <div style={{ ...S.card, animation: "fadeUp 0.5s ease 0.4s both" }}>
           <h2 style={S.cardTitle}><span style={{ color: "#6d549e" }}>◆</span> Positions Ledger — The Paper Book<Info text="A paper-trading book marked to the live tape. Fills execute at the last trade when you click; every buy demands a one-line thesis, printed beside the position so your past reasoning confronts your P&L. Reset archives the old book rather than deleting it. Private to this browser." /></h2>
