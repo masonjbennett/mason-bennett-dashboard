@@ -1523,6 +1523,18 @@ function useTechBank() {
   useEffect(() => { if (TECH_BANK_CACHE) return; let on = true; import("./technicals.json").then(m => { TECH_BANK_CACHE = m.default; if (on) setBank(m.default); }).catch(() => {}); return () => { on = false; }; }, []);
   return bank;
 }
+let LEX_BANK_CACHE = null;
+function useLexicon() {
+  const [bank, setBank] = useState(LEX_BANK_CACHE || []);
+  useEffect(() => { if (LEX_BANK_CACHE) return; let on = true; import("./lexicon.json").then(m => { LEX_BANK_CACHE = m.default; if (on) setBank(m.default); }).catch(() => {}); return () => { on = false; }; }, []);
+  return bank;
+}
+let BIAS_BANK_CACHE = null;
+function useBiases() {
+  const [bank, setBank] = useState(BIAS_BANK_CACHE || []);
+  useEffect(() => { if (BIAS_BANK_CACHE) return; let on = true; import("./biases.json").then(m => { BIAS_BANK_CACHE = m.default; if (on) setBank(m.default); }).catch(() => {}); return () => { on = false; }; }, []);
+  return bank;
+}
 const AwaitingWire = () => <div style={{ fontSize: 10, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, padding: "8px 0" }}>AWAITING WIRE <span style={{ animation: "blink 1s step-end infinite", color: "#0d6d56" }}>▮</span></div>;
 const GradeBar = ({ onGrade, done, doneLabel = "Marked — misses return via the docket" }) => done
   ? <span style={{ fontSize: 8.5, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, textTransform: "uppercase" }}>{doneLabel}</span>
@@ -1588,6 +1600,81 @@ function TechnicalsDesk() {
     </div>
     {list.length > PREVIEW && <button onClick={() => setShowAll(!showAll)} style={{ display: "block", width: "100%", background: "none", border: "none", borderTop: "1px solid #ddcfb8", cursor: "pointer", padding: "10px 2px 4px", textAlign: "center", fontSize: 9, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, textTransform: "uppercase", color: "#0d6d56" }}>{showAll ? "▴ Fold the bank away" : `▾ Open the full bank — ${list.length} questions`}</button>}
     <SourceLine>{bank.length} questions at press time · house bank, original questions · reveal before you grade — say the answer out loud first</SourceLine>
+  </div>;
+}
+
+const LEX_CAT_LABELS = { acct: "Accounting", val: "Valuation", ma: "M&A", lbo: "LBO & Private Equity", cred: "Credit & LevFin", fi: "Bonds & Rates", eq: "Equities", der: "Derivatives", mac: "Macro & the Fed", wm: "Wealth & Portfolio", str: "Street Speak" };
+function LexiconBox({ desk }) {
+  const bank = useLexicon();
+  const [quiz, setQuizRaw] = useState(() => lsGet("mjb_lex_quiz", desk));
+  const [rev, setRev] = useState(false);
+  const [done, setDone] = useState(() => lsGet("mjb_attempts", []).some(x => x.src === "lexicon" && x.d === todayISO()));
+  const setQuiz = v => { setQuizRaw(v); lsSet("mjb_lex_quiz", v); setRev(false); };
+  if (!bank.length) return <AwaitingWire />;
+  const day = Math.floor(Date.now() / 86400000);
+  const t = bank[day % bank.length];
+  const body = <>
+    <p style={{ fontSize: 12.5, color: "#4a443c", lineHeight: 1.75, marginBottom: 8 }}>{t.def}</p>
+    <p style={{ fontSize: 11.5, color: "#6f675c", fontStyle: "italic", lineHeight: 1.6, borderLeft: "2px solid #ddcfb8", paddingLeft: 10, margin: 0 }}>{t.usage}</p>
+  </>;
+  return <div>
+    <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 8 }}>
+      <span style={{ fontSize: 8, color: "#1f5a9e", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, textTransform: "uppercase" }}>{LEX_CAT_LABELS[t.cat] || t.cat} · Entry {(day % bank.length) + 1} of {bank.length}</span>
+      <button onClick={() => setQuiz(!quiz)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 8, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, textTransform: "uppercase", color: quiz ? "#0d6d56" : "#8a8072", textDecoration: "underline dotted", textUnderlineOffset: 3 }}>Quiz me first · {quiz ? "on" : "off"}</button>
+    </div>
+    <p style={{ fontFamily: "'Instrument Serif',serif", fontSize: 21, color: "#262421", lineHeight: 1.3, marginBottom: 10 }}>{t.term}</p>
+    {quiz ? <>
+      <Redacted revealed={rev} onReveal={() => setRev(true)}>{body}</Redacted>
+      {rev && <div style={{ marginTop: 12 }}>
+        <GradeBar done={done} onGrade={g => { recordSelfGrade({ src: "lexicon", qid: t.id, grade: g, front: `Define: ${t.term}`, back: t.def }); setDone(true); }} />
+      </div>}
+    </> : body}
+    <SourceLine>One term per day from the {bank.length}-entry house lexicon · original definitions, set in-house · same entry for every reader{quiz ? " · quiz marks stay in your browser" : ""}</SourceLine>
+  </div>;
+}
+
+// The Bias Ledger's cross-print: read the paper book (locally) for the classic tells.
+function biasCrossPrints(bank) {
+  const book = lsGet("mjb_paper", null);
+  if (!book || !Array.isArray(book.positions) || !book.positions.length) return [];
+  const name = id => (bank.find(b => b.id === id) || {}).name || id;
+  const marks = cacheGet("mjb_paper_marks", 1440) || {};
+  const out = [];
+  const marked = book.positions.filter(p => typeof marks[p.ticker] === "number" && marks[p.ticker] > 0);
+  const losers = marked.filter(p => marks[p.ticker] < p.basis);
+  if (losers.length >= 2) out.push({ id: "disposition-effect", line: `${losers.length} positions held below entry` });
+  if (marked.length && marked.length === book.positions.length) {
+    const cost = marked.reduce((s, p) => s + p.basis * p.shares, 0);
+    const mv = marked.reduce((s, p) => s + marks[p.ticker] * p.shares, 0);
+    if (cost > 0 && (mv - cost) / cost > 0.10) out.push({ id: "house-money-effect", line: `the book is up ${Math.round(((mv - cost) / cost) * 100)}% on cost` });
+    const top = marked.reduce((a, p) => (marks[p.ticker] * p.shares > marks[a.ticker] * a.shares ? p : a));
+    const topShare = (marks[top.ticker] * top.shares) / (mv + (book.cash || 0));
+    if (mv > 0 && topShare > 0.35) out.push({ id: "overconfidence", line: `${top.ticker} alone is ${Math.round(topShare * 100)}% of the book` });
+  }
+  const now = Date.now();
+  const week = (book.blotter || []).filter(e => { const ts = new Date(e.d).getTime(); return ts && now - ts < 7 * 86400000; });
+  if (week.length >= 5) out.push({ id: "action-bias", line: `${week.length} trades printed inside a week` });
+  const latest = (book.blotter || []).reduce((m, e) => Math.max(m, new Date(e.d).getTime() || 0), 0);
+  if (latest && now - latest > 30 * 86400000) out.push({ id: "status-quo-bias", line: "no trade printed in over 30 days" });
+  return out.map(x => ({ ...x, bias: name(x.id) }));
+}
+function BiasLedger({ desk }) {
+  const bank = useBiases();
+  if (!bank.length) return <AwaitingWire />;
+  const day = Math.floor(Date.now() / 86400000);
+  const b = bank[day % bank.length];
+  const prints = desk ? biasCrossPrints(bank) : [];
+  return <div>
+    <div style={{ fontSize: 8, color: "#990f3d", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>Behavioral finance · Entry {(day % bank.length) + 1} of {bank.length}</div>
+    <p style={{ fontFamily: "'Instrument Serif',serif", fontSize: 21, color: "#262421", lineHeight: 1.3, marginBottom: 10 }}>{b.name}</p>
+    <p style={{ fontSize: 12.5, color: "#4a443c", lineHeight: 1.75, marginBottom: 10 }}>{b.def}</p>
+    <div style={{ fontSize: 11.5, color: "#4a443c", lineHeight: 1.65, marginBottom: 6 }}><span style={{ fontSize: 8, color: "#b0741e", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, textTransform: "uppercase", marginRight: 8 }}>The tell</span>{b.tell}</div>
+    <div style={{ fontSize: 11.5, color: "#4a443c", lineHeight: 1.65 }}><span style={{ fontSize: 8, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, textTransform: "uppercase", marginRight: 8 }}>The counter</span>{b.counter}</div>
+    {prints.length > 0 && <div style={{ marginTop: 12, borderTop: "1px solid #efe4d2", paddingTop: 9 }}>
+      <div style={{ fontSize: 8, color: "#990f3d", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, textTransform: "uppercase", marginBottom: 5 }}>Cross-print · your paper book</div>
+      {prints.map(p => <div key={p.id} style={{ fontSize: 11, color: "#4a443c", lineHeight: 1.65 }}>{p.line[0].toUpperCase() + p.line.slice(1)} — see: <i>{p.bias}</i>{p.id === b.id ? <span style={{ color: "#990f3d" }}> — printed above.</span> : null}</div>)}
+    </div>}
+    <SourceLine>One bias per day from the {bank.length}-entry ledger{desk ? " · cross-prints read your paper book locally — nothing leaves this browser" : ""}</SourceLine>
   </div>;
 }
 
@@ -2498,6 +2585,16 @@ export default function App() {
         <div style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease 0.05s both" }}>
           <h2 style={S.cardTitle}><span style={{ color: "#b0741e" }}>◆</span> The Daily Drill<Info text="One dated edition per day: six stations mixed across every drill generator on the site — technicals at rising difficulty, a tape-signal check, a three-statement ripple, and the paper LBO. Interleaving is deliberate: identifying WHICH method applies is the skill interviews test. Same edition for every reader; marks stay in your browser." /></h2>
           <DailyDrill onGoPuzzle={() => goAnchor("projects", "puzzle-corner")} />
+        </div>
+        <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
+          <section id="lexicon" style={{ ...S.card, animation: "fadeUp 0.5s ease both" }}>
+            <h2 style={S.cardTitle}><span style={{ color: "#1f5a9e" }}>◆</span> The Lexicon<Info text="One term a day from the 300-entry house dictionary — accounting to Street slang, definitions written in-house. Flip on 'quiz me first' to hide the definition and grade your recall; marks feed the Review Docket and never leave your browser." /></h2>
+            <LexiconBox desk={desk} />
+          </section>
+          <section id="bias-ledger" style={{ ...S.card, animation: "fadeUp 0.5s ease 0.05s both" }}>
+            <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> The Bias Ledger<Info text="One behavioral-finance bias a day from the 40-entry almanac: what it is, the tell in a real book, and the working countermeasure. With the desk on, it cross-prints against your paper positions — read locally, never sent anywhere." /></h2>
+            <BiasLedger desk={desk} />
+          </section>
         </div>
         <div style={{ marginBottom: 24, animation: "fadeUp 0.5s ease both", padding: "20px 24px", background: "linear-gradient(135deg, rgba(255,253,249,0.9), rgba(251,245,236,0.7))", borderRadius: 10, border: "1px solid #e3d5bf", boxShadow: "0 4px 20px rgba(64,52,32,0.07)" }}><Clock /></div>
         <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
