@@ -2762,6 +2762,109 @@ function CurveTimeMachine() {
   </div>;
 }
 
+// Name That Regime — a blind macro-history quiz. Show an unlabeled FRED series over a
+// past window; guess the era from its shape. Keyless via api/macrohist.js. Public.
+function useMacroHist() {
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    let on = true;
+    (async () => {
+      try {
+        const cached = cacheGet("mjb_macrohist", 1440);
+        if (cached) { if (on) setData(cached); return; }
+        const r = await fetch("/api/macrohist");
+        if (!r.ok) throw 0;
+        const d = await r.json();
+        if (d && !d.error && on) { setData(d); cacheSet("mjb_macrohist", d); }
+      } catch {}
+    })();
+    return () => { on = false; };
+  }, []);
+  return data;
+}
+const REGIME_SERIES = {
+  FEDFUNDS: { name: "Fed funds rate", fmt: v => v.toFixed(2) + "%" },
+  UNRATE: { name: "Unemployment rate", fmt: v => v.toFixed(1) + "%" },
+  DGS10: { name: "10-year Treasury yield", fmt: v => v.toFixed(2) + "%" },
+  T10Y2Y: { name: "2s10s spread", fmt: v => `${v >= 0 ? "+" : ""}${Math.round(v * 100)}bp` },
+  VIXCLS: { name: "VIX — market volatility", fmt: v => v.toFixed(0) },
+  BAMLH0A0HYM2: { name: "High-yield credit spread", fmt: v => v.toFixed(1) + "%" },
+};
+const REGIME_EPISODES = [
+  { key: "covid", series: "UNRATE", start: "2019-06", end: "2021-06", answer: "2020 · COVID shock", blurb: "Unemployment leapt from 3.5% to 14.7% in two months as the economy shut down — the fastest labor-market collapse on record." },
+  { key: "gfc", series: "BAMLH0A0HYM2", start: "2007-01", end: "2010-06", answer: "2008 · Financial crisis", blurb: "High-yield spreads blew out past 20% as Lehman failed and credit markets froze." },
+  { key: "dotcom", series: "FEDFUNDS", start: "1999-01", end: "2004-06", answer: "2000–01 · Dot-com bust", blurb: "The Fed hiked to 6.5% into the tech peak, then cut all the way to 1% as the Nasdaq collapsed." },
+  { key: "inflation", series: "FEDFUNDS", start: "2021-01", end: "2024-12", answer: "2022–23 · Inflation shock", blurb: "The Fed hiked from ~0% to 5.25%+ in 18 months — the fastest tightening since the 1980s — against 9% CPI." },
+  { key: "euro", series: "VIXCLS", start: "2010-06", end: "2012-12", answer: "2011 · Euro crisis", blurb: "The VIX spiked toward 48 on the U.S. credit-rating downgrade and Europe's sovereign-debt crisis." },
+  { key: "q4-2018", series: "VIXCLS", start: "2017-06", end: "2019-06", answer: "2018 · Q4 growth scare", blurb: "February's 'Volmageddon' vol spike and the Q4 selloff, as the Fed hiked into a slowing economy." },
+  { key: "taper", series: "DGS10", start: "2012-06", end: "2014-12", answer: "2013 · Taper tantrum", blurb: "The 10-year yield jumped from 1.6% to 3% after the Fed signaled it would taper its bond buying." },
+  { key: "bond94", series: "DGS10", start: "1993-01", end: "1995-06", answer: "1994 · Bond massacre", blurb: "A surprise, aggressive Fed tightening cycle sent the 10-year from 5.2% to 8% in barely a year." },
+  { key: "china16", series: "BAMLH0A0HYM2", start: "2014-06", end: "2016-12", answer: "2015–16 · Oil & China scare", blurb: "High-yield spreads widened toward 9% as oil crashed and fears of a China slowdown hit markets." },
+  { key: "gulf91", series: "UNRATE", start: "1990-01", end: "1993-06", answer: "1990–91 · Gulf War recession", blurb: "Unemployment climbed toward 7.8% through the early-'90s recession and its slow, jobless recovery." },
+];
+function NameThatRegime() {
+  const data = useMacroHist();
+  const [round, setRound] = useState(null);
+  const [picked, setPicked] = useState(null);
+  const [score, setScore] = useState(() => lsGet("mjb_regime_score", { c: 0, n: 0 }));
+  const deal = () => {
+    const valid = REGIME_EPISODES.filter(ep => (data[ep.series] || []).some(([ym]) => ym >= ep.start && ym <= ep.end));
+    if (!valid.length) return;
+    let e; do { e = valid[Math.floor(Math.random() * valid.length)]; } while (round && valid.length > 1 && e.key === round.ep.key);
+    const pool = [...new Set(REGIME_EPISODES.map(x => x.answer))].filter(l => l !== e.answer);
+    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    const opts = [e.answer, ...pool.slice(0, 3)];
+    for (let i = opts.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [opts[i], opts[j]] = [opts[j], opts[i]]; }
+    setRound({ ep: e, opts }); setPicked(null);
+  };
+  useEffect(() => { if (data && !round) deal(); }, [data]);
+  if (!data) return <p style={{ color: "#8a8072", fontSize: 12, textAlign: "center", padding: "12px 0", lineHeight: 1.6 }}>A blind macro-history chart — unemployment, the VIX, credit spreads, the Fed. Read the shape and name the era it belongs to.<br /><span style={{ fontSize: 10, color: "#a2977f" }}>Live via FRED in production</span></p>;
+  if (!round) return null;
+  const { ep, opts } = round;
+  const meta = REGIME_SERIES[ep.series];
+  const series = (data[ep.series] || []).filter(([ym]) => ym >= ep.start && ym <= ep.end);
+  const vals = series.map(r => r[1]);
+  const W = 560, H = 168, PL = 42, PB = 12, PT = 12;
+  const lo = Math.min(...vals), hi = Math.max(...vals), span = (hi - lo) || 1;
+  const x = i => PL + (i / (series.length - 1)) * (W - PL - 12);
+  const y = v => PT + (1 - (v - lo) / span) * (H - PT - PB);
+  const path = series.map((r, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(r[1]).toFixed(1)}`).join(" ");
+  const gridVals = [hi, lo + span / 2, lo];
+  const fmtYm = ym => { const [yy, mm] = ym.split("-"); return new Date(+yy, +mm - 1, 1).toLocaleDateString("en-US", { month: "short", year: "numeric" }); };
+  const pick = o => {
+    if (picked) return;
+    setPicked(o);
+    const ns = { c: score.c + (o === ep.answer ? 1 : 0), n: score.n + 1 };
+    setScore(ns); lsSet("mjb_regime_score", ns);
+  };
+  return <div>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8, marginBottom: 6 }}>
+      <span style={{ fontSize: 12, fontFamily: "'JetBrains Mono',monospace", color: "#6f675c" }}>{meta.name}<span style={{ color: "#a2977f", marginLeft: 8, fontSize: 10 }}>· {series.length} months, dates hidden</span></span>
+      <span style={{ fontSize: 10, fontFamily: "'JetBrains Mono',monospace", color: "#8a8072", letterSpacing: 1 }}>SCORE {score.c}/{score.n}</span>
+    </div>
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }} role="img" aria-label="Unlabeled macro-history chart — guess the era">
+      {gridVals.map((v, i) => <g key={i}><line x1={PL} x2={W - 8} y1={y(v)} y2={y(v)} stroke="#e9ddc9" strokeWidth="0.6" /><text x={PL - 6} y={y(v) + 3} textAnchor="end" fontSize="8" fill="#a2977f" fontFamily="'JetBrains Mono',monospace">{meta.fmt(v)}</text></g>)}
+      <path d={path} fill="none" stroke="#262421" strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+    <p style={{ fontSize: 12.5, color: "#33302c", margin: "10px 0 8px", fontWeight: 600 }}>Which market regime is this?</p>
+    <div className="regime-opts" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+      {opts.map(o => {
+        const isAns = o === ep.answer, isPick = o === picked;
+        const bg = !picked ? "rgba(255,253,249,0.85)" : isAns ? "rgba(13,109,86,0.10)" : isPick ? "rgba(178,52,43,0.08)" : "rgba(255,253,249,0.5)";
+        const bc = !picked ? "#e9ddc9" : isAns ? "#0d6d5640" : isPick ? "#b2342b40" : "#e9ddc9";
+        const cl = !picked ? "#4a443c" : isAns ? "#0d6d56" : isPick ? "#b2342b" : "#8a8072";
+        return <button key={o} onClick={() => pick(o)} disabled={!!picked} style={{ textAlign: "left", background: bg, border: `1px solid ${bc}`, borderRadius: 8, padding: "8px 12px", fontSize: 11.5, fontFamily: "'JetBrains Mono',monospace", color: cl, cursor: picked ? "default" : "pointer", letterSpacing: 0.3, transition: "all 0.2s" }}>{o}</button>;
+      })}
+    </div>
+    {picked && <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid #efe4d2" }}>
+      <div style={{ fontSize: 11, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, textTransform: "uppercase", color: picked === ep.answer ? "#0d6d56" : "#b2342b", marginBottom: 5 }}>{picked === ep.answer ? "Correct" : "Not quite"} — {ep.answer} · {fmtYm(ep.start)}–{fmtYm(ep.end)}</div>
+      <p style={{ fontSize: 12, color: "#4a443c", lineHeight: 1.6, margin: 0 }}>{ep.blurb}</p>
+      <button onClick={deal} style={{ ...S.btn, fontSize: 10, padding: "5px 16px", marginTop: 10 }}>Next chart</button>
+    </div>}
+    <SourceLine>Source: FRED — monthly macro history from 1990 · read the shape, name the era · your score stays in this browser · 24-hr cache</SourceLine>
+  </div>;
+}
+
 // FX (ECB reference rates via Frankfurter) + crypto (CoinGecko) — both keyless and CORS-open, browser-direct.
 function CrossAssetRows() {
   const [fx, setFx] = useState(null);
@@ -3149,6 +3252,10 @@ export default function App() {
         <div id="curve-time-machine" style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease 0.5s both" }}>
           <h2 style={S.cardTitle}><span style={{ color: "#1f5a9e" }}>◆</span> The Curve Time Machine<Info text="Scrub the entire US Treasury yield curve month by month from 1990 to today, drawn from FRED's constant-maturity series. The y-axis is fixed so you can watch the whole curve rise, fall, and invert as you drag; today's curve stays on as a dashed teal ghost for comparison. The chips jump to landmark regimes — the dot-com peak, the pre-GFC inversion, COVID, and the deepest modern inversion." link="https://fred.stlouisfed.org/categories/115" linkLabel="FRED · Treasury constant maturity" /></h2>
           <CurveTimeMachine />
+        </div>
+        <div id="name-that-regime" style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease 0.51s both" }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#6d549e" }}>◆</span> Name That Regime<Info text="A blind macro-history quiz drawn from FRED. You're shown one long-history series — unemployment, the VIX, high-yield spreads, the fed funds rate — over an unlabeled two-to-three-year window, and you name the era from its shape. Reveal shows the real dates and what happened. Your running score stays in this browser." link="https://fred.stlouisfed.org" linkLabel="FRED" /></h2>
+          <NameThatRegime />
         </div>
         <div id="drawdown-meter" style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease 0.52s both" }}>
           <h2 style={S.cardTitle}><span style={{ color: "#b2342b" }}>◆</span> The Drawdown Meter<Info text="A one-glance risk read from FRED: how far the S&P 500 has fallen from its highest close in the lookback window, how many sessions it has spent below that peak, and where today's VIX ranks against its own recent range. Drawdown and days-underwater use daily S&P 500 closes; the VIX figure is a percentile over the same window." link="https://fred.stlouisfed.org/series/SP500" linkLabel="FRED · S&P 500 series" /></h2>
