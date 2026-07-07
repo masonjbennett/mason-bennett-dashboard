@@ -68,7 +68,7 @@ const EXPERIENCE = [
   { role: "B.S. Business Administration", org: "Walton College of Business", date: "2021–2024", type: "edu", detail: "3.62 GPA · Business Economics · Dean's List (5 semesters)" },
   { role: "Finance & Economics Tutor", org: "Self-employed · Fayetteville, AR", date: "2021–2024", type: "work", detail: "10+ students/semester. Tailored study guides. Helped improve grades 1–2 letters." },
   { role: "Event Manager", org: "Venue on Spring Creek · TX", date: "2016–2020", type: "work", detail: "100+ guest events. Coordinated vendors, supervised staff. 95%+ satisfaction." },
-  { role: "Bartender & Server", org: "Service industry · TX & AR", date: "2016–2025", type: "work", detail: "Worked service-industry jobs continuously through high school and college — funding 100% of undergraduate education." },
+  { role: "Bartender & Server", org: "Service industry · OK, TX & AR", date: "2016–2025", type: "work", detail: "Worked service-industry jobs to save for and self-fund undergraduate and graduate studies." },
 ];
 const READING = [
   { title: "Damodaran on Valuation", author: "Aswath Damodaran", s: "Reading", note: "Every story has to reconcile to a number eventually." },
