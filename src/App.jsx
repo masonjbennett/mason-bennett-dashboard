@@ -152,11 +152,11 @@ async function fetchBriefing(type, key, forceRefresh = false) {
   const p = { morning: `Senior equity research analyst morning briefing. Search latest market news. Cover: 1) Overnight global markets 2) Macro/Fed developments 3) Pre-market sector moves 4) M&A/deals 5) What to watch today.\n${SRC_GUIDE}\nCite sources inline [Reuters]. End with ---SOURCES--- then JSON: [{"name":"...","url":"..."}]. Plain paragraphs, no markdown.`, close: `Senior equity research analyst close briefing. Search today's results. Cover: 1) Index closes with % 2) Session drivers 3) Stock movers 4) After-hours 5) Tomorrow watch.\n${SRC_GUIDE}\nCite inline [Reuters]. End with ---SOURCES--- then JSON: [{"name":"...","url":"..."}]. Plain paragraphs, no markdown.` };
   if (!key) return null;
   if (!forceRefresh) { const cached = cacheGet(`mb_brief_${type}`, 60); if (cached) return cached; }
-  try { const d = await callAPI(key, { model: "claude-sonnet-5", max_tokens: 4000, tools: [{ type: "web_search_20260209", name: "web_search" }], messages: [{ role: "user", content: p[type] }] }); const raw = extractTextMulti(d); if (!raw) return null; let text = raw, sources = []; const sep = raw.indexOf("---SOURCES---"); if (sep !== -1) { text = raw.slice(0, sep).trim(); try { const srcRaw = raw.slice(sep + 13).trim().replace(/```json|```/g, "").trim(); const srcMatch = srcRaw.match(/\[[\s\S]*\]/); sources = JSON.parse(srcMatch ? srcMatch[0] : srcRaw); } catch {} } if (!sources.length) { const m = text.match(/\[([A-Z][A-Za-z\s\.&']+?)\]/g); if (m) sources = [...new Set(m.map(x => x.slice(1, -1).trim()))].map(n => ({ name: n, url: SRC_URLS[n] || "#" })); } const result = { text, sources }; cacheSet(`mb_brief_${type}`, result); return result; } catch (e) { console.error("Briefing error:", e); return null; }
+  try { const d = await callAPI(key, { model: "claude-sonnet-5", max_tokens: 4000, tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 6 }], messages: [{ role: "user", content: p[type] }] }); const raw = extractTextMulti(d); if (!raw) return null; let text = raw, sources = []; const sep = raw.indexOf("---SOURCES---"); if (sep !== -1) { text = raw.slice(0, sep).trim(); try { const srcRaw = raw.slice(sep + 13).trim().replace(/```json|```/g, "").trim(); const srcMatch = srcRaw.match(/\[[\s\S]*\]/); sources = JSON.parse(srcMatch ? srcMatch[0] : srcRaw); } catch {} } if (!sources.length) { const m = text.match(/\[([A-Z][A-Za-z\s\.&']+?)\]/g); if (m) sources = [...new Set(m.map(x => x.slice(1, -1).trim()))].map(n => ({ name: n, url: SRC_URLS[n] || "#" })); } const result = { text, sources }; cacheSet(`mb_brief_${type}`, result); return result; } catch (e) { console.error("Briefing error:", e); return null; }
 }
 async function verifyBriefing(t, key) {
   if (!key) return null;
-  try { const d = await callAPI(key, { model: "claude-sonnet-5", max_tokens: 3000, tools: [{ type: "web_search_20260209", name: "web_search" }], messages: [{ role: "user", content: `Fact-check this briefing. Extract factual claims, verify each via web search. Return ONLY JSON: {"summary":{"verified":0,"unverified":0,"discrepancy":0,"total":0,"confidence_pct":0},"claims":[{"claim":"...","status":"verified|unverified|minor_discrepancy","note":"...","source":"..."}]}\n\n"""\n${t}\n"""` }] }); const raw = extractText(d); if (!raw) return null; const match = raw.match(/\{[\s\S]*\}/); if (match) return JSON.parse(match[0]); return JSON.parse(raw); } catch (e) { console.error("Verify error:", e); return null; }
+  try { const d = await callAPI(key, { model: "claude-sonnet-5", max_tokens: 3000, tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 6 }], messages: [{ role: "user", content: `Fact-check this briefing. Extract factual claims, verify each via web search. Return ONLY JSON: {"summary":{"verified":0,"unverified":0,"discrepancy":0,"total":0,"confidence_pct":0},"claims":[{"claim":"...","status":"verified|unverified|minor_discrepancy","note":"...","source":"..."}]}\n\n"""\n${t}\n"""` }] }); const raw = extractText(d); if (!raw) return null; const match = raw.match(/\{[\s\S]*\}/); if (match) return JSON.parse(match[0]); return JSON.parse(raw); } catch (e) { console.error("Verify error:", e); return null; }
 }
 async function fetchSoWhat(t, type, key) {
   if (!key) return null;
@@ -167,7 +167,7 @@ async function fetchRegime(key) {
   const cached = cacheGet("mb_regime", 15);
   if (cached) return cached;
   try {
-    const d = await callAPI(key, { model: "claude-sonnet-5", max_tokens: 1000, tools: [{ type: "web_search_20260209", name: "web_search" }],
+    const d = await callAPI(key, { model: "claude-sonnet-5", max_tokens: 1000, tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 6 }],
         messages: [{ role: "user", content: `Search for the current VIX index level, CNN Fear and Greed Index score, and US 10-year Treasury yield.
 
 Then return ONLY a raw JSON object with no other text, no markdown, no backticks:
@@ -187,7 +187,7 @@ async function fetchEarnings(key) {
   const cached = cacheGet("mb_earnings", 60);
   if (cached) return cached;
   try {
-    const d = await callAPI(key, { model: "claude-sonnet-5", max_tokens: 1000, tools: [{ type: "web_search_20260209", name: "web_search" }],
+    const d = await callAPI(key, { model: "claude-sonnet-5", max_tokens: 1000, tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 6 }],
         messages: [{ role: "user", content: `Search for upcoming earnings reports this week and next week for major US companies. Return ONLY a raw JSON array with no other text, no markdown, no backticks. 8-10 most notable companies:
 [{"company":"Apple Inc.","ticker":"AAPL","date":"Apr 24","time":"AMC","est_eps":"$1.62"}]
 Replace with real upcoming earnings data. time should be "BMO" for before market open or "AMC" for after market close. Return ONLY the JSON array.` }] });
@@ -559,7 +559,7 @@ async function fetchEconCal(key) {
   const cached = cacheGet("mb_econ_cal", 120);
   if (cached) return cached;
   try {
-    const d = await callAPI(key, { model: "claude-sonnet-5", max_tokens: 1500, tools: [{ type: "web_search_20260209", name: "web_search" }],
+    const d = await callAPI(key, { model: "claude-sonnet-5", max_tokens: 1500, tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 6 }],
       messages: [{ role: "user", content: `Search for upcoming US economic calendar events for the next 2 weeks. Include Fed meetings (FOMC), CPI releases, jobs reports (NFP), GDP, PPI, retail sales, and any other major economic data releases. Return ONLY a JSON array: [{"event":"FOMC Rate Decision","date":"Apr 30","time":"2:00 PM ET","importance":"high","prior":"5.25-5.50%"}]. importance should be "high", "medium", or "low". Include 8-12 events. Return ONLY the JSON array.` }] });
     const raw = extractText(d);
     if (!raw) return null;
