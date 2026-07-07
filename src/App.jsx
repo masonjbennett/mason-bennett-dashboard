@@ -1880,6 +1880,135 @@ function CouponDesk() {
   </div>;
 }
 
+// The Waterfall Room — absolute-priority recovery drill. One emergence EV, three classes
+// of debt; value falls through the structure until it runs out. The class cut short is the fulcrum.
+function WaterfallRoom() {
+  const [seed, setSeed] = useState(() => Math.floor(Date.now() / 86400000));
+  const [ans, setAns] = useState({ sr: "", sub: "" });
+  const [pick, setPick] = useState(null);
+  const [checked, setChecked] = useState(false);
+  let P = null;
+  for (let k = 0; k < 16 && !P; k++) {
+    const r = mulberry32(seed * 31 + 19 + k * 101);
+    const E = [60, 80, 100, 120][Math.floor(r() * 4)];
+    const lien = E * [2, 2.5, 3][Math.floor(r() * 3)];
+    const sr = E * [1.5, 2][Math.floor(r() * 2)];
+    const sub = E * [1, 1.5][Math.floor(r() * 2)];
+    const EV = E * [3, 3.5, 4, 4.5, 5][Math.floor(r() * 5)];
+    // The fulcrum must be strictly PARTIALLY recovered: keep EV a margin away from every class boundary.
+    if (EV <= lien + E * 0.25 || EV >= lien + sr + sub - E * 0.25 || Math.abs(EV - (lien + sr)) <= E * 0.25) continue;
+    const toSr = Math.min(sr, EV - lien);
+    const toSub = Math.max(0, Math.min(sub, EV - lien - sr));
+    P = { E, lien, sr, sub, EV, toSr, toSub, recSr: toSr / sr * 100, recSub: toSub / sub * 100, fulcrum: toSr < sr ? "sr" : "sub" };
+  }
+  if (!P) return null;
+  const num = s => parseFloat(String(s).replace(/[$,%¢\s]/g, ""));
+  const grade = { sr: Math.abs(num(ans.sr) - P.recSr) <= 1, sub: Math.abs(num(ans.sub) - P.recSub) <= 1, f: pick === P.fulcrum };
+  const fields = [["sr", "Senior notes recovery (¢ per $1)", P.recSr.toFixed(1)], ["sub", "Subordinated recovery (¢ per $1)", P.recSub.toFixed(1)]];
+  const TRANCHES = [["lien", "1st-lien loan"], ["sr", "Senior notes"], ["sub", "Sub notes"]];
+  const fresh = () => { setSeed(s => s + 1); setAns({ sr: "", sub: "" }); setPick(null); setChecked(false); };
+  const check = () => {
+    setChecked(true);
+    recordDrillResult({ src: "waterfall", qid: String(seed), ok: Object.values(grade).every(Boolean), front: `Recovery waterfall: $${P.EV}M emergence EV against 1st lien $${P.lien}M, senior notes $${P.sr}M, subs $${P.sub}M — recoveries and the fulcrum?`, back: `Senior ${P.recSr.toFixed(1)}¢ · Sub ${P.recSub.toFixed(1)}¢ · fulcrum: ${P.fulcrum === "sr" ? "senior notes" : "sub notes"}`, given: `${ans.sr} / ${ans.sub} / ${pick || "—"}` });
+  };
+  return <div>
+    <p style={{ fontSize: 12.5, color: "#4a443c", lineHeight: 1.8, marginBottom: 6 }}>
+      A business with <b>${P.E}M EBITDA</b> files and emerges at <b>${P.EV}M</b> of enterprise value. The structure, top to bottom: a <b>${P.lien}M first-lien loan</b>, <b>${P.sr}M of senior notes</b>, and <b>${P.sub}M of subordinated notes</b>. Distribute the value by absolute priority:
+    </p>
+    <p style={{ fontSize: 9.5, color: "#a2977f", marginBottom: 14 }}>Each class is paid in full before a dollar reaches the next. The first class NOT paid in full is the fulcrum — it usually takes the post-reorg equity.</p>
+    <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+      {fields.map(([k, label, sol]) => <div key={k} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <span style={{ fontSize: 10.5, color: "#6f675c", width: 190, flexShrink: 0 }}>{label}</span>
+        <input value={ans[k]} onChange={e => { setAns(p => ({ ...p, [k]: e.target.value })); setChecked(false); }} style={{ ...S.input, width: 92, fontFamily: "'JetBrains Mono',monospace", fontSize: 12, padding: "6px 10px", textAlign: "right" }} />
+        {checked && <span style={{ fontSize: 12, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: grade[k] ? "#0d6d56" : "#b2342b" }}>{grade[k] ? "✓" : `✗ ${sol}`}</span>}
+      </div>)}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 10.5, color: "#6f675c", width: 190, flexShrink: 0 }}>The fulcrum security</span>
+        {TRANCHES.map(([k, l]) => <button key={k} onClick={() => { setPick(k); setChecked(false); }} style={{ ...S.chip, padding: "5px 11px", fontSize: 10, cursor: "pointer", ...(pick === k ? { color: "#0d6d56", border: "1px solid #0d6d5640", background: "rgba(13,109,86,0.06)" } : {}) }}>{l}</button>)}
+        {checked && <span style={{ fontSize: 12, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: grade.f ? "#0d6d56" : "#b2342b" }}>{grade.f ? "✓" : `✗ ${P.fulcrum === "sr" ? "senior notes" : "sub notes"}`}</span>}
+      </div>
+    </div>
+    <div style={{ display: "flex", gap: 10, marginBottom: checked ? 14 : 0 }}>
+      <button onClick={check} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "7px 18px" }}>Check</button>
+      <button onClick={fresh} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "7px 18px", color: "#6f675c", border: "1px solid #ddcfb8" }}>New problem</button>
+    </div>
+    {checked && <div style={{ borderTop: "1px solid #e9ddc9", paddingTop: 12 }}>
+      <div style={{ fontSize: 8, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 2, marginBottom: 8 }}>The waterfall, worked</div>
+      {[`$${P.EV}M falls through the structure:`,
+        `1st lien: paid in full — 100¢ (${P.EV} − ${P.lien} = ${P.EV - P.lien} left)`,
+        P.fulcrum === "sr" ? `Senior notes: ${P.toSr} against a ${P.sr} claim — ${P.recSr.toFixed(1)}¢. Value exhausts HERE → the fulcrum.` : `Senior notes: paid in full — 100¢ (${P.EV - P.lien} − ${P.sr} = ${P.EV - P.lien - P.sr} left)`,
+        P.fulcrum === "sr" ? `Subordinated notes: nothing left — 0¢. Equity: wiped.` : `Subordinated notes: ${P.toSub} against a ${P.sub} claim — ${P.recSub.toFixed(1)}¢ → the fulcrum. Equity: wiped.`,
+        `The fulcrum class ends up owning the company: its shortfall converts to post-reorg equity, which is why distressed buyers hunt for it.`
+      ].map((s, i) => <div key={i} style={{ fontSize: 11, color: "#4a443c", fontFamily: "'JetBrains Mono',monospace", lineHeight: 2 }}>{s}</div>)}
+    </div>}
+    <p style={{ fontSize: 9, color: "#a2977f", marginTop: 12, lineHeight: 1.6 }}>The transaction-advisory interview staple: absolute priority, cents on the dollar, and who holds the keys after Chapter 11. Fresh structure daily.</p>
+  </div>;
+}
+
+// The Two-Minute Tape — Zetamac's mechanic with the desk's arithmetic: 120 seconds,
+// auto-advance the instant the answer is right. The day's first run is the same tape for everyone.
+const TAPE_GENS = [
+  r => { const b = [40, 60, 80, 120, 160, 200, 240][Math.floor(r() * 7)], p = [5, 10, 15, 20, 25, 50][Math.floor(r() * 6)], up = r() < 0.5; return { q: `Stock at ${b} ${up ? "rises" : "falls"} ${p}% — new price?`, a: Math.round(b * (1 + (up ? p : -p) / 100)) }; },
+  r => { const n = [40, 80, 120, 160, 200, 240, 320, 400][Math.floor(r() * 8)], p = [15, 20, 25, 30, 35, 40, 45, 60, 75][Math.floor(r() * 9)]; return { q: `${p}% of ${n}?`, a: n * p / 100 }; },
+  r => { const E = [15, 20, 25, 30, 40, 50, 60, 75, 80][Math.floor(r() * 9)], m = [4, 5, 6, 7, 8, 9, 10, 12][Math.floor(r() * 8)]; return { q: `EBITDA $${E}M at ${m}.0x — enterprise value ($M)?`, a: E * m }; },
+  r => { const E = [20, 25, 30, 40, 50, 60, 80][Math.floor(r() * 7)], m = [4, 5, 6, 7, 8, 9, 11, 12][Math.floor(r() * 8)]; return { q: `EV $${E * m}M on $${E}M EBITDA — the multiple (x)?`, a: m }; },
+  r => { const p = [2, 3, 4, 6, 8, 9, 12, 18][Math.floor(r() * 8)]; return { q: `Money doubles at ${p}% — years (rule of 72)?`, a: 72 / p }; },
+  r => { const [ni, sh] = [[120, 40], [150, 50], [200, 40], [90, 30], [240, 60], [210, 70], [160, 40], [75, 25]][Math.floor(r() * 8)]; return { q: `Net income $${ni}M, ${sh}M shares — EPS ($)?`, a: ni / sh }; },
+  r => { const pe = [8, 10, 20, 25, 40, 50][Math.floor(r() * 6)]; return { q: `P/E of ${pe}x — earnings yield (%)?`, a: 100 / pe }; },
+  r => { const n = [200, 400, 600, 800][Math.floor(r() * 4)], bp = [25, 50, 75, 100, 150][Math.floor(r() * 5)]; return { q: `${bp}bp on a $${n}M facility — annual $M?`, a: n * bp / 10000 }; },
+];
+function TwoMinuteTape() {
+  const DUR = 120;
+  const [phase, setPhase] = useState("idle");
+  const [left, setLeft] = useState(DUR);
+  const [score, setScore] = useState(0);
+  const [seen, setSeen] = useState(0);
+  const [input, setInput] = useState("");
+  const rng = useRef(null);
+  const prob = useRef(null);
+  const inputRef = useRef(null);
+  const scores = lsGet("mjb_tmt", []);
+  const best = scores.reduce((m, s) => Math.max(m, s.score), 0);
+  const todayRuns = scores.filter(s => s.d === todayISO());
+  const next = () => { prob.current = TAPE_GENS[Math.floor(rng.current() * TAPE_GENS.length)](rng.current); setInput(""); setSeen(x => x + 1); };
+  const start = () => { const day = Math.floor(Date.now() / 86400000); rng.current = mulberry32(day * 29 + 13 + todayRuns.length * 9973); setScore(0); setSeen(0); setLeft(DUR); setPhase("run"); next(); };
+  useEffect(() => { if (phase !== "run") return; const t = setInterval(() => setLeft(l => l - 1), 1000); return () => clearInterval(t); }, [phase]);
+  useEffect(() => {
+    if (phase !== "run" || left > 0) return;
+    setPhase("done");
+    const all = lsGet("mjb_tmt", []); all.push({ d: todayISO(), score }); if (all.length > 200) all.splice(0, all.length - 200); lsSet("mjb_tmt", all);
+    recordEdition("two-minute-tape"); learnPing();
+  }, [left, phase, score]);
+  useEffect(() => { if (phase === "run") inputRef.current && inputRef.current.focus(); }, [phase, seen]);
+  const onType = v => { setInput(v); const a = prob.current.a; const t = v.trim(); if (t !== "" && /\d$/.test(t) && parseFloat(t) === a) { setScore(s => s + 1); next(); } };
+  if (phase === "idle") return <div>
+    <p style={{ fontSize: 12.5, color: "#4a443c", lineHeight: 1.8, marginBottom: 12 }}>
+      Two minutes on the clock, finance arithmetic only: percentage moves, EV = EBITDA × multiple, earnings yields, the rule of 72, basis points on a facility. The answer submits itself the instant it's right — no Enter key, no partial credit, just the next problem.
+    </p>
+    <button onClick={start} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "8px 22px" }}>Start the clock</button>
+    <SourceLine>{best > 0 ? `Best on record: ${best} · ` : ""}{todayRuns.length ? `${todayRuns.length} run${todayRuns.length === 1 ? "" : "s"} today · ` : ""}first run of the day is the same tape for every reader · scores stay in your browser</SourceLine>
+  </div>;
+  if (phase === "done") return <div>
+    <div style={{ fontSize: 8, color: "#990f3d", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>Time — pencils down</div>
+    <p style={{ fontFamily: "'Instrument Serif',serif", fontSize: 26, color: "#262421", marginBottom: 6 }}>{score} solved</p>
+    <p style={{ fontSize: 11, color: "#6f675c", marginBottom: 14 }}>{seen - 1 > score ? `${seen - 1 - score} passed or unfinished · ` : ""}{score > best ? "a new house record." : best > 0 ? `best on record: ${Math.max(best, score)}.` : ""}</p>
+    <button onClick={start} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "8px 22px" }}>Run it again</button>
+    <SourceLine>Repeat runs today draw a fresh problem stream · tomorrow's opening tape is new for everyone</SourceLine>
+  </div>;
+  return <div>
+    <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 12 }}>
+      <span style={{ fontSize: 8, color: "#1f5a9e", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, textTransform: "uppercase" }}>Solved {score}</span>
+      <span style={{ marginLeft: "auto", fontSize: 15, fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, color: left <= 10 ? "#b2342b" : "#33302c" }}>{Math.floor(left / 60)}:{String(left % 60).padStart(2, "0")}</span>
+    </div>
+    <p style={{ fontFamily: "'Instrument Serif',serif", fontSize: 20, color: "#262421", lineHeight: 1.4, marginBottom: 12, minHeight: 56 }}>{prob.current.q}</p>
+    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <input ref={inputRef} value={input} onChange={e => onType(e.target.value)} inputMode="decimal" placeholder="answer" style={{ ...S.input, width: 120, fontFamily: "'JetBrains Mono',monospace", fontSize: 15, padding: "8px 12px", textAlign: "right" }} />
+      <button onClick={next} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 9, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, textTransform: "uppercase", color: "#8a8072", textDecoration: "underline dotted", textUnderlineOffset: 3 }}>Pass ↷</button>
+    </div>
+    <SourceLine>Auto-submits on the correct answer · decimals as decimals ("2.5") · passing costs nothing but the clock</SourceLine>
+  </div>;
+}
+
 // Redline the Exhibit — the inverted drill: a finished exhibit with ONE planted error,
 // internally consistent so it must be caught on principle, not arithmetic mismatch.
 // Reviewing models for errors is the actual analyst job; no prep product drills it.
@@ -2726,6 +2855,16 @@ export default function App() {
           <div id="coupon-desk" style={S.card}>
             <h2 style={S.cardTitle}><span style={{ color: "#b3551d" }}>◆</span> Drill — The Coupon Desk<Info text="Bond arithmetic drilled as mental math: current yield, the duration approximation for a rate shock, and the new price — plus the premium/discount yield ordering that interviews love. Seeded fresh daily." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="projects" id="coupon-desk" /></span></h2>
             <CouponDesk />
+          </div>
+        </div>
+        <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16, alignItems: "start" }}>
+          <div id="waterfall-room" style={S.card}>
+            <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> Drill — The Waterfall Room<Info text="The distressed-debt staple: an emergence enterprise value falls through a seeded capital structure by absolute priority. Work the recoveries in cents on the dollar and name the fulcrum security — the class whose shortfall converts to post-reorg equity. Fresh structure daily." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="projects" id="waterfall-room" /></span></h2>
+            <WaterfallRoom />
+          </div>
+          <div id="two-minute-tape" style={S.card}>
+            <h2 style={S.cardTitle}><span style={{ color: "#1f5a9e" }}>◆</span> Drill — The Two-Minute Tape<Info text="Timed mental math with a finance-native problem set: percentage moves, EV from EBITDA and a multiple, earnings yields, the rule of 72, basis points on a facility. Auto-submits the instant the answer is right, Zetamac-style. The day's first run is the same tape for every reader; scores stay in your browser." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="projects" id="two-minute-tape" /></span></h2>
+            <TwoMinuteTape />
           </div>
         </div>
         <div id="redline" style={{ ...S.card, marginBottom: 16 }}>
