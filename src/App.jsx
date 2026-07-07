@@ -36,8 +36,13 @@ const PROJECTS = [
   { title: "Portfolio Analytics App", desc: "Real-time equity portfolio construction and optimization tool with 6 analytical modules. Mean-variance optimization (GMV & Tangency), efficient frontier with CAL, CAPM beta/alpha regression, risk contribution decomposition (PRC), and estimation window sensitivity analysis. Features a tiered tooltip system (Beginner/Intermediate/Advanced) that adapts explanations to the user's knowledge level, custom portfolio builder with live frontier plotting, and CSV/Excel export.", tags: ["Python", "Streamlit", "Portfolio Optimization", "scipy"], status: "Completed", completed: "Apr 2026", updated: "Apr 11, 2026", img: "/projects/portfolio-app.png", url: "https://github.com/masonjbennett/portfolio-app", demo: "https://portfolio-app-ifh8afmcuxkyr6ivov9fmj.streamlit.app/" },
   { title: "Applied Econometrics — Hurricane Michael", desc: "Regression analysis studying Hurricane Michael's impact on Florida housing prices across 67 counties. Built MLR and Difference-in-Difference models achieving R² of 0.59, identifying a $36,631 median price decline in affected counties. Analyzed median income, unemployment, elevation, FEMA risk indices, and population density as determinants.", tags: ["Stata", "Econometrics", "Regression Analysis", "Diff-in-Diff"], status: "Completed", completed: "Apr 2024", url: "/hurricane-paper.docx" },
 ];
+// Home-page "Featured Work" — a curated, ordered set (not every project with an image).
+const FEATURED = [
+  { title: "EA $55B Take-Private LBO", note: "Student reconstruction", img: "/projects/ea-featured.png", blurb: "A graduate-course reconstruction of the Electronic Arts take-private — 38-page investment memo, 26-slide IC deck, and a 12-tab LBO model.", tab: "projects", id: "ea-take-private" },
+  { title: "Portfolio Analytics App", note: "Live demo", img: "/projects/portfolio-app.png", blurb: "Real-time mean-variance optimization, efficient frontier with CAL, CAPM beta/alpha, and risk-contribution decomposition — built in Streamlit.", tab: "projects" },
+];
 const DEALS = [
-  { id: "ea-take-private", value: "$55B", type: "Take-Private LBO", co: "Electronic Arts Inc.", sub: "NASDAQ: EA", detail: "38-page IM · 24-slide IC deck · 12-tab LBO model", date: "Apr 2026", model: "/deals/ea-lbo-model.xlsx", memo: "/deals/ea-memo.pdf",
+  { id: "ea-take-private", value: "$55B", type: "Take-Private LBO", co: "Electronic Arts Inc.", sub: "NASDAQ: EA", detail: "38-page IM · 26-slide IC deck · 12-tab LBO model", date: "Apr 2026", model: "/deals/ea-lbo-model.xlsx", memo: "/deals/ea-memo.pdf", deck: "/deals/ea-ic-deck.pptx",
     thesis: "Durable live-services cash flow supports an all-cash take-private; returns underwritten primarily to EBITDA growth and deleveraging, not multiple expansion.",
     assumptions: "$36.4B equity / $18.0B debt sources & uses; three-case operating projections spanning 1.27x–2.43x MoM and 4.8%–19.4% gross IRR; reconstruction diverges from reported terms where figures were not public.",
     takeaway: "Returns attribution — separating EBITDA growth, multiple expansion, and deleveraging — tells you more about a deal than the headline IRR." },
@@ -2982,6 +2987,7 @@ export default function App() {
                 <span style={{ display: "flex", gap: 12 }}>
                   {d.model && <a href={d.model} download style={{ fontSize: 8, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, textTransform: "uppercase", textDecoration: "underline dotted", textUnderlineOffset: 3 }}>↧ Model (.xlsx)</a>}
                   {d.memo && <a href={d.memo} target="_blank" rel="noopener noreferrer" style={{ fontSize: 8, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, textTransform: "uppercase", textDecoration: "underline dotted", textUnderlineOffset: 3 }}>Memo (PDF)</a>}
+                  {d.deck && <a href={d.deck} download style={{ fontSize: 8, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, textTransform: "uppercase", textDecoration: "underline dotted", textUnderlineOffset: 3 }}>↧ IC Deck (.pptx)</a>}
                 </span>
                 <CopyAnchor tab="projects" id={d.id} />
               </div>
@@ -3104,11 +3110,14 @@ export default function App() {
         <Reveal><div style={{ padding: "8px 0 22px" }}>
           <Slug right={<button onClick={() => setTab("projects")} style={{ ...S.btn, fontSize: 10, padding: "5px 14px" }}>All projects →</button>}>Featured Work</Slug>
           <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-            {PROJECTS.filter(p => p.img).map(p => <div key={p.title} style={{ borderRadius: 12, border: "1px solid #e9ddc9", overflow: "hidden", background: "#fffdf9", transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)", cursor: "pointer" }} onClick={() => setTab("projects")} onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "0 12px 32px rgba(13,109,86,0.1)"; }} onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; }}>
+            {FEATURED.map(p => <div key={p.title} style={{ borderRadius: 12, border: "1px solid #e9ddc9", overflow: "hidden", background: "#fffdf9", transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)", cursor: "pointer" }} onClick={() => p.id ? goAnchor(p.tab, p.id) : setTab(p.tab)} onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "0 12px 32px rgba(13,109,86,0.1)"; }} onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "none"; }}>
               <img src={p.img} alt={p.title} loading="lazy" style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", objectPosition: "top", display: "block", borderBottom: "1px solid #e9ddc9", background: "#f6eee1" }} />
               <div style={{ padding: "14px 16px" }}>
-                <div style={{ color: "#33302c", fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{p.title}</div>
-                <div style={{ color: "#6f675c", fontSize: 11, lineHeight: 1.5 }}>{p.desc.split(". ")[0].slice(0, 110)}{p.desc.split(". ")[0].length > 110 ? "…" : "."}</div>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4, flexWrap: "wrap" }}>
+                  <span style={{ color: "#33302c", fontSize: 14, fontWeight: 600 }}>{p.title}</span>
+                  {p.note && <span style={{ fontSize: 8, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, textTransform: "uppercase" }}>{p.note}</span>}
+                </div>
+                <div style={{ color: "#6f675c", fontSize: 11, lineHeight: 1.5 }}>{p.blurb}</div>
               </div>
             </div>)}
           </div>

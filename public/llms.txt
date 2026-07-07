@@ -20,8 +20,9 @@ he was NOT part of the actual transactions.
 - Funded 100% of undergraduate education through service-industry work
 
 ## Work samples
-- EA $55B take-private LBO — student reconstruction: 38-page memo, 24-slide IC
-  deck, 12-tab Excel LBO model (downloads: /deals/ea-lbo-model.xlsx, /deals/ea-memo.pdf)
+- EA $55B take-private LBO — student reconstruction: 38-page memo, 26-slide IC
+  deck, 12-tab Excel LBO model (downloads: /deals/ea-lbo-model.xlsx, /deals/ea-memo.pdf,
+  /deals/ea-ic-deck.pptx)
 - Jagex £900M sponsor-to-sponsor LBO — student reconstruction: 10-tab model,
   QoE bridge, PE fund waterfall (downloads: /deals/jagex-lbo-model.xlsx, /deals/jagex-memo.pdf)
 - HCA Healthcare stock pitch — Garrison Financial Institute competition,
