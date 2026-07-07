@@ -1678,6 +1678,154 @@ function BiasLedger({ desk }) {
   </div>;
 }
 
+// Explain It to the Desk — the Feynman drill. Write the concept in plain sentences;
+// with a key set, Claude plays the sharp novice and returns the one gap + one follow-up.
+const EXPLAIN_PROMPTS = [
+  "Explain to a smart friend why a company can report record profits and still run out of cash.",
+  "Explain why a dollar next year is worth less than a dollar today — without using the word “discount.”",
+  "Explain why an acquirer usually pays a premium over the market price, and who pockets it.",
+  "Explain leverage with a house: why borrowing amplifies both gains and losses.",
+  "Explain why bond prices fall when interest rates rise, to someone who owns a bond fund.",
+  "Explain what an investment banker actually sells to a client — it isn't money.",
+  "Explain why depreciation shows up on the income statement when no money left the building.",
+  "Explain what a P/E ratio actually tells you, and one way it can lie.",
+  "Explain what synergies are and why the market is often skeptical of them.",
+  "Explain why lenders care about covenants — what job do they do?",
+  "Explain what an inverted yield curve is and why people treat it as an omen.",
+  "Explain why holding a losing stock “until it comes back” is a decision, not a default.",
+  "Explain what deferred revenue is and why it sits on the balance sheet as a debt to customers.",
+  "Explain why two companies with identical profits can deserve very different price tags.",
+  "Explain accretion versus dilution to a board member who only cares about EPS.",
+  "Explain what carried interest is and why the sponsor only eats after its investors do.",
+  "Explain what the Fed actually does when it “raises rates” — the mechanics, not the headline.",
+  "Explain risk versus volatility — are they the same thing for a 25-year-old saver?",
+  "Explain why the balance sheet has to balance — what forces the two sides to be equal?",
+  "Explain enterprise value versus market cap, as if pricing a house with a mortgage on it.",
+  "Explain why a company might pay for an acquisition in stock rather than cash, and what that signals.",
+  "Explain how private equity can make money buying a company that never grows.",
+  "Explain inflation's effect on savers, borrowers, and the stock market — one sentence each.",
+  "Explain why past fund performance is a weak guide to future results.",
+  "Explain the difference between bookings, revenue, and cash collected, using a gym membership.",
+  "Explain why most of a DCF's value usually sits in the terminal value, and why that should bother you.",
+  "Explain what a fairness opinion is and who it actually protects.",
+  "Explain what happens to each layer of the capital structure when a company can't pay its debts.",
+  "Explain what short selling is and where its risk differs from buying a stock.",
+  "Explain what “priced in” means and why good news can make a stock fall.",
+  "Explain why buying a $1M machine doesn't reduce this year's profit by $1M.",
+  "Explain what WACC is and why riskier businesses face a higher bar.",
+  "Explain why debt is “cheaper” than equity — and why a company doesn't fund itself entirely with it.",
+  "Explain why diversification is called the only free lunch in finance.",
+  "Explain why the dollar strengthening can hurt US companies that sell globally.",
+  "Explain what working capital is and why growing companies are always hungry for it.",
+  "Explain why buybacks can raise earnings per share without making the business any better.",
+  "Explain what market makers do and how the bid-ask spread pays them.",
+  "Explain what the VIX measures and what a high reading actually says.",
+  "Explain the rule of 72 and why compounding sneaks up on people.",
+];
+function ExplainDesk({ apiKey }) {
+  const day = Math.floor(Date.now() / 86400000);
+  const prompt = EXPLAIN_PROMPTS[day % EXPLAIN_PROMPTS.length];
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [review, setReview] = useState(() => lsGet("mjb_explain", []).find(x => x.d === todayISO()) || null);
+  const [done, setDone] = useState(() => lsGet("mjb_attempts", []).some(x => x.src === "explain" && x.d === todayISO()));
+  const send = async () => {
+    const t = text.trim();
+    if (t.split(/[.!?]+/).filter(s => s.trim().length > 8).length < 2) { setErr("Give the desk at least two full sentences."); return; }
+    setErr(""); setBusy(true);
+    try {
+      const d = await callAPI(apiKey, { model: "claude-sonnet-4-20250514", max_tokens: 400, messages: [{ role: "user", content: `You are a sharp, genuinely curious novice who just joined a trading desk — no finance background, but quick, and unafraid to ask. Someone was asked: "${prompt}"\n\nTheir explanation:\n"""\n${t}\n"""\n\nFind the ONE most important gap: the missing piece, hidden assumption, or wrong turn that would most improve the explanation (not a style note). Then ask the single follow-up question a curious novice would naturally ask next. Return ONLY JSON, no markdown: {"gap":"1-2 specific sentences","followup":"one question"}` }] });
+      const raw = extractText(d);
+      const m = raw && raw.match(/\{[\s\S]*\}/);
+      if (!m) { setErr("The desk didn't answer — try again in a moment."); return; }
+      let j; try { j = JSON.parse(m[0]); } catch { setErr("The desk mumbled — try again."); return; }
+      const entry = { d: todayISO(), prompt, answer: t, gap: String(j.gap || ""), followup: String(j.followup || "") };
+      const all = lsGet("mjb_explain", []).filter(x => x.d !== entry.d); all.unshift(entry); if (all.length > 60) all.length = 60; lsSet("mjb_explain", all);
+      setReview(entry);
+    } catch { setErr("The desk didn't answer — try again in a moment."); }
+    finally { setBusy(false); }
+  };
+  return <div>
+    <div style={{ fontSize: 8, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>Feynman drill · Prompt {(day % EXPLAIN_PROMPTS.length) + 1} of {EXPLAIN_PROMPTS.length}</div>
+    <p style={{ fontFamily: "'Instrument Serif',serif", fontSize: 19, color: "#262421", lineHeight: 1.45, marginBottom: 12 }}>{prompt}</p>
+    {review ? <div>
+      <p style={{ fontSize: 11.5, color: "#6f675c", fontStyle: "italic", lineHeight: 1.65, borderLeft: "2px solid #ddcfb8", paddingLeft: 10, marginBottom: 12 }}>{review.answer}</p>
+      <div style={{ fontSize: 11.5, color: "#4a443c", lineHeight: 1.65, marginBottom: 6 }}><span style={{ fontSize: 8, color: "#990f3d", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, textTransform: "uppercase", marginRight: 8 }}>The gap</span>{review.gap}</div>
+      <div style={{ fontSize: 11.5, color: "#4a443c", lineHeight: 1.65, marginBottom: 12 }}><span style={{ fontSize: 8, color: "#1f5a9e", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, textTransform: "uppercase", marginRight: 8 }}>The follow-up</span>{review.followup}</div>
+      <GradeBar done={done} doneLabel="Marked — the gap files to the docket" onGrade={g => { recordSelfGrade({ src: "explain", qid: String(day), grade: g, front: review.prompt, back: review.gap, given: review.answer }); setDone(true); }} />
+    </div> : <div>
+      <textarea value={text} onChange={e => { setText(e.target.value); setErr(""); }} placeholder="Three to five plain sentences. No term you couldn't unpack if the novice asked." rows={4} style={{ ...S.input, width: "100%", resize: "vertical", fontSize: 12.5, lineHeight: 1.6, padding: "10px 12px", boxSizing: "border-box" }} />
+      {err && <p style={{ fontSize: 10.5, color: "#b2342b", margin: "6px 0 0" }}>{err}</p>}
+      {apiKey
+        ? <button onClick={send} disabled={busy} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "7px 18px", marginTop: 10, opacity: busy ? 0.6 : 1 }}>{busy ? "The desk is reading…" : "Send to the desk"}</button>
+        : <div style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#a2977f", letterSpacing: 1, marginTop: 10 }}>WRITE IT ANYWAY — THE DESK'S REVIEW NEEDS AN ANTHROPIC KEY IN SETTINGS</div>}
+    </div>}
+    <SourceLine>One prompt per day, same for every reader · with a key set, Claude plays the inquisitive novice: one gap, one follow-up · your writing stays in this browser</SourceLine>
+  </div>;
+}
+
+// The Syllabus Ledger — mastery states derived from the attempt log with 30-day decay.
+// Agate text states, never progress bars; the weakest unit sets the day's assignment.
+const SYL_UNITS = [
+  { k: "I", name: "Accounting & the Statements" },
+  { k: "II", name: "Valuation" },
+  { k: "III", name: "Merger Math & Deals" },
+  { k: "IV", name: "LBO & Credit" },
+  { k: "V", name: "Markets, Macro & Fixed Income" },
+  { k: "VI", name: "Communication & Fit" },
+];
+const SYL_CAT_UNIT = { acct: "I", ev: "II", val: "II", merger: "III", ma: "III", lbo: "IV", cred: "IV", mkts: "V", fi: "V", eq: "V", der: "V", mac: "V", wm: "V", str: "VI", deal: "VI", fit: "VI" };
+const SYL_SRC_UNIT = { ripple: "I", redline: "II", debt: "IV", puzzle: "IV", waterfall: "IV", coupon: "V", signals: "V", explain: "VI" };
+const sylUnitOf = a => SYL_SRC_UNIT[a.src] || (String(a.qid).match(/^(?:lex-)?([a-z]+)-/) ? SYL_CAT_UNIT[String(a.qid).match(/^(?:lex-)?([a-z]+)-/)[1]] || null : null);
+const SYL_STATES = {
+  cold: { label: "cold", note: "no ink in 30 days", c: "#8a8072" },
+  shaky: { label: "shaky", note: "", c: "#b2342b" },
+  thin: { label: "thin file", note: "", c: "#b0741e" },
+  working: { label: "working", note: "", c: "#1f5a9e" },
+  set: { label: "set", note: "", c: "#0d6d56" },
+};
+function SyllabusLedger() {
+  useLearnTick();
+  const bank = useTechBank();
+  const now = Date.now();
+  const atts = lsGet("mjb_attempts", []);
+  const per = {}; SYL_UNITS.forEach(u => { per[u.k] = { wOk: 0, w: 0, n: 0 }; });
+  atts.forEach(a => {
+    const u = sylUnitOf(a); if (!u || !per[u]) return;
+    const age = (now - new Date(a.d).getTime()) / 86400000;
+    if (!(age >= 0 && age <= 30)) return;
+    const w = (30 - age) / 30 + 0.1;
+    per[u].w += w; per[u].wOk += a.ok ? w : 0; per[u].n++;
+  });
+  const states = SYL_UNITS.map(u => {
+    const p = per[u.k], rate = p.w ? p.wOk / p.w : 0;
+    const state = p.n === 0 ? "cold" : p.n < 4 ? "thin" : rate >= 0.8 ? "set" : rate >= 0.55 ? "working" : "shaky";
+    return { ...u, ...p, rate, state };
+  });
+  const order = { cold: 0, shaky: 1, thin: 2, working: 3, set: 4 };
+  const weakest = [...states].sort((a, b) => order[a.state] - order[b.state] || a.rate - b.rate)[0];
+  const cats = Object.keys(SYL_CAT_UNIT).filter(c => SYL_CAT_UNIT[c] === weakest.k);
+  const pool = bank.filter(q => cats.includes(q.cat));
+  const day = Math.floor(Date.now() / 86400000);
+  const q = pool.length ? pool[(day * 7 + 1) % pool.length] : null;
+  const done = q ? atts.some(x => x.src === "syllabus" && x.qid === q.id && x.d === todayISO()) : false;
+  return <div>
+    {states.map((u, i) => <div key={u.k} style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "7px 0", borderTop: i ? "1px solid #efe4d2" : "none" }}>
+      <span style={{ fontSize: 9, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", width: 20, flexShrink: 0 }}>{u.k}.</span>
+      <span style={{ fontSize: 11.5, color: "#33302c", flex: 1 }}>{u.name}</span>
+      <span style={{ fontSize: 9, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, textTransform: "uppercase", color: SYL_STATES[u.state].c, flexShrink: 0 }}>
+        {SYL_STATES[u.state].label}{u.n > 0 ? ` · ${u.n} mark${u.n === 1 ? "" : "s"} · ${Math.round(u.rate * 100)}% clean` : ` — ${SYL_STATES.cold.note}`}
+      </span>
+    </div>)}
+    {q && <div style={{ marginTop: 12, borderTop: "1px solid #ddcfb8", paddingTop: 11 }}>
+      <div style={{ fontSize: 8, color: "#6d549e", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, textTransform: "uppercase", marginBottom: 8 }}>The assignment — Unit {weakest.k}, {weakest.name}</div>
+      <QCard q={q} src="syllabus" done={done} />
+    </div>}
+    <SourceLine>Six units, states decay over 30 days · derived from every mark you file on this site · the weakest unit sets the day's assignment · private to this browser</SourceLine>
+  </div>;
+}
+
 // Seeded three-statement perturbation drills. Tax rate 25% throughout; amounts chosen so answers are integers.
 const RIPPLES = [
   { k: "dep", third: "Net PP&E", make: X => ({ prompt: `Depreciation expense rises by $${X} this period. Assume a 25% tax rate, taxes paid in cash.`, ni: -0.75 * X, cash: 0.25 * X, tv: -X,
@@ -2706,6 +2854,10 @@ export default function App() {
             <h2 style={S.cardTitle}><span style={{ color: "#1f5a9e" }}>◆</span> Bennett vs. the Tape<Info text="Three calls filed before the 4pm bell — SPY's direction, QQQ-vs-IWM leadership, and the 10-year — graded automatically against the closing tape and the Treasury's own data. The running calibration table is the point: having a view and being scored on it. Private to this browser." /></h2>
             <BennettVsTape prices={prices} live={pricesLive} />
           </section>
+          <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.18s both" }}>
+            <h2 style={S.cardTitle}><span style={{ color: "#6d549e" }}>◆</span> The Syllabus Ledger<Info text="Six units of the interview syllabus, graded from your own attempt log with a 30-day decay — states in agate text, never progress bars. The weakest unit sets a daily assignment question. Derived entirely from marks already in this browser." /></h2>
+            <SyllabusLedger />
+          </section>
         </div>}
         <div style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease both" }}>
           <h2 style={S.cardTitle}><span style={{ color: "#6d549e" }}>◆</span> Question of the Day<Info text="One technical interview question per day from the house bank — same edition for every reader, like a crossword. Reveal the answer, then grade yourself honestly. Grades never leave your browser." /></h2>
@@ -2724,6 +2876,10 @@ export default function App() {
             <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> The Bias Ledger<Info text="One behavioral-finance bias a day from the 40-entry almanac: what it is, the tell in a real book, and the working countermeasure. With the desk on, it cross-prints against your paper positions — read locally, never sent anywhere." /></h2>
             <BiasLedger desk={desk} />
           </section>
+        </div>
+        <div id="explain-desk" style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease both" }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> Explain It to the Desk<Info text="The Feynman drill: one concept a day, explained in plain sentences. With an Anthropic key set, Claude plays the sharp novice who just joined the desk and returns the one gap in your explanation plus the follow-up question it invites. Your writing never leaves this browser except to Anthropic with your own key." /></h2>
+          <ExplainDesk apiKey={apiKey} />
         </div>
         <div style={{ marginBottom: 24, animation: "fadeUp 0.5s ease both", padding: "20px 24px", background: "linear-gradient(135deg, rgba(255,253,249,0.9), rgba(251,245,236,0.7))", borderRadius: 10, border: "1px solid #e3d5bf", boxShadow: "0 4px 20px rgba(64,52,32,0.07)" }}><Clock /></div>
         <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
