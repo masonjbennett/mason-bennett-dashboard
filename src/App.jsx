@@ -64,10 +64,11 @@ const ARTIFACTS = [
 ];
 const EXPERIENCE = [
   { role: "M.S. Finance", org: "Walton College of Business", date: "2025–2026", type: "edu", detail: "4.0 GPA · Advanced Financial Modeling, Advanced Corporate Finance, Alternative Investments, New Venture (Private Equity), Financial Data Analytics II" },
-  { role: "Analyst, Information Technology Sector — Shollmier Investment Fund", org: "Garrison Financial Institute · Walton College", url: "https://gfi.uark.edu/shollmier-fund.php", date: "2025–2026", type: "work", detail: "Covered the Information Technology sector for a live $700K+ fixed-income portfolio managed by graduate students." },
-  { role: "B.S. Business Administration", org: "Walton College of Business", date: "2021–2024", type: "edu", detail: "3.62 GPA · Business Economics · Dean's List (5 semesters) · Funded 100% of undergraduate education through service-industry work" },
+  { role: "Analyst, Information Technology Sector — Shollmier Investment Fund", org: "Garrison Financial Institute · Walton College", url: "https://gfi.uark.edu/shollmier-fund.php", date: "Spring 2026", type: "work", detail: "Covered the Information Technology sector for a live $700K+ fixed-income portfolio managed by graduate students." },
+  { role: "B.S. Business Administration", org: "Walton College of Business", date: "2021–2024", type: "edu", detail: "3.62 GPA · Business Economics · Dean's List (5 semesters)" },
   { role: "Finance & Economics Tutor", org: "Self-employed · Fayetteville, AR", date: "2021–2024", type: "work", detail: "10+ students/semester. Tailored study guides. Helped improve grades 1–2 letters." },
   { role: "Event Manager", org: "Venue on Spring Creek · TX", date: "2016–2020", type: "work", detail: "100+ guest events. Coordinated vendors, supervised staff. 95%+ satisfaction." },
+  { role: "Bartender & Server", org: "Service industry · TX & AR", date: "2016–2025", type: "work", detail: "Worked service-industry jobs continuously through high school and college — funding 100% of undergraduate education." },
 ];
 const READING = [
   { title: "Damodaran on Valuation", author: "Aswath Damodaran", s: "Reading", note: "Every story has to reconcile to a number eventually." },
@@ -3059,7 +3060,7 @@ export default function App() {
               <p style={{ color: "#0d6d56", fontSize: 12, fontFamily: "JetBrains Mono, monospace", marginBottom: 16 }}>M.S. Finance · University of Arkansas · Dallas–Fort Worth, TX</p>
               <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14, borderTop: "1px solid #e9ddc9", borderBottom: "1px solid #e9ddc9", padding: "12px 0" }}>
                 {["M.S. Finance, 4.0 GPA — Walton College of Business, May 2026",
-                  "Info Tech Sector Analyst — Shollmier Investment Fund, a $700K+ student-managed portfolio (2025–26)",
+                  "Info Tech Sector Analyst — Shollmier Investment Fund, a $700K+ student-managed portfolio (Spring 2026)",
                   "Seeking analyst roles: IB · PE · Wealth Management · Corporate Finance — Dallas–Fort Worth"].map(l => <div key={l} style={{ fontSize: 13.5, color: "#33302c", fontWeight: 600, lineHeight: 1.45 }}>{l}</div>)}
               </div>
               <p style={{ color: "#4a443c", fontSize: 13.5, lineHeight: 1.8, marginBottom: 18 }}>Led graduate student deal teams reconstructing two real transactions — a $55B take-private LBO and a £900M sponsor-to-sponsor buyout — as fully modeled hypothetical acquisitions built from public filings. Bloomberg Market Concepts certified; FINRA SIE in progress.</p>
@@ -3178,7 +3179,7 @@ export default function App() {
         <h1 style={{ fontFamily: "'Instrument Serif',serif", fontSize: 34, fontWeight: 400, color: "#262421", marginBottom: 6, lineHeight: 1 }}>Mason J. Bennett</h1>
         <p style={{ color: "#0d6d56", fontSize: 11, fontFamily: "'JetBrains Mono',monospace", marginBottom: 20 }}>M.S. Finance · University of Arkansas · Dallas–Fort Worth, TX</p>
         <div style={{ borderTop: "1px solid #e9ddc9", borderBottom: "1px solid #e9ddc9", padding: "14px 0", marginBottom: 20, display: "flex", flexDirection: "column", gap: 8 }}>
-          {["4.0 GPA — M.S. Finance, Walton College of Business (May 2026)", "Info Tech Sector Analyst — Shollmier Investment Fund ($700K+, 2025–26)", "Bloomberg Market Concepts certified · FINRA SIE in progress"].map(s => <div key={s} style={{ fontSize: 13, color: "#33302c", fontWeight: 500 }}>{s}</div>)}
+          {["4.0 GPA — M.S. Finance, Walton College of Business (May 2026)", "Info Tech Sector Analyst — Shollmier Investment Fund ($700K+, Spring 2026)", "Bloomberg Market Concepts certified · FINRA SIE in progress"].map(s => <div key={s} style={{ fontSize: 13, color: "#33302c", fontWeight: 500 }}>{s}</div>)}
         </div>
         <div style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginBottom: 24 }}>
           <a href="/resume.pdf" target="_blank" rel="noopener noreferrer" style={{ padding: "10px 22px", borderRadius: 10, background: "#0d6d56", color: "#fdf8f0", fontSize: 12, fontWeight: 600, textDecoration: "none" }}>Download Resume</a>
