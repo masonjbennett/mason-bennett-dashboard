@@ -38,15 +38,15 @@ const PROJECTS = [
 ];
 // Home-page "Featured Work" — a curated, ordered set (not every project with an image).
 const FEATURED = [
-  { title: "EA $55B Take-Private LBO", note: "Student reconstruction", img: "/projects/ea-featured.png", blurb: "A graduate-course reconstruction of the Electronic Arts take-private — 38-page investment memo, 26-slide IC deck, and a 12-tab LBO model.", tab: "projects", id: "ea-take-private" },
+  { title: "EA $55B Take-Private LBO", note: "Student reconstruction", img: "/projects/ea-featured.png", blurb: "A graduate-course reconstruction of the Electronic Arts take-private — 35-page investment memo, 26-slide IC deck, and a 12-tab LBO model.", tab: "projects", id: "ea-take-private" },
   { title: "Portfolio Analytics App", note: "Live demo", img: "/projects/portfolio-app.png", blurb: "Real-time mean-variance optimization, efficient frontier with CAL, CAPM beta/alpha, and risk-contribution decomposition — built in Streamlit.", tab: "projects" },
 ];
 const DEALS = [
-  { id: "ea-take-private", value: "$55B", type: "Take-Private LBO", co: "Electronic Arts Inc.", sub: "NASDAQ: EA", detail: "38-page IM · 26-slide IC deck · 12-tab LBO model", date: "Apr 2026", model: "/deals/ea-lbo-model.xlsx", memo: "/deals/ea-memo.pdf", deck: "/deals/ea-ic-deck.pptx",
+  { id: "ea-take-private", value: "$55B", type: "Take-Private LBO", co: "Electronic Arts Inc.", sub: "NASDAQ: EA", detail: "35-page IM · 26-slide IC deck · 12-tab LBO model", date: "Apr 2026", model: "/deals/ea-lbo-model.xlsx", memo: "/deals/ea-memo.pdf", deck: "/deals/ea-ic-deck.pptx",
     thesis: "Durable live-services cash flow supports an all-cash take-private; returns underwritten primarily to EBITDA growth and deleveraging, not multiple expansion.",
     assumptions: "$36.4B equity / $18.0B debt sources & uses; three-case operating projections spanning 1.27x–2.43x MoM and 4.8%–19.4% gross IRR; reconstruction diverges from reported terms where figures were not public.",
     takeaway: "Returns attribution — separating EBITDA growth, multiple expansion, and deleveraging — tells you more about a deal than the headline IRR." },
-  { id: "jagex-lbo", value: "£900M", type: "Sponsor-to-Sponsor LBO", co: "Jagex Limited", sub: "CVC & Haveli ← The Carlyle Group", detail: "10-tab LBO model · 26-page IM · QoE bridge", date: "Apr 2026", model: "/deals/jagex-lbo-model.xlsx", memo: "/deals/jagex-memo.pdf",
+  { id: "jagex-lbo", value: "£900M", type: "Sponsor-to-Sponsor LBO", co: "Jagex Limited", sub: "CVC & Haveli ← The Carlyle Group", detail: "10-tab LBO model · 27-page IM · QoE bridge", date: "Apr 2026", model: "/deals/jagex-lbo-model.xlsx", memo: "/deals/jagex-memo.pdf",
     thesis: "Recurring subscription revenue with pricing power justifies a 13.4x FY23 EBITDA entry in a secondary buyout, underwriting a 1.77x MOIC / 12.1% IRR base case.",
     assumptions: "Quality-of-earnings bridge normalizing $56.4M reported to $75M pro-forma EBITDA ($18.6M add-backs); ~10% CAPM-derived WACC; full 2-and-20 fund waterfall; every figure footnoted to primary sources.",
     takeaway: "Cross-border, limited-disclosure deals live or die on quality of earnings — the add-back bridge was the real model." },
