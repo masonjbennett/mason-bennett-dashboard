@@ -2650,6 +2650,88 @@ function RatesPlate() {
   </div>;
 }
 
+// The Curve Time Machine — scrub the whole Treasury curve month by month from 1990.
+// Keyless FRED constant-maturity yields via api/curve.js; a flagship public exhibit.
+function useCurveHistory() {
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    let on = true;
+    (async () => {
+      try {
+        const cached = cacheGet("mjb_curve_hist", 1440);
+        if (cached) { if (on) setData(cached); return; }
+        const r = await fetch("/api/curve");
+        if (!r.ok) throw 0;
+        const d = await r.json();
+        if (Array.isArray(d) && d.length && on) { setData(d); cacheSet("mjb_curve_hist", d); }
+      } catch {}
+    })();
+    return () => { on = false; };
+  }, []);
+  return data;
+}
+const CURVE_MARKS = [
+  ["2000-11", "Dot-com peak"], ["2006-06", "Pre-GFC inversion"], ["2009-03", "GFC trough"],
+  ["2020-03", "COVID, pinned"], ["2023-07", "Deepest inversion"],
+];
+function CurveTimeMachine() {
+  const rows = useCurveHistory();
+  const [idx, setIdx] = useState(null);
+  const [playing, setPlaying] = useState(false);
+  useEffect(() => { if (rows && idx == null) setIdx(rows.length - 1); }, [rows]);
+  useEffect(() => {
+    if (!playing || !rows) return;
+    const iv = setInterval(() => setIdx(i => Math.min(rows.length - 1, (i ?? 0) + 1)), 110);
+    return () => clearInterval(iv);
+  }, [playing, rows]);
+  useEffect(() => { if (rows && idx === rows.length - 1) setPlaying(false); }, [idx, rows]);
+  if (!rows || rows.length < 12) return <p style={{ color: "#8a8072", fontSize: 12, textAlign: "center", padding: "12px 0", lineHeight: 1.6 }}>Scrub the entire US Treasury yield curve month by month from 1990 to today — watch inversions arrive, the zero-rate era, and every regime in between.<br /><span style={{ fontSize: 10, color: "#a2977f" }}>Live via FRED in production</span></p>;
+  const i = idx == null ? rows.length - 1 : idx;
+  const [ym, p] = rows[i];
+  const today = rows[rows.length - 1][1];
+  const gmax = Math.ceil(Math.max(...rows.flatMap(([, q]) => TENORS.map(([m]) => q[m]).filter(v => v != null))));
+  const lo = 0, hi = gmax + 0.25;
+  const W = 560, H = 200, PL = 30, PB = 22, PT = 10;
+  const x = k => PL + (k / (TENORS.length - 1)) * (W - PL - 10);
+  const yy = v => PT + (1 - (v - lo) / (hi - lo)) * (H - PT - PB);
+  const path = row => TENORS.map(([m], k) => row[m] == null ? null : `${k === 0 || row[TENORS[k - 1][0]] == null ? "M" : "L"}${x(k).toFixed(1)},${yy(row[m]).toFixed(1)}`).filter(Boolean).join(" ");
+  const gridVals = []; for (let v = 0; v <= hi; v += 1) gridVals.push(v);
+  const label = (() => { const [y, mm] = ym.split("-"); return new Date(+y, +mm - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" }); })();
+  const s2s10 = (p[120] != null && p[24] != null) ? p[120] - p[24] : null;
+  const s3m10 = (p[120] != null && (p[3] != null || p[1] != null)) ? p[120] - (p[3] != null ? p[3] : p[1]) : null;
+  const shape = s2s10 == null ? "" : s2s10 < -0.05 ? "inverted" : s2s10 > 1.2 ? "steep" : "flat";
+  const shapeCol = shape === "inverted" ? "#990f3d" : shape === "steep" ? "#0d6d56" : "#b0741e";
+  const jump = target => { let best = 0, bd = Infinity; rows.forEach(([q], k) => { const dd = Math.abs(new Date(q + "-01") - new Date(target + "-01")); if (dd < bd) { bd = dd; best = k; } }); setPlaying(false); setIdx(best); };
+  const atToday = i === rows.length - 1;
+  return <div>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8, marginBottom: 4 }}>
+      <div style={{ fontFamily: "'Instrument Serif',serif", fontSize: 26, color: "#262421", lineHeight: 1 }}>{label}</div>
+      {shape && <div style={{ fontSize: 10, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, textTransform: "uppercase", color: shapeCol }}>{shape} curve</div>}
+    </div>
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "auto", display: "block" }} role="img" aria-label={`US Treasury yield curve, ${label}`}>
+      {gridVals.map(v => <g key={v}><line x1={PL} x2={W - 10} y1={yy(v)} y2={yy(v)} stroke="#e9ddc9" strokeWidth="0.6" /><text x={PL - 5} y={yy(v) + 3} textAnchor="end" fontSize="8" fill="#a2977f" fontFamily="'JetBrains Mono',monospace">{v}</text></g>)}
+      {TENORS.map(([m, l], k) => <text key={m} x={x(k)} y={H - 7} textAnchor="middle" fontSize="8" fill="#8a8072" fontFamily="'JetBrains Mono',monospace">{l}</text>)}
+      {!atToday && <path d={path(today)} fill="none" stroke="#0d6d56" strokeWidth="1" strokeDasharray="4 4" strokeLinejoin="round" opacity="0.5" />}
+      <path d={path(p)} fill="none" stroke="#262421" strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+      {TENORS.map(([m], k) => p[m] == null ? null : <circle key={m} cx={x(k)} cy={yy(p[m])} r="1.8" fill="#262421" />)}
+    </svg>
+    <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "6px 0 2px" }}>
+      <button onClick={() => setPlaying(v => !v)} style={{ ...S.btn, fontSize: 10, padding: "5px 14px", minWidth: 66 }}>{playing ? "Pause" : atToday ? "Replay" : "Play"}</button>
+      <input type="range" min={0} max={rows.length - 1} value={i} onChange={e => { setPlaying(false); setIdx(+e.target.value); }} style={{ flex: 1, accentColor: "#0d6d56", cursor: "pointer" }} aria-label="Scrub month" />
+    </div>
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "8px 0 2px" }}>
+      {CURVE_MARKS.map(([t, lab]) => <button key={t} onClick={() => jump(t)} style={{ ...S.chip, fontSize: 9, padding: "3px 9px", cursor: "pointer" }}>{lab}</button>)}
+    </div>
+    <div style={{ display: "flex", gap: 18, flexWrap: "wrap", marginTop: 8, fontSize: 11.5, color: "#4a443c" }}>
+      {s2s10 != null && <span>2s10s <span style={{ fontFamily: "'JetBrains Mono',monospace", color: s2s10 >= 0 ? "#0d6d56" : "#990f3d", fontWeight: 600 }}>{s2s10 >= 0 ? "+" : ""}{Math.round(s2s10 * 100)}bp</span></span>}
+      {s3m10 != null && <span>3m10y <span style={{ fontFamily: "'JetBrains Mono',monospace", color: s3m10 >= 0 ? "#0d6d56" : "#990f3d", fontWeight: 600 }}>{s3m10 >= 0 ? "+" : ""}{Math.round(s3m10 * 100)}bp</span></span>}
+      {p[120] != null && <span>10Y <span style={{ fontFamily: "'JetBrains Mono',monospace", color: "#262421", fontWeight: 600 }}>{p[120].toFixed(2)}%</span></span>}
+      {!atToday && <span style={{ color: "#a2977f", fontSize: 10 }}>— dashed teal = today's curve</span>}
+    </div>
+    <SourceLine>Source: FRED — constant-maturity Treasury yields, month-end from 1990 · {rows.length} months on the reel · cached 24 hrs</SourceLine>
+  </div>;
+}
+
 // FX (ECB reference rates via Frankfurter) + crypto (CoinGecko) — both keyless and CORS-open, browser-direct.
 function CrossAssetRows() {
   const [fx, setFx] = useState(null);
@@ -3033,6 +3115,10 @@ export default function App() {
             <h2 style={S.cardTitle}><span style={{ color: "#b0741e" }}>◆</span> Macro Ledger<Info text="The prints every interview and morning meeting references — CPI, unemployment, Fed funds, the 10-year, the 30-year mortgage — each with its change from the prior reading and release dateline. The econ calendar says CPI is due; this shows the print." link="https://fred.stlouisfed.org" linkLabel="FRED" /></h2>
             <MacroLedger />
           </section>
+        </div>
+        <div id="curve-time-machine" style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease 0.5s both" }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#1f5a9e" }}>◆</span> The Curve Time Machine<Info text="Scrub the entire US Treasury yield curve month by month from 1990 to today, drawn from FRED's constant-maturity series. The y-axis is fixed so you can watch the whole curve rise, fall, and invert as you drag; today's curve stays on as a dashed teal ghost for comparison. The chips jump to landmark regimes — the dot-com peak, the pre-GFC inversion, COVID, and the deepest modern inversion." link="https://fred.stlouisfed.org/categories/115" linkLabel="FRED · Treasury constant maturity" /></h2>
+          <CurveTimeMachine />
         </div>
         <div id="drawdown-meter" style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease 0.52s both" }}>
           <h2 style={S.cardTitle}><span style={{ color: "#b2342b" }}>◆</span> The Drawdown Meter<Info text="A one-glance risk read from FRED: how far the S&P 500 has fallen from its highest close in the lookback window, how many sessions it has spent below that peak, and where today's VIX ranks against its own recent range. Drawdown and days-underwater use daily S&P 500 closes; the VIX figure is a percentile over the same window." link="https://fred.stlouisfed.org/series/SP500" linkLabel="FRED · S&P 500 series" /></h2>
