@@ -2686,10 +2686,10 @@ function PuzzleCorner() {
       A sponsor buys a company generating <b>${E0}M of EBITDA</b> at <b>{entry.toFixed(1)}x</b>, financed with <b>{debtPct}% debt</b> (interest-only, no paydown). Over five years EBITDA grows to <b>${EN}M</b> and the sponsor exits at <b>{exitM.toFixed(1)}x</b>. Work it on paper:
     </p>
     {scaf.m < 4 ? <div style={{ border: "1px solid #e9ddc9", borderRadius: 8, background: "#f6eee1", padding: "8px 12px", marginBottom: 14 }}>
-      <div style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#8a8072", letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>Scaffold · level {scaf.m} of 4 · three clean solves fade it a step</div>
+      <div style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#8a8072", letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>Scaffold · level {scaf.m} of 4 · three clean solves fade a step · <span style={{ color: "#6f675c" }}>figures <span style={{ display: "inline-block", width: 22, height: 7, background: "#262421", borderRadius: 1, verticalAlign: "baseline" }} /> are set in ink — yours to work</span></div>
       {STEPS.map(([f, v], i) => <div key={i} style={{ fontSize: 10.5, fontFamily: "'JetBrains Mono',monospace", color: "#6f675c", lineHeight: 1.9, display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
         <span>{i + 1}. {f}</span>
-        {v && (i < 3 - scaf.m ? <span style={{ color: "#33302c" }}>{v}</span> : <span style={{ display: "inline-block", width: 54, height: 9, background: "#262421", borderRadius: 1, alignSelf: "center" }} title="Set in ink — earn the level or work it yourself" />)}
+        {v && (i < 3 - scaf.m ? <span style={{ color: "#33302c" }}>{v}</span> : <span style={{ display: "inline-block", width: 54, height: 9, background: "#262421", borderRadius: 1, alignSelf: "center" }} title="Set in ink — work this figure yourself; it fades back in if you miss" />)}
       </div>)}
     </div> : <div style={{ fontSize: 9, fontFamily: "'JetBrains Mono',monospace", color: "#0d6d56", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 14 }}>Scaffold retired — worked cold. A miss brings it back.</div>}
     <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
