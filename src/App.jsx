@@ -2674,12 +2674,14 @@ function PuzzleCorner() {
   const fields = [["eq", "Equity check ($M)", `${Eq0.toFixed(0)}`], ["exit", "Exit equity ($M)", `${EqN.toFixed(0)}`], ["mom", "Multiple of money (x)", `${mom.toFixed(2)}x`], ["irr", "5-yr IRR (%)", `${irr.toFixed(1)}%`]];
   const [scafMsg, setScafMsg] = useState("");
   const fresh = () => { setSeed(s => s + 1); setAns({ eq: "", exit: "", mom: "", irr: "" }); setChecked(false); setScafMsg(""); };
+  // Intermediates (fi 0-2) fade with mastery; the four graded answers are NEVER shown ("ans").
   const STEPS = [
-    [`Entry EV = ${entry.toFixed(1)}x × $${E0}M`, `= $${EV0.toFixed(0)}M`],
-    [`Debt = ${debtPct}% × entry EV`, `= $${D.toFixed(0)}M → equity check $${Eq0.toFixed(0)}M`],
-    [`Exit EV = ${exitM.toFixed(1)}x × $${EN}M`, `= $${EVN.toFixed(0)}M`],
-    [`Exit equity = exit EV − debt`, `= $${EqN.toFixed(0)}M`],
-    [`MoM = exit equity ÷ equity check; IRR ≈ MoM^(1/5) − 1`, null],
+    [`Entry EV = ${entry.toFixed(1)}x × $${E0}M`, `= $${EV0.toFixed(0)}M`, 0],
+    [`Debt = ${debtPct}% × entry EV`, `= $${D.toFixed(0)}M`, 1],
+    [`Equity check = entry EV − debt`, "ans", -1],
+    [`Exit EV = ${exitM.toFixed(1)}x × $${EN}M`, `= $${EVN.toFixed(0)}M`, 2],
+    [`Exit equity = exit EV − debt`, "ans", -1],
+    [`MoM = exit equity ÷ equity check; IRR ≈ MoM^(1/5) − 1`, null, -1],
   ];
   return <div>
     <p style={{ fontSize: 12.5, color: "#4a443c", lineHeight: 1.8, marginBottom: 14 }}>
@@ -2687,9 +2689,11 @@ function PuzzleCorner() {
     </p>
     {scaf.m < 4 ? <div style={{ border: "1px solid #e9ddc9", borderRadius: 8, background: "#f6eee1", padding: "8px 12px", marginBottom: 14 }}>
       <div style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#8a8072", letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>Scaffold · level {scaf.m} of 4 · three clean solves fade a step · <span style={{ color: "#6f675c" }}>figures <span style={{ display: "inline-block", width: 22, height: 7, background: "#262421", borderRadius: 1, verticalAlign: "baseline" }} /> are set in ink — yours to work</span></div>
-      {STEPS.map(([f, v], i) => <div key={i} style={{ fontSize: 10.5, fontFamily: "'JetBrains Mono',monospace", color: "#6f675c", lineHeight: 1.9, display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
+      {STEPS.map(([f, v, fi], i) => <div key={i} style={{ fontSize: 10.5, fontFamily: "'JetBrains Mono',monospace", color: "#6f675c", lineHeight: 1.9, display: "flex", gap: 6, alignItems: "baseline", flexWrap: "wrap" }}>
         <span>{i + 1}. {f}</span>
-        {v && (i < 3 - scaf.m ? <span style={{ color: "#33302c" }}>{v}</span> : <span style={{ display: "inline-block", width: 54, height: 9, background: "#262421", borderRadius: 1, alignSelf: "center" }} title="Set in ink — work this figure yourself; it fades back in if you miss" />)}
+        {v && (v !== "ans" && fi < 3 - scaf.m
+          ? <span style={{ color: "#33302c" }}>{v}</span>
+          : <span style={{ display: "inline-block", width: 54, height: 9, background: "#262421", borderRadius: 1, alignSelf: "center" }} title={v === "ans" ? "One of the four answers below — always set in ink" : "Set in ink — work this figure yourself; it fades back in if you miss"} />)}
       </div>)}
     </div> : <div style={{ fontSize: 9, fontFamily: "'JetBrains Mono',monospace", color: "#0d6d56", letterSpacing: 1.5, textTransform: "uppercase", marginBottom: 14 }}>Scaffold retired — worked cold. A miss brings it back.</div>}
     <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
