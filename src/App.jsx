@@ -913,6 +913,9 @@ function FirstCall({ prices, live, apiKey }) {
   const [econ, setEcon] = useState(null);
   const [ai, setAi] = useState(() => { const c = cacheGet("mjb_firstcall_ai", 1440); return c && c.d === todayISO() ? c.text : null; });
   const [aiBusy, setAiBusy] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
+  const uRef = useRef(null);
+  useEffect(() => () => { try { window.speechSynthesis.cancel(); } catch {} }, []);
   const now = etNow(), mins = now.getHours() * 60 + now.getMinutes();
   const show = isTradingDay(now) && mins < 570;
   useEffect(() => {
@@ -944,6 +947,29 @@ function FirstCall({ prices, live, apiKey }) {
   useEffect(() => { if (show && apiKey && !ai && !aiBusy && (leads.length || tape.length)) writeCall(); }, [show, apiKey, leads.length]);
   if (!show) return null;
   const toOpen = 570 - mins;
+  // Wireless Edition — read the note aloud via the browser's speech synthesis (zero cost,
+  // commute/coffee modality). Composes the same facts the note renders into spoken lines.
+  const canSpeak = typeof window !== "undefined" && "speechSynthesis" in window;
+  const speak = () => {
+    if (!canSpeak) return;
+    if (speaking) { try { window.speechSynthesis.cancel(); } catch {} setSpeaking(false); return; }
+    const chg = p => `${parseFloat(p.change) >= 0 ? "up" : "down"} ${Math.abs(parseFloat(p.change)).toFixed(2)} percent`;
+    const parts = [`The seven o'clock note for ${now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}.`, `The market opens in ${Math.floor(toOpen / 60)} hours and ${toOpen % 60} minutes.`];
+    if (ai) parts.push(`Top call. ${ai}`);
+    if (tape.length) parts.push("Overnight tape. " + tape.map(p => `${p.symbol} ${p.price}, ${chg(p)}`).join(". ") + ".");
+    if (leads.length) parts.push("On the wire. " + leads.slice(0, 3).map(c => c.lead.title).join(". ") + ".");
+    if (nextEvents.length) parts.push("On the calendar. " + nextEvents.map(e => `${e.date === todayISO() ? "Today" : e.date.slice(5)}, ${e.event}`).join(". ") + ".");
+    const deskBits = [];
+    if (due > 0) deskBits.push(`${due} card${due === 1 ? "" : "s"} due in the review docket`);
+    if (openNotices > 0) deskBits.push(`${openNotices} unread notice${openNotices === 1 ? "" : "s"}`);
+    if (held > 0) deskBits.push(`${held} item${held === 1 ? "" : "s"} held over`);
+    if (unfiled > 0) deskBits.push(`${unfiled} call${unfiled === 1 ? "" : "s"} not yet filed at Bennett versus the Tape`);
+    parts.push(deskBits.length ? "On the desk. " + deskBits.join(", ") + "." : "The desk is clear.");
+    const u = new SpeechSynthesisUtterance(parts.join(" "));
+    u.rate = 1; u.onend = () => setSpeaking(false); u.onerror = () => setSpeaking(false);
+    uRef.current = u; // keep a ref so the utterance isn't GC'd mid-speech
+    try { window.speechSynthesis.cancel(); window.speechSynthesis.speak(u); setSpeaking(true); } catch { setSpeaking(false); }
+  };
   const Sec = ({ label, children }) => <div style={{ minWidth: 0 }}><div style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#8a8072", letterSpacing: 2, textTransform: "uppercase", margin: "8px 0 4px" }}>{label}</div>{children}</div>;
   return <div style={{ border: "1px solid #33302c", outline: "1px solid #33302c", outlineOffset: -4, borderRadius: 2, padding: "14px 18px", marginBottom: 16, background: "#fffdf9" }}>
     <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
@@ -951,6 +977,10 @@ function FirstCall({ prices, live, apiKey }) {
       <span style={{ fontFamily: "'Instrument Serif',serif", fontSize: 15, color: "#262421" }}>{now.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</span>
       <Info text="The morning first-call sheet: overnight tape, top wire stories, the next data prints, overnight 8-Ks, and everything due on the desk. Appears on trading days until the 9:30 open, then retires for the day. With your API key set, Claude writes the two-sentence top call once per morning — private, never shown to visitors." />
       <span style={{ marginLeft: "auto", fontSize: 9, fontFamily: "'JetBrains Mono',monospace", color: "#8a8072", letterSpacing: 1 }}>OPENS IN {Math.floor(toOpen / 60)}H {String(toOpen % 60).padStart(2, "0")}M</span>
+      {canSpeak && <button onClick={speak} title={speaking ? "Stop reading" : "Read the note aloud — the Wireless Edition"} style={{ background: "none", border: `1px solid ${speaking ? "#0d6d5640" : "#e9ddc9"}`, borderRadius: 6, padding: "2px 9px", cursor: "pointer", fontSize: 8, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, textTransform: "uppercase", color: speaking ? "#0d6d56" : "#8a8072", display: "inline-flex", alignItems: "center", gap: 5 }}>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5Z" /><path d="M15.5 8.5a5 5 0 0 1 0 7" />{speaking && <path d="M18.5 5.5a9 9 0 0 1 0 13" />}</svg>
+        {speaking ? "Stop" : "Listen"}
+      </button>}
     </div>
     {tape.length > 0 && <div style={{ fontFamily: "'JetBrains Mono',monospace", fontSize: 10, color: "#6f675c", display: "flex", gap: 14, flexWrap: "wrap", marginTop: 6 }}>{tape.map(p => <span key={p.symbol}>{p.symbol} {p.price} <span style={{ color: parseFloat(p.change) >= 0 ? "#0d6d56" : "#b2342b" }}>{parseFloat(p.change) >= 0 ? "▲" : "▼"}{Math.abs(parseFloat(p.change)).toFixed(2)}%</span></span>)}</div>}
     {ai && <p style={{ fontSize: 12.5, color: "#33302c", lineHeight: 1.7, margin: "10px 0 2px", borderLeft: "2px solid #0d6d56", paddingLeft: 10 }}>{ai}<span style={{ fontSize: 7.5, fontFamily: "'JetBrains Mono',monospace", color: "#a2977f", letterSpacing: 1, marginLeft: 8 }}>TOP CALL · CLAUDE · PRIVATE</span></p>}
