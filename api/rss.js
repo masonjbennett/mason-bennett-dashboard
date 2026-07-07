@@ -19,12 +19,16 @@ const SOURCES = {
 };
 const UA = "Mozilla/5.0 (compatible; masonjbennett.com wire; bennettmasonj@gmail.com)";
 
+// Publishers double-encode ("&amp;#x2014;"), so &amp; decodes first; numeric entities
+// (decimal AND hex) next; then the named typographic set that survives in headlines.
+const NAMED = { lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", mdash: "—", ndash: "–", lsquo: "‘", rsquo: "’", ldquo: "“", rdquo: "”", hellip: "…", middot: "·", bull: "•", euro: "€", pound: "£", yen: "¥", cent: "¢", copy: "©", reg: "®", trade: "™", deg: "°", plusmn: "±", times: "×", minus: "−", sect: "§", laquo: "«", raquo: "»" };
 const strip = s => s
   .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1")
   .replace(/<[^>]+>/g, "")
-  .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-  .replace(/&#0?39;|&apos;|&#8217;/g, "'").replace(/&quot;|&#8220;|&#8221;/g, '"')
-  .replace(/&nbsp;/g, " ").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n))
+  .replace(/&amp;/g, "&")
+  .replace(/&#x([0-9a-f]+);/gi, (_, n) => { try { return String.fromCodePoint(parseInt(n, 16)); } catch { return ""; } })
+  .replace(/&#(\d+);/g, (_, n) => { try { return String.fromCodePoint(+n); } catch { return ""; } })
+  .replace(/&([a-z]+);/gi, (m, n) => NAMED[n.toLowerCase()] ?? m)
   .replace(/\s+/g, " ").trim();
 
 function parseFeed(xml, srcId) {
