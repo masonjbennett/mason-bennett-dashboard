@@ -3241,14 +3241,14 @@ function FedLedger() {
   return <div id="fed-ledger" style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease both" }}>
     <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> The Fed Ledger<Info text="A word-level redline of the two most recent FOMC policy statements, straight from the Federal Reserve's press feed — what the Committee changed since its last meeting. Struck claret text was removed; teal text is new. FOMC statements are public domain; the redline is computed in your browser and hides itself if it can't be built cleanly." link={d.latest.url} linkLabel="Read the full statement" /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="markets" id="fed-ledger" /></span></h2>
     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
-      <div style={{ fontSize: 10, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1 }}>{fedFmtDate(d.latest.date)} <span style={{ color: "#a2977f" }}>vs.</span> {fedFmtDate(d.prior.date)}</div>
+      <div style={{ fontSize: 10, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1 }}>{fedFmtDate(d.prior.date)} <span style={{ color: "#a2977f" }}>→</span> {fedFmtDate(d.latest.date)}</div>
       <div style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, textTransform: "uppercase", display: "flex", gap: 16 }}>
         <span style={{ color: "#990f3d", textDecoration: "line-through", textDecorationColor: "rgba(153,15,61,0.5)" }}>removed</span>
-        <span style={{ color: "#0d6d56", fontWeight: 600 }}>added</span>
+        <span style={{ color: "#0d6d56", textDecoration: "underline", textDecorationColor: "rgba(13,109,86,0.5)", textUnderlineOffset: "2px" }}>added</span>
       </div>
     </div>
     <div style={{ whiteSpace: "pre-wrap", fontSize: 13.5, lineHeight: 1.95, color: "#33302c", fontFamily: "'Space Grotesk',sans-serif" }}>
-      {diff.map(([t, s], i) => t === "eq" ? s : <span key={i} style={t === "del" ? { color: "#990f3d", textDecoration: "line-through", textDecorationColor: "rgba(153,15,61,0.5)", background: "rgba(153,15,61,0.07)", borderRadius: 2 } : { color: "#0d6d56", fontWeight: 600, background: "rgba(13,109,86,0.10)", borderRadius: 2 }}>{s}</span>)}
+      {diff.map(([t, s], i) => t === "eq" ? s : <span key={i} style={t === "del" ? { color: "#990f3d", textDecoration: "line-through", textDecorationColor: "rgba(153,15,61,0.5)", background: "rgba(153,15,61,0.07)", borderRadius: 2 } : { color: "#0d6d56", textDecoration: "underline", textDecorationColor: "rgba(13,109,86,0.55)", textUnderlineOffset: "2px", background: "rgba(13,109,86,0.10)", borderRadius: 2 }}>{s}</span>)}
     </div>
     <SourceLine>Source: Federal Reserve — FOMC policy statement (public domain) · redline computed in-browser</SourceLine>
   </div>;
