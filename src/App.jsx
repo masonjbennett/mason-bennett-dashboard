@@ -83,8 +83,8 @@ const ANCHOR_SEG = {
   "puzzle-corner": ["projects", "prep"], "merger-math": ["projects", "prep"], "ripple-drill": ["projects", "prep"],
   "technicals-desk": ["projects", "prep"], "debt-ledger": ["projects", "prep"], "coupon-desk": ["projects", "prep"],
   "waterfall-room": ["projects", "prep"], "two-minute-tape": ["projects", "prep"], "redline": ["projects", "prep"],
-  "lexicon": ["projects", "prep"], "bias-ledger": ["projects", "prep"], "name-that-regime": ["projects", "prep"], "explain-desk": ["projects", "prep"],
-  "curve-time-machine": ["markets", "tape"], "drawdown-meter": ["markets", "tape"],
+  "lexicon": ["projects", "prep"], "bias-ledger": ["projects", "prep"], "name-that-regime": ["projects", "prep"], "explain-desk": ["projects", "prep"], "query-drill": ["projects", "prep"],
+  "curve-time-machine": ["markets", "tape"], "drawdown-meter": ["markets", "tape"], "fed-ledger": ["markets", "tape"],
   "standing-wire": ["news", null], "filings-wire": ["news", null], "reading-ledger": ["news", null],
 };
 const EXPERIENCE = [
@@ -3106,6 +3106,153 @@ function SettingsPanel({ apiKey, setApiKey, finnhubKey, setFinnhubKey, desk, set
   </div>;
 }
 
+// The Query Drill — a real SQL desk over Damodaran's industry EV/EBITDA data, run entirely in
+// the browser via sql.js (SQLite compiled to WebAssembly), lazy-loaded only when the user opens
+// the desk so its ~640KB wasm never touches the critical path. A date-seeded task from a bank of
+// verified reference queries; the user's SQL is graded by DIFFING its result set against the
+// reference's, so any equivalent query passes. Read-only (SELECT/WITH only); recursive CTEs and
+// multi-statement input are blocked so a runaway query can't hang the main thread. Grades stay local.
+const QD_TASKS = [
+  { id: "above30", ordered: true, prompt: "List every industry with an EV/EBITDA above 30 — the name and its EV/EBITDA, richest first.", ref: "SELECT name, ev_ebitda FROM industries WHERE ev_ebitda > 30 ORDER BY ev_ebitda DESC, name ASC" },
+  { id: "top5firms", ordered: true, prompt: "The five industries with the most firms — show the name and the firm count, most firms first.", ref: "SELECT name, firms FROM industries ORDER BY firms DESC, name ASC LIMIT 5" },
+  { id: "count", ordered: false, prompt: "How many industries are in the table? Return a single number.", ref: "SELECT COUNT(*) FROM industries" },
+  { id: "avg", ordered: false, prompt: "The average EV/EBITDA across all industries, rounded to one decimal place.", ref: "SELECT ROUND(AVG(ev_ebitda), 1) FROM industries" },
+  { id: "buckets", ordered: false, prompt: "Group the industries into three valuation buckets — 'Cheap' (EV/EBITDA below 10), 'Mid' (10 to 20 inclusive), and 'Rich' (above 20) — and show each bucket label with how many industries fall in it.", ref: "SELECT CASE WHEN ev_ebitda < 10 THEN 'Cheap' WHEN ev_ebitda <= 20 THEN 'Mid' ELSE 'Rich' END AS bucket, COUNT(*) FROM industries GROUP BY bucket" },
+  { id: "having", ordered: false, prompt: "Using those same three buckets (Cheap below 10, Mid 10 to 20, Rich above 20), show only the buckets that hold more than 20 industries, with their counts.", ref: "SELECT CASE WHEN ev_ebitda < 10 THEN 'Cheap' WHEN ev_ebitda <= 20 THEN 'Mid' ELSE 'Rich' END AS bucket, COUNT(*) FROM industries GROUP BY bucket HAVING COUNT(*) > 20" },
+  { id: "aboveavg", ordered: true, prompt: "Which industries trade above the overall average EV/EBITDA? Show the name and EV/EBITDA, cheapest of those first.", ref: "SELECT name, ev_ebitda FROM industries WHERE ev_ebitda > (SELECT AVG(ev_ebitda) FROM industries) ORDER BY ev_ebitda ASC, name ASC" },
+  { id: "software", ordered: true, prompt: "Every industry whose name contains the word 'Software' — just the names, alphabetical.", ref: "SELECT name FROM industries WHERE name LIKE '%Software%' ORDER BY name" },
+  { id: "min", ordered: false, prompt: "Which industry has the lowest EV/EBITDA? Show its name and multiple.", ref: "SELECT name, ev_ebitda FROM industries ORDER BY ev_ebitda ASC, name ASC LIMIT 1" },
+  { id: "sumfirms", ordered: false, prompt: "Across all industries, how many firms are there in total?", ref: "SELECT SUM(firms) FROM industries" },
+  { id: "third", ordered: false, prompt: "Which industry has the third-highest EV/EBITDA? Show its name and multiple.", ref: "SELECT name, ev_ebitda FROM industries ORDER BY ev_ebitda DESC, name ASC LIMIT 1 OFFSET 2" },
+  { id: "richcount", ordered: false, prompt: "How many industries trade above 20x EV/EBITDA?", ref: "SELECT COUNT(*) FROM industries WHERE ev_ebitda > 20" },
+];
+// Compare two result sets by VALUE (ignore column names/aliases). Numbers rounded to 2dp for
+// float tolerance; order-insensitive unless the task's answer depends on ORDER BY.
+const qdSame = (a, b, ordered) => {
+  if (a.length !== b.length) return false;
+  const rd = v => typeof v === "number" ? Math.round(v * 100) / 100 : v;
+  const k = row => JSON.stringify(row.map(rd));
+  const na = a.map(k), nb = b.map(k);
+  if (ordered) return na.every((x, i) => x === nb[i]);
+  return na.slice().sort().every((x, i) => x === nb.slice().sort()[i]);
+};
+const qdGuard = q => {
+  // Sanitize a COPY for the structural checks — drop comments and mask string literals so a ';' or a
+  // keyword sitting inside a comment/string can't trigger a false rejection. The original query runs.
+  const code = q.replace(/--[^\n]*/g, " ").replace(/\/\*[\s\S]*?\*\//g, " ").replace(/'(?:[^']|'')*'/g, "''");
+  const t = code.trim().replace(/;\s*$/, "");
+  if (/;/.test(t)) return false;                                   // no multi-statement input
+  if (!/^(select|with)\b/i.test(t)) return false;                  // read queries only
+  if (/\brecursive\b/i.test(t)) return false;                      // no runaway recursive CTEs
+  return !/\b(insert|update|delete|drop|alter|create|attach|detach|pragma|replace|vacuum|reindex)\b/i.test(t);
+};
+function QueryDrill() {
+  const [ready, setReady] = useState(false), [loading, setLoading] = useState(false), [loadErr, setLoadErr] = useState("");
+  const dbRef = useRef(null);
+  useEffect(() => () => { try { dbRef.current?.close?.(); } catch {} dbRef.current = null; }, []);   // free WASM heap on unmount
+  const [idx, setIdx] = useState(() => Math.floor(Date.now() / 864e5) % QD_TASKS.length);
+  const [sql, setSql] = useState("SELECT "), [rs, setRs] = useState(null), [runErr, setRunErr] = useState(""), [verdict, setVerdict] = useState(null), [reveal, setReveal] = useState(false);
+  const task = QD_TASKS[idx];
+  const open = async () => {
+    setLoading(true); setLoadErr("");
+    try { dbRef.current?.close?.(); } catch {} dbRef.current = null;   // release any partial db from a failed prior open
+    try {
+      const mod = await import("sql.js"); const initSqlJs = mod.default || mod;
+      const SQL = await initSqlJs({ locateFile: f => "/" + f });
+      const data = await (await fetch("/damodaran-2026.json")).json();
+      const db = new SQL.Database();
+      db.run("CREATE TABLE industries (name TEXT, firms INTEGER, ev_ebitda REAL);");
+      const ins = db.prepare("INSERT INTO industries VALUES (?,?,?)");
+      data.industries.forEach(r => ins.run([r.name, r.firms, r.evEbitda])); ins.free();
+      dbRef.current = db; setReady(true);
+    } catch { setLoadErr("The SQL engine couldn't load in this browser. Try again, or skip this drill."); }
+    setLoading(false);
+  };
+  const exec = q => { const out = dbRef.current.exec(q); return out[0] || { columns: [], values: [] }; };
+  const run = () => {
+    setVerdict(null);
+    if (!qdGuard(sql)) { setRs(null); setRunErr(/\brecursive\b/i.test(sql) ? "Recursive CTEs are disabled in the drill." : "Only a single read-only SELECT / WITH query is allowed."); return; }
+    try { setRs(exec(sql)); setRunErr(""); } catch (e) { setRs(null); setRunErr(String(e.message || e)); }
+  };
+  const check = () => {
+    if (!qdGuard(sql)) { run(); return; }
+    let mine, want;
+    try { mine = exec(sql); want = exec(task.ref); } catch (e) { setRs(null); setRunErr(String(e.message || e)); return; }
+    setRs(mine); setRunErr("");
+    const ok = qdSame(mine.values, want.values, task.ordered);
+    setVerdict(ok ? "right" : "wrong");
+    recordDrillResult({ src: "query", qid: task.id, ok, front: `SQL — ${task.prompt}`, back: task.ref, given: sql });
+  };
+  const next = () => { setIdx(i => (i + 1) % QD_TASKS.length); setSql("SELECT "); setRs(null); setRunErr(""); setVerdict(null); setReveal(false); };
+  if (!ready) return <div>
+    <p style={{ fontSize: 12.5, color: "#4a443c", lineHeight: 1.8, marginBottom: 12 }}>A real SQL desk: write a query against a live SQLite table of Damodaran's industry multiples, and it's graded by comparing your result to the answer's — any query that returns the right rows passes. The engine (SQLite compiled to WebAssembly, ~640&nbsp;KB) loads only when you open the desk.</p>
+    <button onClick={open} disabled={loading} style={{ ...S.btn, fontSize: 11, padding: "9px 20px", opacity: loading ? 0.6 : 1, cursor: loading ? "default" : "pointer" }}>{loading ? "Loading the SQL engine…" : "Open the SQL desk →"}</button>
+    {loadErr && <p style={{ fontSize: 11, color: "#b2342b", marginTop: 10 }}>{loadErr}</p>}
+  </div>;
+  return <div>
+    <div style={{ fontSize: 9, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, marginBottom: 8 }}>TABLE <span style={{ color: "#0d6d56" }}>industries</span> ( name TEXT · firms INTEGER · ev_ebitda REAL ) — 91 rows</div>
+    <p style={{ fontSize: 12.5, color: "#4a443c", lineHeight: 1.7, marginBottom: 10 }}><span style={{ fontSize: 8, color: "#b0741e", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, textTransform: "uppercase", marginRight: 8 }}>Task</span>{task.prompt}</p>
+    <textarea value={sql} onChange={e => { setSql(e.target.value); setVerdict(null); }} spellCheck={false} rows={3} style={{ ...S.input, fontFamily: "'JetBrains Mono',monospace", fontSize: 12.5, lineHeight: 1.6, resize: "vertical", whiteSpace: "pre" }} />
+    <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
+      <button onClick={run} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "7px 18px" }}>Run</button>
+      <button onClick={check} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "7px 18px", color: "#fdf8f0", background: "#0d6d56", border: "1px solid #0d6d56" }}>Check answer</button>
+      <button onClick={() => setReveal(r => !r)} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "7px 18px", color: "#6f675c", border: "1px solid #ddcfb8" }}>{reveal ? "Hide" : "Reveal"} query</button>
+      <button onClick={next} style={{ ...S.btn, fontSize: 10, letterSpacing: 1, padding: "7px 18px", color: "#6f675c", border: "1px solid #ddcfb8" }}>Next task</button>
+    </div>
+    {verdict && <div style={{ marginTop: 12, fontSize: 12, fontWeight: 700, fontFamily: "'JetBrains Mono',monospace", color: verdict === "right" ? "#0d6d56" : "#b2342b" }}>{verdict === "right" ? "✓ Correct — your result matches the answer." : "✗ Not yet — those rows don't match the expected result."}</div>}
+    {runErr && <div style={{ marginTop: 12, fontSize: 11, color: "#b2342b", fontFamily: "'JetBrains Mono',monospace" }}>SQL error — {runErr}</div>}
+    {reveal && <div style={{ marginTop: 12, background: "#f6eee1", border: "1px solid #e9ddc9", borderRadius: 8, padding: "10px 12px", fontFamily: "'JetBrains Mono',monospace", fontSize: 11.5, color: "#4a443c", whiteSpace: "pre-wrap" }}>{task.ref}</div>}
+    {rs && rs.values.length > 0 && <div style={{ marginTop: 14, overflowX: "auto" }}>
+      <table style={{ borderCollapse: "collapse", fontFamily: "'JetBrains Mono',monospace", fontSize: 11.5 }}>
+        <thead><tr>{rs.columns.map((c, i) => <th key={i} style={{ textAlign: "left", padding: "6px 16px 6px 0", color: "#8a8072", borderBottom: "1px solid #ddcfb8", fontWeight: 600, whiteSpace: "nowrap" }}>{c}</th>)}</tr></thead>
+        <tbody>{rs.values.slice(0, 20).map((row, i) => <tr key={i}>{row.map((v, j) => <td key={j} style={{ padding: "5px 16px 5px 0", color: "#33302c", borderBottom: "1px solid #efe4d2", textAlign: typeof v === "number" ? "right" : "left", whiteSpace: "nowrap" }}>{v === null ? "—" : String(v)}</td>)}</tr>)}</tbody>
+      </table>
+      {rs.values.length > 20 && <div style={{ fontSize: 9, color: "#a2977f", marginTop: 6 }}>… {rs.values.length - 20} more rows</div>}
+    </div>}
+    {rs && rs.values.length === 0 && !runErr && <div style={{ marginTop: 12, fontSize: 11, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace" }}>Query ran — 0 rows returned.</div>}
+    <SourceLine>In-browser SQLite via sql.js · data: Aswath Damodaran, industry EV/EBITDA (Jan 2026) · read-only; grades stay in this browser</SourceLine>
+  </div>;
+}
+
+// The Fed Ledger — a word-level redline of the two most recent FOMC statements (via api/fed.js).
+// HIDE-ON-FAILURE: renders nothing unless the proxy returns two confidently-parsed statements, so a
+// fed.gov markup change or outage can never surface a garbled/stale statement on the public page.
+function fedFmtDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ""); if (!m) return iso || "";
+  return new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+}
+// Word-level LCS diff (statements are a few hundred tokens — O(m·k) is trivial). Whitespace tokens
+// are emitted plain so paragraph breaks survive and no space is ever struck through.
+function fedWordDiff(oldS, newS) {
+  const o = oldS.split(/(\s+)/), n = newS.split(/(\s+)/), m = o.length, k = n.length;
+  const dp = Array.from({ length: m + 1 }, () => new Int32Array(k + 1));
+  for (let i = m - 1; i >= 0; i--) for (let j = k - 1; j >= 0; j--) dp[i][j] = o[i] === n[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+  const out = []; let i = 0, j = 0;
+  while (i < m && j < k) { if (o[i] === n[j]) { out.push(["eq", n[j]]); i++; j++; } else if (dp[i + 1][j] >= dp[i][j + 1]) { out.push(["del", o[i]]); i++; } else { out.push(["ins", n[j]]); j++; } }
+  while (i < m) out.push(["del", o[i++]]); while (j < k) out.push(["ins", n[j++]]);
+  return out;
+}
+function FedLedger() {
+  const [d, setD] = useState(undefined);
+  useEffect(() => { let ok = true; fetch("/api/fed").then(r => r.ok ? r.json() : null).then(j => { if (ok) setD(j && j.ok ? j : null); }).catch(() => { if (ok) setD(null); }); return () => { ok = false; }; }, []);
+  if (!d || !d.ok) return null;
+  const diff = fedWordDiff(d.prior.text, d.latest.text);
+  return <div id="fed-ledger" style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease both" }}>
+    <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> The Fed Ledger<Info text="A word-level redline of the two most recent FOMC policy statements, straight from the Federal Reserve's press feed — what the Committee changed since its last meeting. Struck claret text was removed; teal text is new. FOMC statements are public domain; the redline is computed in your browser and hides itself if it can't be built cleanly." link={d.latest.url} linkLabel="Read the full statement" /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="markets" id="fed-ledger" /></span></h2>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
+      <div style={{ fontSize: 10, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1 }}>{fedFmtDate(d.latest.date)} <span style={{ color: "#a2977f" }}>vs.</span> {fedFmtDate(d.prior.date)}</div>
+      <div style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, textTransform: "uppercase", display: "flex", gap: 16 }}>
+        <span style={{ color: "#990f3d", textDecoration: "line-through", textDecorationColor: "rgba(153,15,61,0.5)" }}>removed</span>
+        <span style={{ color: "#0d6d56", fontWeight: 600 }}>added</span>
+      </div>
+    </div>
+    <div style={{ whiteSpace: "pre-wrap", fontSize: 13.5, lineHeight: 1.9, color: "#33302c", fontFamily: "'Space Grotesk',sans-serif" }}>
+      {diff.map(([t, s], i) => /^\s+$/.test(s) ? s : <span key={i} style={t === "del" ? { color: "#990f3d", textDecoration: "line-through", textDecorationColor: "rgba(153,15,61,0.5)" } : t === "ins" ? { color: "#0d6d56", fontWeight: 600 } : null}>{s}</span>)}
+    </div>
+    <SourceLine>Source: Federal Reserve — FOMC policy statement (public domain) · redline computed in-browser</SourceLine>
+  </div>;
+}
+
 export default function App() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem("mb_api_key") || "");
   const [finnhubKey, setFinnhubKey] = useState(() => localStorage.getItem("mb_finnhub_key") || "");
@@ -3224,6 +3371,7 @@ export default function App() {
             <MacroLedger />
           </section>
         </div>
+        <FedLedger />
         <div id="curve-time-machine" style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease 0.5s both" }}>
           <h2 style={S.cardTitle}><span style={{ color: "#1f5a9e" }}>◆</span> The Curve Time Machine<Info text="Scrub the entire US Treasury yield curve month by month from 1990 to today, drawn from FRED's constant-maturity series. The y-axis is fixed so you can watch the whole curve rise, fall, and invert as you drag; today's curve stays on as a dashed teal ghost for comparison. The chips jump to landmark regimes — the dot-com peak, the pre-GFC inversion, COVID, and the deepest modern inversion." link="https://fred.stlouisfed.org/categories/115" linkLabel="FRED · Treasury constant maturity" /></h2>
           <CurveTimeMachine />
@@ -3406,6 +3554,10 @@ export default function App() {
         <div id="redline" style={{ ...S.card, marginBottom: 16 }}>
           <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> Drill — Redline the Exhibit<Info text="The inverted drill: a completed exhibit contains exactly one planted error, propagated consistently so it must be caught on principle rather than arithmetic. Click the flawed line, submit the redline, and the correction prints in proofreader's red ink. Model review is the actual analyst job — nothing else drills it." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="projects" id="redline" /></span></h2>
           <RedlineExhibit />
+        </div>
+        <div id="query-drill" style={{ ...S.card, marginBottom: 16 }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#1f5a9e" }}>◆</span> The Query Drill<Info text="A working SQL desk: write a query against a live in-browser SQLite table of Damodaran's 91 industry EV/EBITDA multiples, and it's graded by comparing your result set to the answer's — any query that returns the right rows passes. The engine (SQLite compiled to WebAssembly) loads only when you open the desk. Read-only; the seeded task rotates daily; grades stay in this browser." link="https://pages.stern.nyu.edu/~adamodar/" linkLabel="Damodaran data" /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="projects" id="query-drill" /></span></h2>
+          <QueryDrill />
         </div>
         <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
           <section id="lexicon" style={{ ...S.card, animation: "fadeUp 0.5s ease both" }}>
