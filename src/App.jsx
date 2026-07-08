@@ -3221,10 +3221,11 @@ function fedFmtDate(iso) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ""); if (!m) return iso || "";
   return new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
-// Word-level LCS diff (statements are a few hundred tokens — O(m·k) is trivial). Whitespace tokens
-// are emitted plain so paragraph breaks survive and no space is ever struck through.
+// Word-level LCS diff (statements are a few hundred tokens — O(m·k) is trivial). Each token is a word
+// plus its TRAILING whitespace, so a replaced word can never end up jammed against its replacement
+// (the space always travels with its word) and paragraph breaks survive inside the tokens.
 function fedWordDiff(oldS, newS) {
-  const o = oldS.split(/(\s+)/), n = newS.split(/(\s+)/), m = o.length, k = n.length;
+  const o = oldS.match(/\S+\s*/g) || [], n = newS.match(/\S+\s*/g) || [], m = o.length, k = n.length;
   const dp = Array.from({ length: m + 1 }, () => new Int32Array(k + 1));
   for (let i = m - 1; i >= 0; i--) for (let j = k - 1; j >= 0; j--) dp[i][j] = o[i] === n[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
   const out = []; let i = 0, j = 0;
@@ -3246,8 +3247,8 @@ function FedLedger() {
         <span style={{ color: "#0d6d56", fontWeight: 600 }}>added</span>
       </div>
     </div>
-    <div style={{ whiteSpace: "pre-wrap", fontSize: 13.5, lineHeight: 1.9, color: "#33302c", fontFamily: "'Space Grotesk',sans-serif" }}>
-      {diff.map(([t, s], i) => /^\s+$/.test(s) ? s : <span key={i} style={t === "del" ? { color: "#990f3d", textDecoration: "line-through", textDecorationColor: "rgba(153,15,61,0.5)" } : t === "ins" ? { color: "#0d6d56", fontWeight: 600 } : null}>{s}</span>)}
+    <div style={{ whiteSpace: "pre-wrap", fontSize: 13.5, lineHeight: 1.95, color: "#33302c", fontFamily: "'Space Grotesk',sans-serif" }}>
+      {diff.map(([t, s], i) => t === "eq" ? s : <span key={i} style={t === "del" ? { color: "#990f3d", textDecoration: "line-through", textDecorationColor: "rgba(153,15,61,0.5)", background: "rgba(153,15,61,0.07)", borderRadius: 2 } : { color: "#0d6d56", fontWeight: 600, background: "rgba(13,109,86,0.10)", borderRadius: 2 }}>{s}</span>)}
     </div>
     <SourceLine>Source: Federal Reserve — FOMC policy statement (public domain) · redline computed in-browser</SourceLine>
   </div>;
