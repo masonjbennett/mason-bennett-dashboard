@@ -55,23 +55,38 @@ const DEALS = [
     assumptions: "Three-method valuation: EPS multiple 16x–20x ($428–537), DCF exit multiple 6x–10x ($497–737), DCF Gordon growth ($555–602); comps vs. THC, UHS, CYH; as of Oct 30, 2025.",
     takeaway: "Pitching to practitioners punishes any assumption you can't defend out loud — the Q&A was the real test." },
 ];
+// recruiterSafe: true => shown in the /recruiter packet's Work Samples. Real work only —
+// the interview drills, Technicals Desk, and Lexicon stay OFF the packet (they remain in the
+// Home Work Index, which prints the full list). Resume has its own button, so it stays off too.
 const ARTIFACTS = [
   { label: "Resume (PDF)", href: "/resume.pdf" },
-  { label: "EA $55B take-private LBO — student reconstruction", tab: "projects", id: "ea-take-private" },
-  { label: "Jagex £900M sponsor-to-sponsor LBO — student reconstruction", tab: "projects", id: "jagex-lbo" },
-  { label: "HCA Healthcare stock pitch — GFI competition", tab: "projects", id: "hca-pitch" },
-  { label: "ML credit-default classifier — 0.9931 ROC-AUC, project report (PDF)", href: "/projects/fda2-report.pdf" },
-  { label: "Applied econometrics — Hurricane Michael housing study (paper)", href: "/hurricane-paper.docx" },
-  { label: "Interactive mini-LBO model", tab: "projects", id: "lbo-sandbox" },
+  { label: "EA $55B take-private LBO — student reconstruction", tab: "projects", id: "ea-take-private", recruiterSafe: true },
+  { label: "Jagex £900M sponsor-to-sponsor LBO — student reconstruction", tab: "projects", id: "jagex-lbo", recruiterSafe: true },
+  { label: "HCA Healthcare stock pitch — GFI competition", tab: "projects", id: "hca-pitch", recruiterSafe: true },
+  { label: "ML credit-default classifier — 0.9931 ROC-AUC, project report (PDF)", href: "/projects/fda2-report.pdf", recruiterSafe: true },
+  { label: "Applied econometrics — Hurricane Michael housing study (paper)", href: "/hurricane-paper.docx", recruiterSafe: true },
+  { label: "Interactive mini-LBO model", tab: "projects", id: "lbo-sandbox", recruiterSafe: true },
   { label: "Interview drill gym — paper LBO, three-statement ripple, debt sweep, redline & more", tab: "projects", id: "puzzle-corner" },
   { label: "The Technicals Desk — original interview question bank", tab: "projects", id: "technicals-desk" },
-  { label: "The Lexicon — 300-term original finance dictionary", tab: "markets", id: "lexicon" },
-  { label: "Personal budgeting app — live demo", href: "https://masonbennett-budget.streamlit.app/" },
-  { label: "Portfolio analytics app — live demo", href: "https://portfolio-app-ifh8afmcuxkyr6ivov9fmj.streamlit.app/" },
-  { label: "Bloomberg Market Concepts certificate (PDF)", href: "/bmc-certificate.pdf" },
-  { label: "GitHub", href: "https://github.com/masonjbennett" },
-  { label: "Shollmier Investment Fund — Garrison Financial Institute", href: "https://gfi.uark.edu/shollmier-fund.php" },
+  { label: "The Lexicon — 300-term original finance dictionary", tab: "projects", id: "lexicon" },
+  { label: "Personal budgeting app — live demo", href: "https://masonbennett-budget.streamlit.app/", recruiterSafe: true },
+  { label: "Portfolio analytics app — live demo", href: "https://portfolio-app-ifh8afmcuxkyr6ivov9fmj.streamlit.app/", recruiterSafe: true },
+  { label: "Bloomberg Market Concepts certificate (PDF)", href: "/bmc-certificate.pdf", recruiterSafe: true },
+  { label: "GitHub", href: "https://github.com/masonjbennett", recruiterSafe: true },
+  { label: "Shollmier Investment Fund — Garrison Financial Institute", href: "https://gfi.uark.edu/shollmier-fund.php", recruiterSafe: true },
 ];
+// Maps every deep-link anchor id to [tab, segment] so goAnchor / hash-load land on the right
+// segment — and so old links to relocated content (e.g. /markets#lexicon) redirect correctly.
+const ANCHOR_SEG = {
+  "ea-take-private": ["projects", "portfolio"], "jagex-lbo": ["projects", "portfolio"], "hca-pitch": ["projects", "portfolio"],
+  "hca-field": ["projects", "portfolio"], "lbo-sandbox": ["projects", "portfolio"], "model-rack": ["projects", "portfolio"],
+  "puzzle-corner": ["projects", "prep"], "merger-math": ["projects", "prep"], "ripple-drill": ["projects", "prep"],
+  "technicals-desk": ["projects", "prep"], "debt-ledger": ["projects", "prep"], "coupon-desk": ["projects", "prep"],
+  "waterfall-room": ["projects", "prep"], "two-minute-tape": ["projects", "prep"], "redline": ["projects", "prep"],
+  "lexicon": ["projects", "prep"], "bias-ledger": ["projects", "prep"], "name-that-regime": ["projects", "prep"], "explain-desk": ["projects", "prep"],
+  "curve-time-machine": ["markets", "tape"], "drawdown-meter": ["markets", "tape"],
+  "standing-wire": ["news", null], "filings-wire": ["news", null], "reading-ledger": ["news", null],
+};
 const EXPERIENCE = [
   { role: "M.S. Finance", org: "Walton College of Business", date: "2025–2026", type: "edu", detail: "4.0 GPA · Advanced Financial Modeling, Advanced Corporate Finance, Alternative Investments, New Venture (Private Equity), Financial Data Analytics II" },
   { role: "Analyst, Information Technology Sector — Shollmier Investment Fund", org: "Garrison Financial Institute · Walton College", url: "https://gfi.uark.edu/shollmier-fund.php", date: "Spring 2026", type: "work", detail: "Covered the Information Technology sector for a live $700K+ fixed-income portfolio managed by graduate students." },
@@ -384,6 +399,9 @@ const Slug = ({ icon = "#0d6d56", children, right }) => <div style={{ position: 
   {right || null}
 </div>;
 const SourceLine = ({ children }) => <div style={{ fontSize: 8.5, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 0.5, marginTop: 12, borderTop: "1px solid #efe4d2", paddingTop: 8 }}>{children}</div>;
+// Secondary in-page nav under the Kicker: splits a heavy tab into segments that default to the
+// recruiter-facing view. Mirrors the header tab look (teal wash + inset teal underline when active).
+const SegControl = ({ items, active, onChange }) => <div style={{ display: "inline-flex", gap: 2, background: "rgba(255,253,249,0.85)", border: "1px solid #e3d5bf", borderRadius: 10, padding: 4, marginBottom: 22, boxShadow: "inset 0 2px 6px rgba(64,52,32,0.07)" }}>{items.map(it => { const on = active === it.id; return <button key={it.id} onClick={() => onChange(it.id)} style={{ background: on ? "linear-gradient(135deg, rgba(13,109,86,0.15), rgba(31,90,158,0.1))" : "none", border: "none", cursor: "pointer", borderRadius: 8, color: on ? "#262421" : "#8a8072", fontWeight: on ? 600 : 500, fontSize: 12, padding: "7px 18px", fontFamily: "'Space Grotesk',sans-serif", boxShadow: on ? "inset 0 -2px 0 #0d6d56" : "none", transition: "all 0.25s" }}>{it.l}{it.note ? <span style={{ marginLeft: 8, fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#a2977f", letterSpacing: 1, textTransform: "uppercase" }}>{it.note}</span> : null}</button>; })}</div>;
 const CloudIc = ({ size = 13 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M17.5 19a4.5 4.5 0 0 0 .9-8.91 6 6 0 0 0-11.66 1.4A4 4 0 0 0 7 19Z" /></svg>;
 const StormIc = ({ size = 13 }) => <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M17.5 16a4.5 4.5 0 0 0 .9-8.91 6 6 0 0 0-11.66 1.4A4 4 0 0 0 7 16Z" /><path d="M12.5 16 10 20h3l-2 4" /></svg>;
 function WeatherEar({ prices }) {
@@ -1061,7 +1079,7 @@ function LateEdition({ prices, live }) {
 
 // ============ HERO + CMD ============
 function Hero(){const[ph,setPh]=useState(0);useEffect(()=>{const timers=[setTimeout(()=>setPh(1),350),setTimeout(()=>setPh(2),1000),setTimeout(()=>setPh(3),1800),setTimeout(()=>setPh(4),2600)];return()=>timers.forEach(clearTimeout)},[]);return <div style={{position:"fixed",inset:0,background:"#faf3ea",zIndex:9999,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",transition:"opacity 1s ease",opacity:ph>=4?0:1,pointerEvents:ph>=4?"none":"all"}} onClick={()=>setPh(4)}><div style={{position:"absolute",width:600,height:600,borderRadius:"50%",background:"radial-gradient(circle,rgba(13,109,86,0.06) 0%,transparent 70%)",animation:"breathe 4s ease-in-out infinite"}}/><div style={{position:"absolute",width:400,height:400,borderRadius:"50%",background:"radial-gradient(circle,rgba(31,90,158,0.04) 0%,transparent 70%)",animation:"breathe 5s ease-in-out infinite",animationDelay:"1s",left:"35%",top:"55%"}}/><div style={{position:"absolute",top:0,left:0,right:0,height:10,background:"#2b2825"}}/><div style={{position:"absolute",top:10,left:0,right:0,height:2,background:"#0d6d56",transform:ph>=1?"scaleX(1)":"scaleX(0)",transition:"transform 1.2s cubic-bezier(0.4,0,0.2,1)"}}/><div style={{position:"relative",textAlign:"center"}}><div style={{fontSize:12,fontFamily:"'JetBrains Mono',monospace",color:"#0d6d56",letterSpacing:8,textTransform:"uppercase",marginBottom:28,opacity:ph>=1?1:0,transform:`translateY(${ph>=1?0:10}px)`,transition:"all 0.8s cubic-bezier(0.4,0,0.2,1)"}}>masonjbennett.com</div><div style={{width:360,maxWidth:"72vw",margin:"0 auto 26px",borderTop:"1px solid #33302c",borderBottom:"1px solid #33302c",height:5,transform:ph>=2?"scaleX(1)":"scaleX(0)",transition:"transform 0.9s cubic-bezier(0.4,0,0.2,1)"}}/><h1 className="hero-name" style={{fontSize:72,fontWeight:400,fontFamily:"'Instrument Serif',serif",color:"#262421",lineHeight:1,marginBottom:18,opacity:ph>=2?1:0,transform:`translateY(${ph>=2?0:20}px) scale(${ph>=2?1:0.95})`,transition:"all 1s cubic-bezier(0.4,0,0.2,1)",letterSpacing:"-0.02em"}}>Mason J. Bennett</h1><p className="hero-sub" style={{fontSize:15,color:"#6f675c",letterSpacing:2,opacity:ph>=3?1:0,transform:`translateY(${ph>=3?0:10}px)`,transition:"all 0.8s cubic-bezier(0.4,0,0.2,1)",fontFamily:"'Space Grotesk',sans-serif"}}>M.S. Finance '26 · University of Arkansas · Dallas–Fort Worth, TX</p><div style={{width:60,margin:"26px auto 0",borderTop:"1px solid #0d6d56",transform:ph>=3?"scaleX(1)":"scaleX(0)",transition:"transform 0.8s cubic-bezier(0.4,0,0.2,1)"}}/><div style={{display:"flex",gap:16,marginTop:24,justifyContent:"center",opacity:ph>=3?1:0,transform:`translateY(${ph>=3?0:10}px)`,transition:"all 0.8s cubic-bezier(0.4,0,0.2,1) 0.2s"}}>{["IB","PE","WM","CF"].map(t=><span key={t} style={{fontSize:10,padding:"4px 14px",borderRadius:20,border:"1px solid rgba(13,109,86,0.2)",color:"#0d6d56",fontFamily:"'JetBrains Mono',monospace",letterSpacing:2,background:"rgba(13,109,86,0.05)"}}>{t}</span>)}</div></div><div style={{position:"absolute",bottom:36,fontSize:9,color:"#a2977f",fontFamily:"'JetBrains Mono',monospace",letterSpacing:3,textTransform:"uppercase",opacity:ph>=1&&ph<4?0.8:0,transition:"opacity 1.2s"}}>click anywhere to skip</div></div>;}
-function Cmd({open,onClose,onNav}){const[q,setQ]=useState("");const ref=useRef();const items=[{l:"Home",t:"home"},{l:"Projects",t:"projects"},{l:"Markets",t:"markets"},{l:"News",t:"news"},...QLINKS.map(l=>({l:l.n,u:l.u}))];const f=items.filter(i=>i.l.toLowerCase().includes(q.toLowerCase()));useEffect(()=>{if(open&&ref.current){ref.current.focus();setQ("")}},[open]);if(!open)return null;return <div style={{position:"fixed",inset:0,background:"rgba(51,48,46,0.45)",backdropFilter:"blur(12px)",zIndex:1000,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:100,animation:"fadeIn 0.15s"}} onClick={onClose}><div style={{background:"#fffdf9",border:"1px solid #d8c8b0",borderRadius:16,width:520,overflow:"hidden",boxShadow:"0 32px 80px rgba(64,52,32,0.14)"}} onClick={e=>e.stopPropagation()} className="cmd-modal"><div style={{padding:"16px 20px",borderBottom:"1px solid #e9ddc9",display:"flex",alignItems:"center",gap:12}}><span style={{color:"#0d6d56"}}>⌘</span><input ref={ref} value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..." style={{flex:1,background:"none",border:"none",outline:"none",color:"#33302c",fontSize:15}}/><kbd style={{fontSize:9,padding:"2px 7px",borderRadius:4,background:"#e9ddc9",color:"#8a8072",border:"1px solid #d8c8b0",fontFamily:"'JetBrains Mono',monospace"}}>ESC</kbd></div><div style={{maxHeight:320,overflowY:"auto",padding:6}}>{f.map((item,i)=><button key={i} onClick={()=>{if(item.t)onNav(item.t);else window.open(item.u,"_blank");onClose()}} style={{display:"flex",alignItems:"center",gap:12,width:"100%",padding:"11px 14px",background:"none",border:"none",color:"#33302c",fontSize:14,cursor:"pointer",borderRadius:10,textAlign:"left",transition:"background 0.1s"}} onMouseEnter={e=>e.currentTarget.style.background="#e9ddc9"} onMouseLeave={e=>e.currentTarget.style.background="none"}><span style={{color:"#0d6d56",width:20,textAlign:"center"}}>→</span><span>{item.l}</span>{item.u&&<span style={{marginLeft:"auto",fontSize:10,color:"#8a8072"}}>↗</span>}</button>)}</div></div></div>;}
+function Cmd({open,onClose,onNav}){const[q,setQ]=useState("");const ref=useRef();const items=[{l:"Home",t:"home"},{l:"Selected Work",t:"projects"},{l:"Markets",t:"markets"},{l:"News",t:"news"},{l:"Recruiter packet",t:"recruiter"},{l:"Prep — drills & learning",t:"projects",seg:"prep"},{l:"Markets — my book",t:"markets",seg:"book"},...QLINKS.map(l=>({l:l.n,u:l.u}))];const f=items.filter(i=>i.l.toLowerCase().includes(q.toLowerCase()));useEffect(()=>{if(open&&ref.current){ref.current.focus();setQ("")}},[open]);if(!open)return null;return <div style={{position:"fixed",inset:0,background:"rgba(51,48,46,0.45)",backdropFilter:"blur(12px)",zIndex:1000,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:100,animation:"fadeIn 0.15s"}} onClick={onClose}><div style={{background:"#fffdf9",border:"1px solid #d8c8b0",borderRadius:16,width:520,overflow:"hidden",boxShadow:"0 32px 80px rgba(64,52,32,0.14)"}} onClick={e=>e.stopPropagation()} className="cmd-modal"><div style={{padding:"16px 20px",borderBottom:"1px solid #e9ddc9",display:"flex",alignItems:"center",gap:12}}><span style={{color:"#0d6d56"}}>⌘</span><input ref={ref} value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..." style={{flex:1,background:"none",border:"none",outline:"none",color:"#33302c",fontSize:15}}/><kbd style={{fontSize:9,padding:"2px 7px",borderRadius:4,background:"#e9ddc9",color:"#8a8072",border:"1px solid #d8c8b0",fontFamily:"'JetBrains Mono',monospace"}}>ESC</kbd></div><div style={{maxHeight:320,overflowY:"auto",padding:6}}>{f.map((item,i)=><button key={i} onClick={()=>{if(item.t)onNav(item.t,item.seg);else window.open(item.u,"_blank");onClose()}} style={{display:"flex",alignItems:"center",gap:12,width:"100%",padding:"11px 14px",background:"none",border:"none",color:"#33302c",fontSize:14,cursor:"pointer",borderRadius:10,textAlign:"left",transition:"background 0.1s"}} onMouseEnter={e=>e.currentTarget.style.background="#e9ddc9"} onMouseLeave={e=>e.currentTarget.style.background="none"}><span style={{color:"#0d6d56",width:20,textAlign:"center"}}>→</span><span>{item.l}</span>{item.u&&<span style={{marginLeft:"auto",fontSize:10,color:"#8a8072"}}>↗</span>}</button>)}</div></div></div>;}
 
 // ============ BRIEFINGS (compact) ============
 function Briefings({apiKey}){const[morning,setMorning]=useState(null),[close,setClose]=useState(null),[vM,setVM]=useState(null),[vC,setVC]=useState(null),[swM,setSwM]=useState(null),[swC,setSwC]=useState(null),[lM,setLM]=useState(false),[lC,setLC]=useState(false),[vLM,setVLM]=useState(false),[vLC,setVLC]=useState(false),[swLM,setSwLM]=useState(false),[swLC,setSwLC]=useState(false),[tM,setTM]=useState(null),[tC,setTC]=useState(null),[showCl,setShowCl]=useState(false),[showSW,setShowSW]=useState(true),[err,setErr]=useState(""),[tab,setTab]=useState(()=>new Date().getHours()>=16?"close":"morning");const sugg=new Date().getHours()>=16?"close":"morning";
@@ -3097,8 +3115,10 @@ export default function App() {
   const { prices, live: pricesLive, asOf } = usePrices(TICKERS, finnhubKey);
   const hist = useHistory(TICKERS.map(t => t.symbol).join(","));
   const [tab, setTabRaw] = useState(() => { try { const valid = ["home", "projects", "markets", "news", "recruiter"]; const path = window.location.pathname.replace(/\/+$/, "").slice(1); if (valid.includes(path)) return path; const q = new URLSearchParams(window.location.search).get("tab"); return valid.includes(q) ? q : "home"; } catch { return "home"; } }), [hovP, setHovP] = useState(null), [cmd, setCmd] = useState(false), [showHero, setShowHero] = useState(() => { try { return !sessionStorage.getItem("mb_intro"); } catch { return true; } }), [mounted, setMounted] = useState(false);
+  const [seg, setSeg] = useState({ home: "dossier", projects: "portfolio", markets: "tape" });
+  const setSegment = (t, s) => setSeg(p => (p[t] === s ? p : { ...p, [t]: s }));
   const setTab = (t) => { setTabRaw(t); try { window.history.pushState({ tab: t }, "", t === "home" ? "/" : `/${t}`); } catch {} window.scrollTo(0, 0); };
-  const goAnchor = (t, id) => { setTabRaw(t); try { window.history.pushState({ tab: t }, "", `${t === "home" ? "/" : `/${t}`}#${id}`); } catch {} setTimeout(() => { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); else window.scrollTo(0, 0); }, 80); };
+  const goAnchor = (t, id) => { const m = ANCHOR_SEG[id]; const tt = m ? m[0] : t; if (m && m[1]) setSegment(tt, m[1]); setTabRaw(tt); try { window.history.pushState({ tab: tt }, "", `${tt === "home" ? "/" : `/${tt}`}#${id}`); } catch {} setTimeout(() => { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: "smooth", block: "start" }); else window.scrollTo(0, 0); }, 80); };
   useEffect(() => {
     const h = () => { try { const valid = ["home", "projects", "markets", "news", "recruiter"]; const path = window.location.pathname.replace(/\/+$/, "").slice(1); const q = new URLSearchParams(window.location.search).get("tab"); setTabRaw(valid.includes(path) ? path : valid.includes(q) ? q : "home"); } catch {} };
     window.addEventListener("popstate", h);
@@ -3108,15 +3128,16 @@ export default function App() {
     const titles = { home: "Mason J. Bennett — M.S. Finance · Analyst Candidate", projects: "Projects & Deal Sheet — Mason J. Bennett", markets: "Markets — Mason J. Bennett", news: "News & Briefings — Mason J. Bennett", recruiter: "Recruiter Packet — Mason J. Bennett" };
     document.title = titles[tab] || titles.home;
   }, [tab]);
-  useEffect(() => { if (!window.location.hash) return; const id = window.location.hash.slice(1); const t = setTimeout(() => document.getElementById(id)?.scrollIntoView({ block: "start" }), showHero ? 3200 : 300); return () => clearTimeout(t); }, []);
+  useEffect(() => { if (!window.location.hash) return; const id = window.location.hash.slice(1); const m = ANCHOR_SEG[id]; if (m) { setTabRaw(m[0]); if (m[1]) setSegment(m[0], m[1]); } const t = setTimeout(() => document.getElementById(id)?.scrollIntoView({ block: "start" }), showHero ? 3200 : 300); return () => clearTimeout(t); }, []);
+  useEffect(() => { try { const v = new URLSearchParams(window.location.search).get("view"); const owner = { dossier: "home", personal: "home", portfolio: "projects", prep: "projects", tape: "markets", book: "markets" }; if (v && owner[v]) setSegment(owner[v], v); } catch {} }, []);
   useEffect(() => { window.scrollTo(0, 0); if (!showHero) { setMounted(true); return; } try { sessionStorage.setItem("mb_intro", "1"); } catch {} const t = setTimeout(() => { setShowHero(false); setMounted(true); }, 2900); return () => clearTimeout(t); }, []);
   useEffect(() => { const h = e => { if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setCmd(true); } if (e.key === "Escape") setCmd(false); if (!e.metaKey && !e.ctrlKey && !e.altKey && ["1", "2", "3", "4"].includes(e.key) && !e.target.closest("input") && !e.target.closest("textarea")) setTab(["home", "projects", "markets", "news"][+e.key - 1]); }; window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, []);
 
-  const tabs = [{ id: "home", l: "Home" }, { id: "projects", l: "Projects" }, { id: "markets", l: "Markets" }, { id: "news", l: "News" }];
+  const tabs = [{ id: "home", l: "Home" }, { id: "projects", l: "Selected Work" }, { id: "markets", l: "Markets" }, { id: "news", l: "News" }];
 
   return <div style={S.root}>
     {showHero && <Hero />}
-    <Cmd open={cmd} onClose={() => setCmd(false)} onNav={t => setTab(t)} />
+    <Cmd open={cmd} onClose={() => setCmd(false)} onNav={(t, s) => { setTab(t); if (s) setSegment(t, s); }} />
     <SettingsPanel apiKey={apiKey} setApiKey={setApiKey} finnhubKey={finnhubKey} setFinnhubKey={setFinnhubKey} desk={desk} setDesk={setDesk} open={showSettings} onClose={() => setShowSettings(false)} />
     <div className="bg-fx" style={{ position: "fixed", top: -200, right: -100, width: 900, height: 900, background: "radial-gradient(circle,rgba(13,109,86,0.045) 0%,transparent 55%)", pointerEvents: "none", animation: "breathe 8s ease-in-out infinite" }} />
     <div className="bg-fx" style={{ position: "fixed", bottom: -100, left: -100, width: 700, height: 700, background: "radial-gradient(circle,rgba(31,90,158,0.035) 0%,transparent 55%)", pointerEvents: "none", animation: "breathe 10s ease-in-out infinite", animationDelay: "2s" }} />
@@ -3159,58 +3180,12 @@ export default function App() {
     <main style={{ padding: 32, maxWidth: 1300, margin: "0 auto", position: "relative", zIndex: 1, opacity: mounted ? 1 : 0, transform: mounted ? "none" : "translateY(16px)", transition: "all 0.6s ease 0.3s" }}>
 
       {tab === "markets" && <div>
-        <Kicker n="03" t="Markets & Data" />
+        <Kicker n="03" t="Markets" />
+        <SegControl items={[{ id: "tape", l: "The Tape" }, { id: "book", l: "My Book", note: "desk" }]} active={seg.markets} onChange={s => setSegment("markets", s)} />
+        {seg.markets === "tape" && <>
         <MacroTape />
         <CrossAssetRows />
         <QuoteLookup />
-        {desk && <EditionStrip />}
-        {desk && <TodaysDesk />}
-        {desk && <FirstCall prices={prices} live={pricesLive} apiKey={apiKey} />}
-        {desk && <LateEdition prices={prices} live={pricesLive} />}
-        {desk && <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
-          <section style={{ ...S.card, animation: "fadeUp 0.5s ease both" }}>
-            <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> The Review Docket<Info text="Spaced repetition over everything you've missed on this site. Cards are scheduled with the SM-2 algorithm: misses return tomorrow, solid answers push the next review further out. Private — lives in this browser's storage only." /></h2>
-            <ReviewDocket />
-          </section>
-          <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.06s both" }}>
-            <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> Errata & Corrections<Info text="Every missed question is filed as a correction, newspaper-style, with room for a one-line rule so the same mistake isn't made twice. Private to this browser." /></h2>
-            <ErrataColumn />
-          </section>
-          <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.1s both" }}>
-            <h2 style={S.cardTitle}><span style={{ color: "#b3551d" }}>◆</span> Notices & Alerts<Info text="File a rule — a price cross or a daily-move threshold — and the page opens with a NOTICES box when it fires, persisting until you mark it read. Checked on load against the live tape; no push infrastructure, no server. Private to this browser." /></h2>
-            <Notices prices={prices} live={pricesLive} />
-          </section>
-          <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.14s both" }}>
-            <h2 style={S.cardTitle}><span style={{ color: "#1f5a9e" }}>◆</span> Bennett vs. the Tape<Info text="Three calls filed before the 4pm bell — SPY's direction, QQQ-vs-IWM leadership, and the 10-year — graded automatically against the closing tape and the Treasury's own data. The running calibration table is the point: having a view and being scored on it. Private to this browser." /></h2>
-            <BennettVsTape prices={prices} live={pricesLive} />
-          </section>
-          <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.18s both" }}>
-            <h2 style={S.cardTitle}><span style={{ color: "#6d549e" }}>◆</span> The Syllabus Ledger<Info text="Six units of the interview syllabus, graded from your own attempt log with a 30-day decay — states in agate text, never progress bars. The weakest unit sets a daily assignment question. Derived entirely from marks already in this browser." /></h2>
-            <SyllabusLedger />
-          </section>
-        </div>}
-        <div style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease both" }}>
-          <h2 style={S.cardTitle}><span style={{ color: "#6d549e" }}>◆</span> Question of the Day<Info text="One technical interview question per day from the house bank — same edition for every reader, like a crossword. Reveal the answer, then grade yourself honestly. Grades never leave your browser." /></h2>
-          <QOTD />
-        </div>
-        <div style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease 0.05s both" }}>
-          <h2 style={S.cardTitle}><span style={{ color: "#b0741e" }}>◆</span> The Daily Drill<Info text="One dated edition per day: six stations mixed across every drill generator on the site — technicals at rising difficulty, a tape-signal check, a three-statement ripple, and the paper LBO. Interleaving is deliberate: identifying WHICH method applies is the skill interviews test. Same edition for every reader; marks stay in your browser." /></h2>
-          <DailyDrill onGoPuzzle={() => goAnchor("projects", "puzzle-corner")} />
-        </div>
-        <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
-          <section id="lexicon" style={{ ...S.card, animation: "fadeUp 0.5s ease both" }}>
-            <h2 style={S.cardTitle}><span style={{ color: "#1f5a9e" }}>◆</span> The Lexicon<Info text="One term a day from the 300-entry house dictionary — accounting to Street slang, definitions written in-house. Flip on 'quiz me first' to hide the definition and grade your recall; marks feed the Review Docket and never leave your browser." /></h2>
-            <LexiconBox desk={desk} />
-          </section>
-          <section id="bias-ledger" style={{ ...S.card, animation: "fadeUp 0.5s ease 0.05s both" }}>
-            <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> The Bias Ledger<Info text="One behavioral-finance bias a day from the 40-entry almanac: what it is, the tell in a real book, and the working countermeasure. With the desk on, it cross-prints against your paper positions — read locally, never sent anywhere." /></h2>
-            <BiasLedger desk={desk} />
-          </section>
-        </div>
-        <div id="explain-desk" style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease both" }}>
-          <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> Explain It to the Desk<Info text="The Feynman drill: one concept a day, explained in plain sentences. With an Anthropic key set, Claude plays the sharp novice who just joined the desk and returns the one gap in your explanation plus the follow-up question it invites. Your writing never leaves this browser except to Anthropic with your own key." /></h2>
-          <ExplainDesk apiKey={apiKey} />
-        </div>
         <div style={{ marginBottom: 24, animation: "fadeUp 0.5s ease both", padding: "20px 24px", background: "linear-gradient(135deg, rgba(255,253,249,0.9), rgba(251,245,236,0.7))", borderRadius: 10, border: "1px solid #e3d5bf", boxShadow: "0 4px 20px rgba(64,52,32,0.07)" }}><Clock /></div>
         <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
           <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.08s both" }}>
@@ -3253,21 +3228,40 @@ export default function App() {
           <h2 style={S.cardTitle}><span style={{ color: "#1f5a9e" }}>◆</span> The Curve Time Machine<Info text="Scrub the entire US Treasury yield curve month by month from 1990 to today, drawn from FRED's constant-maturity series. The y-axis is fixed so you can watch the whole curve rise, fall, and invert as you drag; today's curve stays on as a dashed teal ghost for comparison. The chips jump to landmark regimes — the dot-com peak, the pre-GFC inversion, COVID, and the deepest modern inversion." link="https://fred.stlouisfed.org/categories/115" linkLabel="FRED · Treasury constant maturity" /></h2>
           <CurveTimeMachine />
         </div>
-        <div id="name-that-regime" style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease 0.51s both" }}>
-          <h2 style={S.cardTitle}><span style={{ color: "#6d549e" }}>◆</span> Name That Regime<Info text="A blind macro-history quiz drawn from FRED. You're shown one long-history series — unemployment, the VIX, high-yield spreads, the fed funds rate — over an unlabeled two-to-three-year window, and you name the era from its shape. Reveal shows the real dates and what happened. Your running score stays in this browser." link="https://fred.stlouisfed.org" linkLabel="FRED" /></h2>
-          <NameThatRegime />
-        </div>
         <div id="drawdown-meter" style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease 0.52s both" }}>
           <h2 style={S.cardTitle}><span style={{ color: "#b2342b" }}>◆</span> The Drawdown Meter<Info text="A one-glance risk read from FRED: how far the S&P 500 has fallen from its highest close in the lookback window, how many sessions it has spent below that peak, and where today's VIX ranks against its own recent range. Drawdown and days-underwater use daily S&P 500 closes; the VIX figure is a percentile over the same window." link="https://fred.stlouisfed.org/series/SP500" linkLabel="FRED · S&P 500 series" /></h2>
           <DrawdownMeter />
         </div>
-        {desk ? <div style={{ ...S.card, animation: "fadeUp 0.5s ease 0.4s both" }}>
-          <h2 style={S.cardTitle}><span style={{ color: "#6d549e" }}>◆</span> Positions Ledger — The Paper Book<Info text="A paper-trading book marked to the live tape. Fills execute at the last trade when you click; every buy demands a one-line thesis, printed beside the position so your past reasoning confronts your P&L. Reset archives the old book rather than deleting it. Private to this browser." /></h2>
-          <PositionsLedger />
-        </div> : <div style={{ ...S.card, animation: "fadeUp 0.5s ease 0.4s both" }}>
+        {!desk && <div style={{ ...S.card, animation: "fadeUp 0.5s ease 0.4s both" }}>
           <h2 style={S.cardTitle}><span style={{ color: "#6d549e" }}>◆</span> Portfolio Allocation<Info text="Sample asset allocation by weight — illustrative, not investment advice. Hover the donut to see individual holdings." link="https://www.investopedia.com/terms/a/assetallocation.asp" linkLabel="Asset allocation basics" /><span style={{ marginLeft: "auto", fontSize: 8, padding: "3px 8px", borderRadius: 8, background: "rgba(176,116,30,0.08)", color: "#b0741e", border: "1px solid rgba(176,116,30,0.25)", letterSpacing: 1 }}>SAMPLE</span></h2>
           <div className="portfolio-layout" style={{ display: "flex", gap: 40, alignItems: "center", flexWrap: "wrap" }}><Donut data={PORTFOLIO} size={200} /><div style={{ flex: 1, minWidth: 300 }}><table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr>{["Ticker", "Name", "Type", "Weight"].map(h => <th key={h} style={{ textAlign: h === "Weight" ? "right" : "left", padding: "10px 12px", fontSize: 9, textTransform: "uppercase", letterSpacing: 2, color: "#8a8072", fontFamily: "JetBrains Mono, monospace", borderBottom: "1px solid #e9ddc9" }}>{h}</th>)}</tr></thead><tbody>{PORTFOLIO.map(p => <tr key={p.ticker} style={{ borderBottom: "1px solid #e9ddc910" }} onMouseEnter={e => e.currentTarget.style.background = "#e9ddc910"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}><td style={{ padding: "12px", fontSize: 13, color: "#0d6d56", fontWeight: 700, fontFamily: "JetBrains Mono, monospace" }}>{p.ticker}</td><td style={{ padding: "12px", fontSize: 13, color: "#6f675c" }}>{p.name}</td><td style={{ padding: "12px" }}><span style={{ fontSize: 10, padding: "3px 10px", borderRadius: 20, background: p.type === "ETF" ? "#1f5a9e10" : p.type === "Crypto" ? "#b0741e10" : "#0d6d5610", color: p.type === "ETF" ? "#1f5a9e" : p.type === "Crypto" ? "#b0741e" : "#0d6d56" }}>{p.type}</span></td><td style={{ padding: "12px", fontFamily: "JetBrains Mono, monospace", fontSize: 13, color: "#6f675c" }}><div style={{ display: "flex", alignItems: "center", gap: 8, justifyContent: "flex-end" }}><div style={{ width: 80, height: 4, background: "#f6eee1", borderRadius: 2, overflow: "hidden" }}><div style={{ width: `${p.weight * 3.3}%`, height: "100%", background: "linear-gradient(90deg,#0d6d56,#1f5a9e)", borderRadius: 2 }} /></div>{p.weight}%</div></td></tr>)}</tbody></table></div></div>
         </div>}
+        </>}
+        {seg.markets === "book" && <>
+        {desk ? <>
+        <EditionStrip />
+        <TodaysDesk />
+        <FirstCall prices={prices} live={pricesLive} apiKey={apiKey} />
+        <LateEdition prices={prices} live={pricesLive} />
+        <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
+          <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.1s both" }}>
+            <h2 style={S.cardTitle}><span style={{ color: "#b3551d" }}>◆</span> Notices & Alerts<Info text="File a rule — a price cross or a daily-move threshold — and the page opens with a NOTICES box when it fires, persisting until you mark it read. Checked on load against the live tape; no push infrastructure, no server. Private to this browser." /></h2>
+            <Notices prices={prices} live={pricesLive} />
+          </section>
+          <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.14s both" }}>
+            <h2 style={S.cardTitle}><span style={{ color: "#1f5a9e" }}>◆</span> Bennett vs. the Tape<Info text="Three calls filed before the 4pm bell — SPY's direction, QQQ-vs-IWM leadership, and the 10-year — graded automatically against the closing tape and the Treasury's own data. The running calibration table is the point: having a view and being scored on it. Private to this browser." /></h2>
+            <BennettVsTape prices={prices} live={pricesLive} />
+          </section>
+        </div>
+        <div style={{ ...S.card, animation: "fadeUp 0.5s ease 0.4s both" }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#6d549e" }}>◆</span> Positions Ledger — The Paper Book<Info text="A paper-trading book marked to the live tape. Fills execute at the last trade when you click; every buy demands a one-line thesis, printed beside the position so your past reasoning confronts your P&L. Reset archives the old book rather than deleting it. Private to this browser." /></h2>
+          <PositionsLedger />
+        </div>
+        </> : <div style={{ ...S.card, textAlign: "center", padding: "44px 24px" }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#6d549e" }}>◆</span> My Book</h2>
+          <p style={{ color: "#6f675c", fontSize: 13, lineHeight: 1.7, maxWidth: 460, margin: "10px auto 0" }}>The paper-trading book marked to the live tape, the morning First Call and Late Edition, filed calls graded against the close, and price-cross alerts all live here. Turn the Desk on in Settings to open the book.</p>
+        </div>}
+        </>}
       </div>}
 
       {tab === "news" && <div style={{ animation: "fadeUp 0.4s ease both" }}><Kicker n="04" t="News & Briefings" />
@@ -3289,6 +3283,8 @@ export default function App() {
 
       {tab === "projects" && <div style={{ animation: "fadeUp 0.4s ease both" }}>
         <Kicker n="02" t="Selected Work" />
+        <SegControl items={[{ id: "portfolio", l: "Portfolio" }, { id: "prep", l: "Prep", note: "drills & learning" }]} active={seg.projects} onChange={s => setSegment("projects", s)} />
+        {seg.projects === "portfolio" && <>
         <h1 style={S.pageTitle}>Projects</h1><p style={{ color: "#6f675c", marginBottom: 32, fontSize: 14 }}>Graduate coursework and independent builds — financial modeling, econometrics, and quantitative analysis.</p>
         <div style={{ ...S.card, marginBottom: 16 }}>
           <h2 style={S.cardTitle}><span style={{ color: "#33302c" }}>◆</span> Deal Sheet<span style={{ marginLeft: "auto", fontSize: 8, color: "#a2977f", letterSpacing: 1 }}>STUDENT RECONSTRUCTIONS OF REAL TRANSACTIONS</span></h2>
@@ -3318,6 +3314,14 @@ export default function App() {
             </div>)}
           </div>
         </div>
+        <div id="hca-field" style={{ ...S.card, marginBottom: 16 }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> HCA Healthcare — Valuation Football Field<Info text="The classic banker valuation summary, hand-built in React from the GFI pitch: each bar is one valuation method's range from the team's sensitivity tables, with the price target, the price on pitch day, and today's live price drawn as vertical rules." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="projects" id="hca-field" /></span></h2>
+          <FootballField />
+        </div>
+        <div id="lbo-sandbox" style={{ ...S.card, marginBottom: 16 }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> Interactive — Mini LBO Model<Info text="A simplified leveraged-buyout model you can play with. Set the entry price, leverage, growth, and exit assumptions — the sponsor returns and value-creation bridge update live. Built in React to demonstrate the mechanics behind the deal reconstructions above." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="projects" id="lbo-sandbox" /></span></h2>
+          <LBOSandbox />
+        </div>
         <div id="model-rack" style={{ ...S.card, marginBottom: 16 }}>
           <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> The Model Rack<Info text="Five clean, formula-driven Excel skeletons: a paper LBO, a DCF, trading comps, precedent transactions, and an integrated three-statement model. The blue sample inputs are yours to overwrite; the three-statement ties out to the penny and the projections run five years. No deal data — just the mechanics. Open in Excel, Google Sheets, or LibreOffice." /><span style={{ marginLeft: "auto", fontSize: 8, color: "#a2977f", letterSpacing: 1 }}>BLANK TEMPLATES · .XLSX</span></h2>
           <p style={{ fontSize: 11, color: "#8a8072", fontStyle: "italic", margin: "-6px 0 14px" }}>Formula-driven skeletons to download and build in. Overwrite the blue inputs with your own figures.</p>
@@ -3337,13 +3341,27 @@ export default function App() {
           </div>
           <SourceLine>Original blank templates · every figure computed by formula · open in Excel, Google Sheets, or LibreOffice</SourceLine>
         </div>
-        <div id="hca-field" style={{ ...S.card, marginBottom: 16 }}>
-          <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> HCA Healthcare — Valuation Football Field<Info text="The classic banker valuation summary, hand-built in React from the GFI pitch: each bar is one valuation method's range from the team's sensitivity tables, with the price target, the price on pitch day, and today's live price drawn as vertical rules." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="projects" id="hca-field" /></span></h2>
-          <FootballField />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(min(360px,100%),1fr))", gap: 14 }}>{PROJECTS.map((p, i) => <div key={i} style={{ ...S.pCard, ...(hovP === i ? { border: "1px solid #0d6d5650", transform: "translateY(-6px) scale(1.01)", boxShadow: "0 20px 50px rgba(13,109,86,0.12), 0 0 0 1px rgba(13,109,86,0.15), 0 0 40px rgba(13,109,86,0.05)" } : {}), animation: "fadeUp 0.5s ease both", animationDelay: `${i * 0.07}s` }} onMouseEnter={() => setHovP(i)} onMouseLeave={() => setHovP(null)}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}><span style={{ fontSize: 9, color: "#8a8072", fontFamily: "JetBrains Mono, monospace", letterSpacing: 1 }}>PROJECT_{String(i + 1).padStart(2, "0")}{p.completed && <span style={{ marginLeft: 8, color: "#a2977f" }}>· {p.completed}</span>}</span><div style={{ display: "flex", alignItems: "center", gap: 6 }}>{p.updated && <span style={{ fontSize: 8, color: "#a2977f", fontFamily: "JetBrains Mono, monospace" }}>Updated {p.updated}</span>}<span style={{ fontSize: 9, padding: "3px 10px", borderRadius: 20, background: p.status === "In Progress" ? "#b0741e08" : "#0d6d5608", color: p.status === "In Progress" ? "#b0741e" : "#0d6d56", fontFamily: "JetBrains Mono, monospace" }}>{p.status}</span></div></div>
+          {p.img && <img src={p.img} alt={p.title} loading="lazy" style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", objectPosition: "top", borderRadius: 10, border: "1px solid #e9ddc9", marginBottom: 14, display: "block", background: "#f6eee1" }} />}
+          <h3 style={{ color: "#33302c", fontSize: 17, fontWeight: 600, marginBottom: 10, lineHeight: 1.3 }}>{p.title}</h3>
+          <p style={{ color: "#6f675c", fontSize: 13, lineHeight: 1.65, marginBottom: 16, flex: 1 }}>{p.desc}</p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: p.url ? 12 : 0 }}>{p.tags.map(t => <span key={t} style={{ fontSize: 9, padding: "3px 10px", borderRadius: 20, background: "#e9ddc930", color: "#6f675c", fontFamily: "JetBrains Mono, monospace" }}>{t}</span>)}</div>
+          {(p.url || p.demo) && <div style={{ display: "flex", gap: 12 }}>
+            {p.demo && <a href={p.demo} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10, color: "#1f5a9e", textDecoration: "none", fontFamily: "JetBrains Mono, monospace", padding: "4px 10px", background: "#1f5a9e08", border: "1px solid #1f5a9e20", borderRadius: 6, transition: "all 0.2s" }} onMouseEnter={e=>{e.currentTarget.style.background="#1f5a9e15";e.currentTarget.style.borderColor="#1f5a9e40"}} onMouseLeave={e=>{e.currentTarget.style.background="#1f5a9e08";e.currentTarget.style.borderColor="#1f5a9e20"}}>▶ Live Demo <span style={{fontSize:9}}>↗</span></a>}
+            {p.url && <a href={p.url} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10, color: "#0d6d56", textDecoration: "none", fontFamily: "JetBrains Mono, monospace", padding: "4px 0", transition: "opacity 0.2s" }} onMouseEnter={e=>e.currentTarget.style.opacity="0.7"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>{p.url.includes("github") ? "GitHub" : p.url.includes("report") ? "Read the Report" : p.url.includes("paper") ? "View Paper" : "View"} <span style={{fontSize:9}}>↗</span></a>}
+          </div>}
+        </div>)}</div>
+        </>}
+        {seg.projects === "prep" && <>
+        <h1 style={S.pageTitle}>The Prep Floor</h1><p style={{ color: "#6f675c", marginBottom: 32, fontSize: 14 }}>Interview-prep drills and a spaced-repetition learning engine — seeded generators, dated daily editions, and a house question bank. Everything regenerates on its own; every mark stays in your browser.</p>
+        <div style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease 0.05s both" }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#b0741e" }}>◆</span> The Daily Drill<Info text="One dated edition per day: six stations mixed across every drill generator on the site — technicals at rising difficulty, a tape-signal check, a three-statement ripple, and the paper LBO. Interleaving is deliberate: identifying WHICH method applies is the skill interviews test. Same edition for every reader; marks stay in your browser." /></h2>
+          <DailyDrill onGoPuzzle={() => goAnchor("projects", "puzzle-corner")} />
         </div>
-        <div id="lbo-sandbox" style={{ ...S.card, marginBottom: 16 }}>
-          <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> Interactive — Mini LBO Model<Info text="A simplified leveraged-buyout model you can play with. Set the entry price, leverage, growth, and exit assumptions — the sponsor returns and value-creation bridge update live. Built in React to demonstrate the mechanics behind the deal reconstructions above." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="projects" id="lbo-sandbox" /></span></h2>
-          <LBOSandbox />
+        <div style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease both" }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#6d549e" }}>◆</span> Question of the Day<Info text="One technical interview question per day from the house bank — same edition for every reader, like a crossword. Reveal the answer, then grade yourself honestly. Grades never leave your browser." /></h2>
+          <QOTD />
         </div>
         <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16, alignItems: "start" }}>
           <div id="merger-math" style={S.card}>
@@ -3389,21 +3407,45 @@ export default function App() {
           <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> Drill — Redline the Exhibit<Info text="The inverted drill: a completed exhibit contains exactly one planted error, propagated consistently so it must be caught on principle rather than arithmetic. Click the flawed line, submit the redline, and the correction prints in proofreader's red ink. Model review is the actual analyst job — nothing else drills it." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="projects" id="redline" /></span></h2>
           <RedlineExhibit />
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(min(360px,100%),1fr))", gap: 14 }}>{PROJECTS.map((p, i) => <div key={i} style={{ ...S.pCard, ...(hovP === i ? { border: "1px solid #0d6d5650", transform: "translateY(-6px) scale(1.01)", boxShadow: "0 20px 50px rgba(13,109,86,0.12), 0 0 0 1px rgba(13,109,86,0.15), 0 0 40px rgba(13,109,86,0.05)" } : {}), animation: "fadeUp 0.5s ease both", animationDelay: `${i * 0.07}s` }} onMouseEnter={() => setHovP(i)} onMouseLeave={() => setHovP(null)}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}><span style={{ fontSize: 9, color: "#8a8072", fontFamily: "JetBrains Mono, monospace", letterSpacing: 1 }}>PROJECT_{String(i + 1).padStart(2, "0")}{p.completed && <span style={{ marginLeft: 8, color: "#a2977f" }}>· {p.completed}</span>}</span><div style={{ display: "flex", alignItems: "center", gap: 6 }}>{p.updated && <span style={{ fontSize: 8, color: "#a2977f", fontFamily: "JetBrains Mono, monospace" }}>Updated {p.updated}</span>}<span style={{ fontSize: 9, padding: "3px 10px", borderRadius: 20, background: p.status === "In Progress" ? "#b0741e08" : "#0d6d5608", color: p.status === "In Progress" ? "#b0741e" : "#0d6d56", fontFamily: "JetBrains Mono, monospace" }}>{p.status}</span></div></div>
-          {p.img && <img src={p.img} alt={p.title} loading="lazy" style={{ width: "100%", aspectRatio: "16/9", objectFit: "cover", objectPosition: "top", borderRadius: 10, border: "1px solid #e9ddc9", marginBottom: 14, display: "block", background: "#f6eee1" }} />}
-          <h3 style={{ color: "#33302c", fontSize: 17, fontWeight: 600, marginBottom: 10, lineHeight: 1.3 }}>{p.title}</h3>
-          <p style={{ color: "#6f675c", fontSize: 13, lineHeight: 1.65, marginBottom: 16, flex: 1 }}>{p.desc}</p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginBottom: p.url ? 12 : 0 }}>{p.tags.map(t => <span key={t} style={{ fontSize: 9, padding: "3px 10px", borderRadius: 20, background: "#e9ddc930", color: "#6f675c", fontFamily: "JetBrains Mono, monospace" }}>{t}</span>)}</div>
-          {(p.url || p.demo) && <div style={{ display: "flex", gap: 12 }}>
-            {p.demo && <a href={p.demo} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10, color: "#1f5a9e", textDecoration: "none", fontFamily: "JetBrains Mono, monospace", padding: "4px 10px", background: "#1f5a9e08", border: "1px solid #1f5a9e20", borderRadius: 6, transition: "all 0.2s" }} onMouseEnter={e=>{e.currentTarget.style.background="#1f5a9e15";e.currentTarget.style.borderColor="#1f5a9e40"}} onMouseLeave={e=>{e.currentTarget.style.background="#1f5a9e08";e.currentTarget.style.borderColor="#1f5a9e20"}}>▶ Live Demo <span style={{fontSize:9}}>↗</span></a>}
-            {p.url && <a href={p.url} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10, color: "#0d6d56", textDecoration: "none", fontFamily: "JetBrains Mono, monospace", padding: "4px 0", transition: "opacity 0.2s" }} onMouseEnter={e=>e.currentTarget.style.opacity="0.7"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>{p.url.includes("github") ? "GitHub" : p.url.includes("report") ? "Read the Report" : p.url.includes("paper") ? "View Paper" : "View"} <span style={{fontSize:9}}>↗</span></a>}
-          </div>}
-        </div>)}</div>
+        <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
+          <section id="lexicon" style={{ ...S.card, animation: "fadeUp 0.5s ease both" }}>
+            <h2 style={S.cardTitle}><span style={{ color: "#1f5a9e" }}>◆</span> The Lexicon<Info text="One term a day from the 300-entry house dictionary — accounting to Street slang, definitions written in-house. Flip on 'quiz me first' to hide the definition and grade your recall; marks feed the Review Docket and never leave your browser." /></h2>
+            <LexiconBox desk={desk} />
+          </section>
+          <section id="bias-ledger" style={{ ...S.card, animation: "fadeUp 0.5s ease 0.05s both" }}>
+            <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> The Bias Ledger<Info text="One behavioral-finance bias a day from the 40-entry almanac: what it is, the tell in a real book, and the working countermeasure. With the desk on, it cross-prints against your paper positions — read locally, never sent anywhere." /></h2>
+            <BiasLedger desk={desk} />
+          </section>
+        </div>
+        <div id="explain-desk" style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease both" }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> Explain It to the Desk<Info text="The Feynman drill: one concept a day, explained in plain sentences. With an Anthropic key set, Claude plays the sharp novice who just joined the desk and returns the one gap in your explanation plus the follow-up question it invites. Your writing never leaves this browser except to Anthropic with your own key." /></h2>
+          <ExplainDesk apiKey={apiKey} />
+        </div>
+        <div id="name-that-regime" style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease 0.51s both" }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#6d549e" }}>◆</span> Name That Regime<Info text="A blind macro-history quiz drawn from FRED. You're shown one long-history series — unemployment, the VIX, high-yield spreads, the fed funds rate — over an unlabeled two-to-three-year window, and you name the era from its shape. Reveal shows the real dates and what happened. Your running score stays in this browser." link="https://fred.stlouisfed.org" linkLabel="FRED" /></h2>
+          <NameThatRegime />
+        </div>
+        {desk && <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16, alignItems: "start" }}>
+          <section style={{ ...S.card, animation: "fadeUp 0.5s ease both" }}>
+            <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> The Review Docket<Info text="Spaced repetition over everything you've missed on this site. Cards are scheduled with the SM-2 algorithm: misses return tomorrow, solid answers push the next review further out. Private — lives in this browser's storage only." /></h2>
+            <ReviewDocket />
+          </section>
+          <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.06s both" }}>
+            <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> Errata & Corrections<Info text="Every missed question is filed as a correction, newspaper-style, with room for a one-line rule so the same mistake isn't made twice. Private to this browser." /></h2>
+            <ErrataColumn />
+          </section>
+          <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.18s both" }}>
+            <h2 style={S.cardTitle}><span style={{ color: "#6d549e" }}>◆</span> The Syllabus Ledger<Info text="Six units of the interview syllabus, graded from your own attempt log with a 30-day decay — states in agate text, never progress bars. The weakest unit sets a daily assignment question. Derived entirely from marks already in this browser." /></h2>
+            <SyllabusLedger />
+          </section>
+        </div>}
+        </>}
       </div>}
 
       {tab === "home" && <div style={{ animation: "fadeUp 0.4s ease both", maxWidth: 860, margin: "0 auto" }}>
         <Kicker n="01" t="Profile" />
+        <SegControl items={[{ id: "dossier", l: "Dossier" }, { id: "personal", l: "Personal", note: "friends & family" }]} active={seg.home} onChange={s => setSegment("home", s)} />
+        {seg.home === "dossier" && <>
         <div style={{ background: "linear-gradient(135deg, rgba(13,109,86,0.5), rgba(224,209,186,0.9), rgba(31,90,158,0.35))", borderRadius: 11, padding: 1, boxShadow: "0 12px 48px rgba(13,109,86,0.08)" }}>
         <div style={{ ...S.card, background: "linear-gradient(135deg,#f6eee1,#fdf8f0,#f6eee1)", border: "none", borderRadius: 10, position: "relative", overflow: "hidden" }}>
           <div style={{ position: "absolute", top: -60, right: -60, width: 300, height: 300, background: "radial-gradient(circle,rgba(13,109,86,0.06) 0%,transparent 70%)", pointerEvents: "none" }} />
@@ -3431,16 +3473,6 @@ export default function App() {
           </div>
         </div>
         </div>
-        <div style={{ padding: "24px 4px 8px", maxWidth: 620, margin: "0 auto" }}>
-          <p style={{ fontSize: 14, lineHeight: 1.9, color: "#4a443c" }}>
-            <span style={{ float: "left", fontFamily: "'Instrument Serif',serif", fontSize: 50, lineHeight: 0.82, color: "#0d6d56", paddingRight: 9, paddingTop: 5 }}>W</span>
-            elcome. This site is part resume, part working tool — a small financial newspaper I built, edit, and use every day: live market prices, deal reconstructions with the models attached, and the occasional experiment. If you're a recruiter, the Work Index below collects everything in one list. If you're friends or family — this is what I do all day, on one page. The presses run continuously.
-          </p>
-          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "baseline", gap: 8, marginTop: 8 }}>
-            <span style={{ fontFamily: "'Instrument Serif',serif", fontStyle: "italic", fontSize: 20, color: "#262421" }}>— Mason</span>
-            <span style={{ color: "#0d6d56", fontSize: 10 }}>∎</span>
-          </div>
-        </div>
         <div className="about-stats" style={{ ...S.card, margin: "14px 0", display: "flex", justifyContent: "space-around", padding: "20px 32px", flexWrap: "wrap", gap: 16 }}>
           {[["Master's GPA", "4.0", "Walton College"], ["Undergrad GPA", "3.62", "Dean's List ×5"], ["Self-Funded", "100%", "of undergrad education"], ["Graduated", "May 2026", "M.S. Finance"]].map(([label, val, sub], i) => (
             <div key={label} style={{ textAlign: "center", padding: "20px 24px", borderRadius: 14, background: "linear-gradient(145deg, #f6eee1, #f6eee1)", border: "1px solid #e3d5bf", flex: "1 1 0", minWidth: 120, boxShadow: "inset 0 2px 10px rgba(64,52,32,0.07), 0 1px 0 rgba(255,255,255,0.4)" }}>
@@ -3467,16 +3499,6 @@ export default function App() {
         </div>
         </Reveal>
         <Reveal><div style={{ padding: "8px 0 22px" }}>
-          <Slug icon="#b0741e" right={<span style={{ fontSize: 8, color: "#a2977f", letterSpacing: 1, fontFamily: "'JetBrains Mono',monospace" }}>UPDATED JUL 2026</span>}>Now</Slug>
-          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-            {["Interviewing for analyst roles across investment banking, private equity, wealth management, and corporate finance",
-              "Extending the EA / Jagex LBO framework to new hypothetical buyout targets",
-              "Preparing for the FINRA SIE — CFA Level I planned next",
-              "Reading Damodaran on Valuation and Pignataro's Financial Modeling & Valuation"].map((t, i) => <div key={i} style={{ display: "flex", gap: 10, alignItems: "baseline" }}><span style={{ color: "#0d6d56", fontSize: 11, fontFamily: "'JetBrains Mono',monospace" }}>→</span><span style={{ color: "#4a443c", fontSize: 13, lineHeight: 1.6 }}>{t}</span></div>)}
-          </div>
-        </div>
-        </Reveal>
-        <Reveal><div style={{ padding: "8px 0 22px" }}>
           <Slug icon="#1f5a9e">Timeline</Slug>
           <div style={{ position: "relative", paddingLeft: 22 }}><div style={{ position: "absolute", left: 5, top: 5, bottom: 5, width: 2, background: "linear-gradient(180deg,#0d6d56,#1f5a9e,#e9ddc9)", borderRadius: 1 }} />
             {EXPERIENCE.map((e, i) => <div key={i} style={{ position: "relative", marginBottom: i < EXPERIENCE.length - 1 ? 18 : 0 }}>
@@ -3497,26 +3519,6 @@ export default function App() {
           </div></div>
         </div>
         </Reveal>
-        <Reveal><div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 28, marginBottom: 4, padding: "8px 0 22px" }}>
-          <div>
-            <Slug icon="#b0741e">Reading List</Slug>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{READING.map((b, i) => <div key={i} style={{ padding: "12px 14px", borderRadius: 10, background: "linear-gradient(145deg, #fffdf9, #f6eee1)", border: "1px solid #e3d5bf", display: "flex", justifyContent: "space-between", alignItems: "center", transition: "all 0.25s" }} onMouseEnter={e=>{e.currentTarget.style.borderColor="#b0741e30";e.currentTarget.style.transform="translateX(4px)"}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#e3d5bf";e.currentTarget.style.transform="none"}} className="mrow"><div><div style={{ color: "#33302c", fontSize: 12, fontWeight: 500 }}>{b.title}</div><div style={{ color: "#8a8072", fontSize: 10 }}>{b.author}</div>{b.note && <div className="mnote" style={{ fontFamily: "'Instrument Serif',serif", fontStyle: "italic", fontSize: 12, color: "#6d549e", marginTop: 4 }}>“{b.note}” <span style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#a2977f", fontStyle: "normal", letterSpacing: 1 }}>— THE IDEA I USE</span></div>}</div><span style={{ fontSize: 8, padding: "3px 10px", borderRadius: 10, fontFamily: "JetBrains Mono, monospace", background: b.s === "Reading" ? "rgba(31,90,158,0.1)" : b.s === "Done" ? "rgba(13,109,86,0.1)" : "rgba(111,103,92,0.08)", color: b.s === "Reading" ? "#1f5a9e" : b.s === "Done" ? "#0d6d56" : "#6f675c", border: `1px solid ${b.s === "Reading" ? "rgba(31,90,158,0.2)" : b.s === "Done" ? "rgba(13,109,86,0.2)" : "rgba(111,103,92,0.15)"}` }}>{b.s === "Done" ? "Completed" : b.s === "Ref" ? "Reference" : b.s}</span></div>)}</div>
-          </div>
-          <div>
-            <Slug icon="#b3551d">Currently Exploring</Slug>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              {[{ topic: "LBO Modeling & PE Deal Structuring", desc: "Completed full LBO models and IC pitch decks for EA and Jagex as graduate coursework — now extending the framework to new hypothetical buyout targets." },
-                { topic: "Python for Equity Research Automation", desc: "Scripting DCF templates and data pipelines to streamline financial analysis workflows." },
-                { topic: "Regression-Based Cost of Equity", desc: "Applying CAPM and multi-factor models in Excel to estimate required returns and alpha." },
-                { topic: "AI Applications in Finance", desc: "Building this dashboard — exploring how AI can augment analyst workflows for research and market monitoring." }
-              ].map((item, i) => <div key={i} style={{ padding: "10px 12px", borderRadius: 8, background: "#f6eee1", border: "1px solid #e9ddc9" }}>
-                <div style={{ color: "#33302c", fontSize: 12, fontWeight: 600, marginBottom: 3 }}>{item.topic}</div>
-                <div style={{ color: "#6f675c", fontSize: 11, lineHeight: 1.5 }}>{item.desc}</div>
-              </div>)}
-            </div>
-          </div>
-        </div>
-        </Reveal>
         <Reveal><div style={{ padding: "8px 0 22px" }}>
           <Slug icon="#33302c" right={<span style={{ fontSize: 8, color: "#a2977f", letterSpacing: 1, fontFamily: "'JetBrains Mono',monospace" }}>EVERYTHING, ONE LIST</span>}>Work Index</Slug>
           <div style={{ display: "flex", flexDirection: "column" }}>
@@ -3531,6 +3533,43 @@ export default function App() {
           <Slug icon="#990f3d">Connect</Slug>
           <div className="connect-links" style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>{LINKS.map(l => <a key={l.label} href={l.url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 24px", borderRadius: 12, background: "linear-gradient(145deg, #fffdf9, #fbf5ec)", color: "#33302c", textDecoration: "none", fontSize: 13, fontWeight: 500, border: "1px solid #e3d5bf", transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)", boxShadow: "0 4px 12px rgba(64,52,32,0.07)", flex: "1 1 0", justifyContent: "center", minWidth: 140 }} onMouseEnter={e => { e.currentTarget.style.borderColor = "#0d6d5650"; e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "0 8px 24px rgba(13,109,86,0.12), 0 0 0 1px rgba(13,109,86,0.1)"; }} onMouseLeave={e => { e.currentTarget.style.borderColor = "#e3d5bf"; e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(64,52,32,0.07)"; }}><span style={{ fontFamily: "JetBrains Mono, monospace", fontSize: 12, fontWeight: 700, color: "#0d6d56" }}>{l.ic}</span>{l.label}</a>)}</div>
         </div></Reveal>
+        </>}
+        {seg.home === "personal" && <>
+        <div style={{ padding: "8px 4px 8px", maxWidth: 620, margin: "0 auto" }}>
+          <p style={{ fontSize: 14, lineHeight: 1.9, color: "#4a443c" }}>
+            <span style={{ float: "left", fontFamily: "'Instrument Serif',serif", fontSize: 50, lineHeight: 0.82, color: "#0d6d56", paddingRight: 9, paddingTop: 5 }}>W</span>
+            elcome. This site is part resume, part working tool — a small financial newspaper I built, edit, and use every day: live market prices, deal reconstructions with the models attached, and the occasional experiment. If you're a recruiter, the Dossier view collects everything in one list. If you're friends or family — this is what I do all day, on one page. The presses run continuously.
+          </p>
+          <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "baseline", gap: 8, marginTop: 8 }}>
+            <span style={{ fontFamily: "'Instrument Serif',serif", fontStyle: "italic", fontSize: 20, color: "#262421" }}>— Mason</span>
+            <span style={{ color: "#0d6d56", fontSize: 10 }}>∎</span>
+          </div>
+        </div>
+        <Reveal><div style={{ padding: "8px 0 22px" }}>
+          <Slug icon="#b0741e">On the Desk Now</Slug>
+          <div style={{ display: "flex", flexDirection: "column", gap: 9, marginBottom: 20 }}>
+            {["Interviewing for analyst roles across investment banking, private equity, wealth management, and corporate finance",
+              "Extending the EA / Jagex LBO framework to new hypothetical buyout targets",
+              "Preparing for the FINRA SIE — CFA Level I planned next",
+              "Reading Damodaran on Valuation and Pignataro's Financial Modeling & Valuation"].map((t, i) => <div key={i} style={{ display: "flex", gap: 10, alignItems: "baseline" }}><span style={{ color: "#0d6d56", fontSize: 11, fontFamily: "'JetBrains Mono',monospace" }}>→</span><span style={{ color: "#4a443c", fontSize: 13, lineHeight: 1.6 }}>{t}</span></div>)}
+          </div>
+          <div style={{ fontSize: 8, color: "#8a8072", textTransform: "uppercase", letterSpacing: 2, margin: "2px 0 10px", fontFamily: "JetBrains Mono, monospace" }}>Currently Exploring</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {[{ topic: "LBO Modeling & PE Deal Structuring", desc: "Completed full LBO models and IC pitch decks for EA and Jagex as graduate coursework — now extending the framework to new hypothetical buyout targets." },
+              { topic: "Python for Equity Research Automation", desc: "Scripting DCF templates and data pipelines to streamline financial analysis workflows." },
+              { topic: "Regression-Based Cost of Equity", desc: "Applying CAPM and multi-factor models in Excel to estimate required returns and alpha." },
+              { topic: "AI Applications in Finance", desc: "Building this dashboard — exploring how AI can augment analyst workflows for research and market monitoring." }
+            ].map((item, i) => <div key={i} style={{ padding: "10px 12px", borderRadius: 8, background: "#f6eee1", border: "1px solid #e9ddc9" }}>
+              <div style={{ color: "#33302c", fontSize: 12, fontWeight: 600, marginBottom: 3 }}>{item.topic}</div>
+              <div style={{ color: "#6f675c", fontSize: 11, lineHeight: 1.5 }}>{item.desc}</div>
+            </div>)}
+          </div>
+        </div></Reveal>
+        <Reveal><div style={{ padding: "8px 0 22px" }}>
+          <Slug icon="#b0741e">The Bookshelf</Slug>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{READING.map((b, i) => <div key={i} style={{ padding: "12px 14px", borderRadius: 10, background: "linear-gradient(145deg, #fffdf9, #f6eee1)", border: "1px solid #e3d5bf", display: "flex", justifyContent: "space-between", alignItems: "center", transition: "all 0.25s" }} onMouseEnter={e=>{e.currentTarget.style.borderColor="#b0741e30";e.currentTarget.style.transform="translateX(4px)"}} onMouseLeave={e=>{e.currentTarget.style.borderColor="#e3d5bf";e.currentTarget.style.transform="none"}} className="mrow"><div><div style={{ color: "#33302c", fontSize: 12, fontWeight: 500 }}>{b.title}</div><div style={{ color: "#8a8072", fontSize: 10 }}>{b.author}</div>{b.note && <div className="mnote" style={{ fontFamily: "'Instrument Serif',serif", fontStyle: "italic", fontSize: 12, color: "#6d549e", marginTop: 4 }}>“{b.note}” <span style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#a2977f", fontStyle: "normal", letterSpacing: 1 }}>— THE IDEA I USE</span></div>}</div><span style={{ fontSize: 8, padding: "3px 10px", borderRadius: 10, fontFamily: "JetBrains Mono, monospace", background: b.s === "Reading" ? "rgba(31,90,158,0.1)" : b.s === "Done" ? "rgba(13,109,86,0.1)" : "rgba(111,103,92,0.08)", color: b.s === "Reading" ? "#1f5a9e" : b.s === "Done" ? "#0d6d56" : "#6f675c", border: `1px solid ${b.s === "Reading" ? "rgba(31,90,158,0.2)" : b.s === "Done" ? "rgba(13,109,86,0.2)" : "rgba(111,103,92,0.15)"}` }}>{b.s === "Done" ? "Completed" : b.s === "Ref" ? "Reference" : b.s}</span></div>)}</div>
+        </div></Reveal>
+        </>}
       </div>}
 
       {tab === "recruiter" && <div style={{ animation: "fadeUp 0.4s ease both", maxWidth: 600, margin: "0 auto", textAlign: "center", padding: "14px 0 30px" }}>
@@ -3548,7 +3587,7 @@ export default function App() {
         </div>
         <div style={{ textAlign: "left", marginBottom: 22 }}>
           <div style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#0d6d56", textTransform: "uppercase", letterSpacing: 2, marginBottom: 6 }}>Work Samples</div>
-          {ARTIFACTS.filter(a => a.label !== "Resume (PDF)").map((a, i) => <div key={a.label} style={{ borderTop: i === 0 ? "none" : "1px solid #efe4d2" }}>
+          {ARTIFACTS.filter(a => a.recruiterSafe).map((a, i) => <div key={a.label} style={{ borderTop: i === 0 ? "none" : "1px solid #efe4d2" }}>
             {a.href
               ? <a href={a.href} target="_blank" rel="noopener noreferrer" style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "8px 2px", fontSize: 12.5, color: "#33302c", textDecoration: "none" }} onMouseEnter={e => e.currentTarget.style.color = "#0d6d56"} onMouseLeave={e => e.currentTarget.style.color = "#33302c"}>{a.label}<span style={{ color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", fontSize: 10 }}>↗</span></a>
               : <button onClick={() => goAnchor(a.tab, a.id)} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "8px 2px", fontSize: 12.5, color: "#33302c", background: "none", border: "none", width: "100%", textAlign: "left", cursor: "pointer", fontFamily: "'Space Grotesk',sans-serif" }} onMouseEnter={e => e.currentTarget.style.color = "#0d6d56"} onMouseLeave={e => e.currentTarget.style.color = "#33302c"}>{a.label}<span style={{ color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", fontSize: 10 }}>→</span></button>}
