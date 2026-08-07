@@ -3295,7 +3295,7 @@ export default function App() {
     <div className="status-bar" style={{ background: "#2b2825", padding: "7px 32px", display: "flex", justifyContent: "space-between", fontSize: 9, fontFamily: "JetBrains Mono, monospace", color: "#cfc5b4", letterSpacing: 1, position: "relative", zIndex: 2 }}>
       <span>WALTON COLLEGE OF BUSINESS · UNIVERSITY OF ARKANSAS · DALLAS–FORT WORTH, TX</span>
       <span className="statusbar-quotes" style={{ display: "flex", gap: 18 }}>{pricesLive && ["SPY", "QQQ", "TLT", "GLD"].map(sym => { const t = prices.find(p => p.symbol === sym); if (!t || t.price === "—") return null; const up = parseFloat(t.change) >= 0; return <span key={sym} style={{ display: "inline-flex", gap: 6 }}><span style={{ color: "#7d7568" }}>{sym}</span><span style={{ color: "#cfc5b4" }}>{t.price}</span><span style={{ color: up ? "#3ecf8e" : "#e07a70" }}>{up ? "+" : "−"}{Math.abs(parseFloat(t.change)).toFixed(2)}%</span></span>; })}<CreditStrip /></span>
-      <span><span style={{ color: "#3ecf8e" }}>●</span> OPEN TO OPPORTUNITIES · IB / PE / WEALTH MANAGEMENT / CORPORATE FINANCE</span>
+      <span><span style={{ color: "#3ecf8e" }}>●</span> OPEN TO OPPORTUNITIES · WEALTH MANAGEMENT / CORPORATE FINANCE / IB / PE</span>
     </div>
 
     <div className="masthead" style={{ background: "rgba(250,244,235,0.95)", padding: "20px 32px 16px", position: "relative", zIndex: 90 }}>
@@ -3303,7 +3303,7 @@ export default function App() {
         <div className="masthead-side" style={{ flex: "1 1 0", fontSize: 9, fontFamily: "'JetBrains Mono',monospace", color: "#8a8072", letterSpacing: 1.5, textTransform: "uppercase" }}>{(() => { const d = new Date(), day = d.getDay(), mins = d.getHours() * 60 + d.getMinutes(); const ed = (day === 0 || day === 6) ? "Weekend Edition" : mins < 570 ? "Morning Edition" : mins < 960 ? "Midday Edition" : "Evening Edition"; return `${d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })} — ${ed}`; })()}</div>
         <div style={{ textAlign: "center" }}>
           <div className="masthead-name" style={{ fontFamily: "'Instrument Serif',serif", fontSize: 36, fontWeight: 400, color: "#262421", letterSpacing: "-0.015em", lineHeight: 1 }}>Mason J. Bennett</div>
-          <div className="masthead-tag" style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#0d6d56", letterSpacing: 3, textTransform: "uppercase", marginTop: 7 }}>Investment Banking · Private Equity · Wealth Management · Corporate Finance</div>
+          <div className="masthead-tag" style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#0d6d56", letterSpacing: 3, textTransform: "uppercase", marginTop: 7 }}>Wealth Management · Corporate Finance · Investment Banking · Private Equity</div>
         </div>
         <div className="masthead-side" style={{ flex: "1 1 0", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}><MktBadge />{pricesLive && <WeatherEar prices={prices} />}</div>
       </div>
@@ -3597,7 +3597,7 @@ export default function App() {
 
       {tab === "home" && <div style={{ animation: "fadeUp 0.4s ease both", maxWidth: 860, margin: "0 auto" }}>
         <Kicker n="01" t="Profile" />
-        <SegControl items={[{ id: "dossier", l: "Dossier" }, { id: "personal", l: "Personal", note: "friends & family" }]} active={seg.home} onChange={s => setSegment("home", s)} />
+        <SegControl items={[{ id: "dossier", l: "Overview" }, { id: "personal", l: "Personal", note: "friends & family" }]} active={seg.home} onChange={s => setSegment("home", s)} />
         {seg.home === "dossier" && <>
         <div style={{ background: "linear-gradient(135deg, rgba(13,109,86,0.5), rgba(224,209,186,0.9), rgba(31,90,158,0.35))", borderRadius: 11, padding: 1, boxShadow: "0 12px 48px rgba(13,109,86,0.08)" }}>
         <div style={{ ...S.card, background: "linear-gradient(135deg,#f6eee1,#fdf8f0,#f6eee1)", border: "none", borderRadius: 10, position: "relative", overflow: "hidden" }}>
@@ -3613,10 +3613,10 @@ export default function App() {
               <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14, borderTop: "1px solid #e9ddc9", borderBottom: "1px solid #e9ddc9", padding: "12px 0" }}>
                 {["M.S. Finance, 4.0 GPA — Walton College of Business, May 2026",
                   "Info Tech Sector Analyst — Shollmier Investment Fund, a $700K+ student-managed portfolio (Spring 2026)",
-                  "Seeking analyst roles: IB · PE · Wealth Management · Corporate Finance — Dallas–Fort Worth"].map(l => <div key={l} style={{ fontSize: 13.5, color: "#33302c", fontWeight: 600, lineHeight: 1.45 }}>{l}</div>)}
+                  "Seeking analyst roles: Wealth Management · Corporate Finance · IB · PE — Dallas–Fort Worth"].map(l => <div key={l} style={{ fontSize: 13.5, color: "#33302c", fontWeight: 600, lineHeight: 1.45 }}>{l}</div>)}
               </div>
               <p style={{ color: "#4a443c", fontSize: 13.5, lineHeight: 1.8, marginBottom: 18 }}>Led graduate student deal teams reconstructing two real transactions — a $55B take-private LBO and a £900M sponsor-to-sponsor buyout — as fully modeled hypothetical acquisitions built from public filings. Bloomberg Market Concepts certified; FINRA SIE in progress.</p>
-              <div className="bio-badges" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{["Investment Banking", "Private Equity", "Wealth Management", "Corporate Finance"].map(t => <span key={t} style={{ fontSize: 10, padding: "5px 14px", borderRadius: 20, background: "linear-gradient(135deg, rgba(13,109,86,0.1), rgba(31,90,158,0.06))", color: "#0d6d56", border: "1px solid rgba(13,109,86,0.2)", fontFamily: "JetBrains Mono, monospace", boxShadow: "0 2px 8px rgba(13,109,86,0.06)" }}>{t}</span>)}</div>
+              <div className="bio-badges" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>{["Wealth Management", "Corporate Finance", "Investment Banking", "Private Equity"].map(t => <span key={t} style={{ fontSize: 10, padding: "5px 14px", borderRadius: 20, background: "linear-gradient(135deg, rgba(13,109,86,0.1), rgba(31,90,158,0.06))", color: "#0d6d56", border: "1px solid rgba(13,109,86,0.2)", fontFamily: "JetBrains Mono, monospace", boxShadow: "0 2px 8px rgba(13,109,86,0.06)" }}>{t}</span>)}</div>
               <div className="bio-badges" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
                 <a href="/resume.pdf" target="_blank" rel="noopener noreferrer" style={{ padding: "10px 22px", borderRadius: 10, background: "#0d6d56", color: "#fdf8f0", fontSize: 12, fontWeight: 600, textDecoration: "none", boxShadow: "0 4px 14px rgba(13,109,86,0.25)", transition: "all 0.25s" }} onMouseEnter={e => e.currentTarget.style.background = "#0a5a47"} onMouseLeave={e => e.currentTarget.style.background = "#0d6d56"}>Download Resume</a>
                 <a href="https://linkedin.com/in/bennettmason" target="_blank" rel="noopener noreferrer" style={{ padding: "10px 22px", borderRadius: 10, background: "#fffdf9", color: "#33302c", fontSize: 12, fontWeight: 600, textDecoration: "none", border: "1px solid #d8c8b0", transition: "all 0.25s" }} onMouseEnter={e => e.currentTarget.style.borderColor = "#0d6d56"} onMouseLeave={e => e.currentTarget.style.borderColor = "#d8c8b0"}>LinkedIn</a>
@@ -3691,7 +3691,7 @@ export default function App() {
         <div style={{ padding: "8px 4px 8px", maxWidth: 620, margin: "0 auto" }}>
           <p style={{ fontSize: 14, lineHeight: 1.9, color: "#4a443c" }}>
             <span style={{ float: "left", fontFamily: "'Instrument Serif',serif", fontSize: 50, lineHeight: 0.82, color: "#0d6d56", paddingRight: 9, paddingTop: 5 }}>W</span>
-            elcome. This site is part resume, part working tool — a small financial newspaper I built, edit, and use every day: live market prices, deal reconstructions with the models attached, and the occasional experiment. If you're a recruiter, the Dossier view collects everything in one list. If you're friends or family — this is what I do all day, on one page. The presses run continuously.
+            elcome. This site is part resume, part working tool — a small financial newspaper I built, edit, and use every day: live market prices, deal reconstructions with the models attached, and the occasional experiment. If you're a recruiter, the Overview collects everything in one list. If you're friends or family — this is what I do all day, on one page. The presses run continuously.
           </p>
           <div style={{ display: "flex", justifyContent: "flex-end", alignItems: "baseline", gap: 8, marginTop: 8 }}>
             <span style={{ fontFamily: "'Instrument Serif',serif", fontStyle: "italic", fontSize: 20, color: "#262421" }}>— Mason</span>
@@ -3701,7 +3701,7 @@ export default function App() {
         <Reveal><div style={{ padding: "8px 0 22px" }}>
           <Slug icon="#b0741e">On the Desk Now</Slug>
           <div style={{ display: "flex", flexDirection: "column", gap: 9, marginBottom: 20 }}>
-            {["Interviewing for analyst roles across investment banking, private equity, wealth management, and corporate finance",
+            {["Interviewing for analyst roles across wealth management, corporate finance, investment banking, and private equity",
               "Extending the EA / Jagex LBO framework to new hypothetical buyout targets",
               "Preparing for the FINRA SIE — CFA Level I planned next",
               "Reading Damodaran on Valuation and Pignataro's Financial Modeling & Valuation"].map((t, i) => <div key={i} style={{ display: "flex", gap: 10, alignItems: "baseline" }}><span style={{ color: "#0d6d56", fontSize: 11, fontFamily: "'JetBrains Mono',monospace" }}>→</span><span style={{ color: "#4a443c", fontSize: 13, lineHeight: 1.6 }}>{t}</span></div>)}
