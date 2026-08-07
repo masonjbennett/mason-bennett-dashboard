@@ -2507,13 +2507,18 @@ function useFred(ids) {
     let on = true;
     (async () => {
       try {
-        const key = `mjb_fred_${ids.replace(/[^A-Z0-9]/g, "")}`;
+        // Key is versioned (…v2): a proxy bug once returned an empty 200 and the old cache
+        // held it for six hours, so the server fix couldn't reach anyone still holding one.
+        const key = `mjb_fredv2_${ids.replace(/[^A-Z0-9]/g, "")}`;
         const cached = cacheGet(key, 360);
         if (cached) { if (on) setData(cached); return; }
         const r = await fetch(`/api/fred?id=${ids}`);
         if (!r.ok) throw 0;
         const d = await r.json();
-        if (d && !d.error && on) { setData(d); cacheSet(key, d); }
+        // Never accept or cache an empty payload — that turns a transient upstream failure
+        // into a six-hour blank card. No data means leave the card in its loading state.
+        const usable = d && !d.error && Object.values(d).some(v => Array.isArray(v) && v.length);
+        if (usable && on) { setData(d); cacheSet(key, d); }
       } catch {}
     })();
     return () => { on = false; };
@@ -2788,12 +2793,14 @@ function useMacroHist() {
     let on = true;
     (async () => {
       try {
-        const cached = cacheGet("mjb_macrohist", 1440);
+        const cached = cacheGet("mjb_macrohistv2", 1440);
         if (cached) { if (on) setData(cached); return; }
         const r = await fetch("/api/macrohist");
         if (!r.ok) throw 0;
         const d = await r.json();
-        if (d && !d.error && on) { setData(d); cacheSet("mjb_macrohist", d); }
+        // Same rule as useFred: an empty payload is a failure, not data worth caching for a day.
+        const usable = d && !d.error && Object.values(d).some(v => Array.isArray(v) && v.length);
+        if (usable && on) { setData(d); cacheSet("mjb_macrohistv2", d); }
       } catch {}
     })();
     return () => { on = false; };
