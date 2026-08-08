@@ -233,40 +233,14 @@ Replace with real upcoming earnings data. time should be "BMO" for before market
 }
 
 // ============ HOOKS ============
-function usePrices(tickers, finnhubKey) {
+// Quotes come from the server-side proxy for everyone (the Finnhub key lives in Vercel env, never
+// in a browser), falling back to clearly-badged simulated data if the proxy can't answer.
+function usePrices(tickers) {
   const [p, setP] = useState(() => tickers.map(t => ({ ...t, price: "—", change: "0.00", loading: true })));
-  const fetchedRef = useRef(false);
-  useEffect(() => {
-    if (!finnhubKey || fetchedRef.current) return;
-    fetchedRef.current = true;
-    // Check cache first
-    const cached = cacheGet("mb_prices", 5);
-    if (cached) { setP(cached); return; }
-    // Fetch real quotes from Finnhub
-    async function load() {
-      const results = [...p];
-      for (let i = 0; i < tickers.length; i++) {
-        try {
-          const r = await fetch(`https://finnhub.io/api/v1/quote?symbol=${tickers[i].symbol}&token=${finnhubKey}`);
-          const d = await r.json();
-          if (d.c) results[i] = { ...tickers[i], price: d.c.toFixed(2), change: d.dp ? d.dp.toFixed(2) : "0.00", h: d.h, l: d.l, pc: d.pc, loading: false };
-        } catch {}
-        if (i < tickers.length - 1) await delay(120); // Rate limit: ~60/min
-      }
-      setP(results);
-      cacheSet("mb_prices", results);
-    }
-    load();
-    // Refresh every 60s during market hours
-    const iv = setInterval(() => { fetchedRef.current = false; }, 60000);
-    return () => clearInterval(iv);
-  }, [finnhubKey]);
-  // Fallback: server-side proxy (real data, key stays on Vercel), then simulated
   const [live, setLive] = useState(false);
   const [asOf, setAsOf] = useState(null);
   const stamp = () => setAsOf(new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
   useEffect(() => {
-    if (finnhubKey) return;
     let cancelled = false, iv = null;
     const startSim = () => {
       if (cancelled) return;
@@ -287,8 +261,8 @@ function usePrices(tickers, finnhubKey) {
       } catch { startSim(); }
     })();
     return () => { cancelled = true; if (iv) clearInterval(iv); };
-  }, [finnhubKey]);
-  return { prices: p, live: !!finnhubKey || live, asOf };
+  }, []);
+  return { prices: p, live, asOf };
 }
 
 // Yahoo daily-close history for sparklines + 52-week strips. GREY-AREA upstream:
@@ -500,32 +474,10 @@ function QuoteLookup() {
 
 // ============ SMALL COMPONENTS ============
 function Donut({ data, size = 200 }) { const [hov,setHov]=useState(null); const total=data.reduce((s,d)=>s+d.weight,0),C=["#0d6d56","#1f5a9e","#6d549e","#990f3d","#b0741e","#b3551d","#6f675c"]; let cum=-90; return <svg viewBox="0 0 200 200" width={size} height={size} style={{filter:"drop-shadow(0 4px 24px rgba(13,109,86,0.12)) drop-shadow(0 0 40px rgba(13,109,86,0.04))"}}>{data.map((d,i)=>{const a=(d.weight/total)*360,s=cum;cum+=a;const r=hov===i?84:80,rd=v=>(v*Math.PI)/180;const x1=100+r*Math.cos(rd(s)),y1=100+r*Math.sin(rd(s)),x2=100+r*Math.cos(rd(cum)),y2=100+r*Math.sin(rd(cum));return <path key={i} d={`M100,100 L${x1},${y1} A${r},${r} 0 ${a>180?1:0},1 ${x2},${y2} Z`} fill={C[i%C.length]} stroke="#f6eee1" strokeWidth="2.5" style={{transition:"all 0.25s",cursor:"pointer",filter:hov===i?`drop-shadow(0 0 8px ${C[i%C.length]}50)`:"none"}} onMouseEnter={()=>setHov(i)} onMouseLeave={()=>setHov(null)}/>})}<circle cx="100" cy="100" r="62" fill="#fffdf9" stroke="#e9ddc9" strokeWidth="1"/>{hov!==null?<><text x="100" y="97" textAnchor="middle" fill={C[hov%C.length]} fontSize="15" fontWeight="700" fontFamily="JetBrains Mono">{data[hov].ticker}</text><text x="100" y="114" textAnchor="middle" fill="#6f675c" fontSize="10" fontFamily="JetBrains Mono">{data[hov].weight}%</text></>:<><text x="100" y="99" textAnchor="middle" fill="#262421" fontSize="17" fontFamily="Instrument Serif, serif">Portfolio</text><text x="100" y="115" textAnchor="middle" fill="#8a8072" fontSize="9" fontFamily="JetBrains Mono">{data.length} holdings</text></>}</svg>; }
-function HeatMap({ finnhubKey }){
+function HeatMap(){
   const [cells, setCells] = useState(() => HEATMAP.map(h => ({ ...h, change: (Math.random() * 9 - 4.5).toFixed(2) })));
-  const fetchedRef = useRef(false);
+  // Real sector data via the server-side proxy — one cached call for every reader.
   useEffect(() => {
-    if (!finnhubKey || fetchedRef.current) return;
-    fetchedRef.current = true;
-    const cached = cacheGet("mb_heatmap", 5);
-    if (cached) { setCells(cached); return; }
-    async function load() {
-      const results = HEATMAP.map(h => ({ ...h, change: "0.00" }));
-      for (let i = 0; i < HEATMAP.length; i++) {
-        try {
-          const r = await fetch(`https://finnhub.io/api/v1/quote?symbol=${HEATMAP[i].ticker}&token=${finnhubKey}`);
-          const d = await r.json();
-          if (d.dp !== undefined) results[i].change = d.dp.toFixed(2);
-        } catch {}
-        if (i < HEATMAP.length - 1) await delay(120);
-      }
-      setCells(results);
-      cacheSet("mb_heatmap", results);
-    }
-    load();
-  }, [finnhubKey]);
-  // No personal key: try the server-side proxy for real sector data
-  useEffect(() => {
-    if (finnhubKey) return;
     let cancelled = false;
     (async () => {
       try {
@@ -540,7 +492,7 @@ function HeatMap({ finnhubKey }){
       } catch {}
     })();
     return () => { cancelled = true; };
-  }, [finnhubKey]);
+  }, []);
   const gc=c=>{const v=parseFloat(c);return v>3?"#15803d":v>1?"#1a9464":v>-1?"#6f675c":v>-3?"#b2342b":"#992d25"};
   return <div style={{display:"flex",flexWrap:"wrap",gap:5}}>{cells.map(c=><a key={c.ticker} href={`https://www.tradingview.com/symbols/${c.ticker}/`} target="_blank" rel="noopener noreferrer" style={{background:gc(c.change)+"15",border:`1px solid ${gc(c.change)}30`,borderRadius:4,padding:"12px 0",flex:`${c.w} 1 0`,minWidth:70,textAlign:"center",cursor:"pointer",transition:"all 0.3s cubic-bezier(0.4,0,0.2,1)",boxShadow:`0 2px 8px ${gc(c.change)}08`,textDecoration:"none"}} onMouseEnter={e=>{e.currentTarget.style.background=gc(c.change)+"30";e.currentTarget.style.transform="scale(1.05) translateY(-2px)";e.currentTarget.style.boxShadow=`0 8px 20px ${gc(c.change)}15`}} onMouseLeave={e=>{e.currentTarget.style.background=gc(c.change)+"15";e.currentTarget.style.transform="scale(1)";e.currentTarget.style.boxShadow=`0 2px 8px ${gc(c.change)}08`}}><div style={{fontSize:12,fontWeight:700,color:"#33302c",fontFamily:"'JetBrains Mono',monospace"}}>{c.ticker}</div><div style={{fontSize:11,color:gc(c.change),fontFamily:"'JetBrains Mono',monospace",marginTop:2,fontWeight:600}}>{parseFloat(c.change)>0?"+":""}{c.change}%</div><div style={{fontSize:8,color:"#8a8072",marginTop:3}}>{c.sector}</div></a>)}</div>;
 }
@@ -3083,12 +3035,11 @@ function PuzzleCorner() {
 }
 
 // ============ MAIN ============
-function SettingsPanel({ apiKey, setApiKey, finnhubKey, setFinnhubKey, desk, setDesk, open, onClose }) {
+function SettingsPanel({ apiKey, setApiKey, desk, setDesk, open, onClose }) {
   const [input, setInput] = useState(apiKey || "");
-  const [fhInput, setFhInput] = useState(finnhubKey || "");
   const [show, setShow] = useState(false);
-  const save = () => { const k = input.trim(); const fk = fhInput.trim(); setApiKey(k); setFinnhubKey(fk); localStorage.setItem("mb_api_key", k); localStorage.setItem("mb_finnhub_key", fk); onClose(); };
-  const clear = () => { setInput(""); setFhInput(""); setApiKey(""); setFinnhubKey(""); localStorage.removeItem("mb_api_key"); localStorage.removeItem("mb_finnhub_key"); };
+  const save = () => { const k = input.trim(); setApiKey(k); localStorage.setItem("mb_api_key", k); onClose(); };
+  const clear = () => { setInput(""); setApiKey(""); localStorage.removeItem("mb_api_key"); };
   if (!open) return null;
   return <div style={{position:"fixed",inset:0,background:"rgba(51,48,46,0.45)",backdropFilter:"blur(12px)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",animation:"fadeIn 0.15s"}} onClick={onClose}>
     <div className="settings-modal" style={{background:"#fffdf9",border:"1px solid #d8c8b0",borderRadius:16,width:480,padding:28,boxShadow:"0 32px 80px rgba(64,52,32,0.14)",maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
@@ -3104,11 +3055,6 @@ function SettingsPanel({ apiKey, setApiKey, finnhubKey, setFinnhubKey, desk, set
         </div>
         <p style={{fontSize:10,color:"#8a8072",marginTop:6,lineHeight:1.55}}>Optional. Unlocks the AI layer only: the morning &amp; close briefings, the 7 O'Clock Note, Explain It to the Desk, and the written read on Market Regime. Everything else — live prices, rates, the Fed Ledger, the wire, every drill — works with no key at all. Calls go straight from this browser to Anthropic and are billed to your account. Get a key at console.anthropic.com</p>
       </div>
-      <div style={{marginBottom:16}}>
-        <label style={{fontSize:10,color:"#8a8072",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:1.5,display:"block",marginBottom:6}}>Finnhub API Key</label>
-        <input type={show?"text":"password"} value={fhInput} onChange={e=>setFhInput(e.target.value)} placeholder="Finnhub API key..." style={{width:"100%",background:"#f6eee1",border:"1px solid #e9ddc9",borderRadius:8,padding:"10px 12px",color:"#33302c",fontSize:12,fontFamily:"'JetBrains Mono',monospace",outline:"none"}} />
-        <p style={{fontSize:10,color:"#8a8072",marginTop:6,lineHeight:1.55}}>Optional. The tape already runs on this site's own key for every reader — add yours only to pull quotes directly from your own Finnhub account instead. Free at finnhub.io</p>
-      </div>
       <div style={{marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,borderTop:"1px solid #efe4d2",paddingTop:16}}>
         <div>
           <label style={{fontSize:10,color:"#8a8072",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:1.5,display:"block",marginBottom:4}}>Desk Mode</label>
@@ -3116,7 +3062,7 @@ function SettingsPanel({ apiKey, setApiKey, finnhubKey, setFinnhubKey, desk, set
         </div>
         <button onClick={()=>setDesk(!desk)} style={{background:desk?"#0d6d5615":"#f6eee1",border:`1px solid ${desk?"#0d6d5630":"#e9ddc9"}`,borderRadius:8,padding:"8px 16px",color:desk?"#0d6d56":"#8a8072",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",fontWeight:600,flexShrink:0}}>{desk?"ON":"OFF"}</button>
       </div>
-      <p style={{fontSize:9,color:"#a2977f",marginBottom:16}}>Both keys stored locally in your browser only. Never committed to code.</p>
+      <p style={{fontSize:9,color:"#a2977f",marginBottom:16}}>Stored in this browser only — never sent to this site's server or committed to code.</p>
       <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
         <button onClick={clear} style={{background:"none",border:"1px solid #b2342b20",borderRadius:8,padding:"8px 16px",color:"#b2342b",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>Clear All</button>
         <button onClick={save} style={{background:"#0d6d5615",border:"1px solid #0d6d5630",borderRadius:8,padding:"8px 20px",color:"#0d6d56",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",fontWeight:600}}>Save</button>
@@ -3275,11 +3221,13 @@ function FedLedger() {
 
 export default function App() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem("mb_api_key") || "");
-  const [finnhubKey, setFinnhubKey] = useState(() => localStorage.getItem("mb_finnhub_key") || "");
+  // Quotes now always run through the server-side proxy, so a reader's own Finnhub key is no longer
+  // used anywhere. Drop any key a previous version stored rather than leaving it in localStorage.
+  useEffect(() => { try { localStorage.removeItem("mb_finnhub_key"); localStorage.removeItem("mb_prices"); localStorage.removeItem("mb_heatmap"); } catch {} }, []);
   const [desk, setDeskRaw] = useState(() => { try { return localStorage.getItem("mjb_desk") === "1"; } catch { return false; } });
   const setDesk = v => { setDeskRaw(v); try { localStorage.setItem("mjb_desk", v ? "1" : "0"); } catch {} };
   const [showSettings, setShowSettings] = useState(false);
-  const { prices, live: pricesLive, asOf } = usePrices(TICKERS, finnhubKey);
+  const { prices, live: pricesLive, asOf } = usePrices(TICKERS);
   const hist = useHistory(TICKERS.map(t => t.symbol).join(","));
   const [tab, setTabRaw] = useState(() => { try { const valid = ["home", "projects", "markets", "news", "recruiter"]; const path = window.location.pathname.replace(/\/+$/, "").slice(1); if (valid.includes(path)) return path; const q = new URLSearchParams(window.location.search).get("tab"); return valid.includes(q) ? q : "home"; } catch { return "home"; } }), [hovP, setHovP] = useState(null), [cmd, setCmd] = useState(false), [showHero, setShowHero] = useState(() => { try { return !sessionStorage.getItem("mb_intro"); } catch { return true; } }), [mounted, setMounted] = useState(false);
   const [seg, setSeg] = useState({ home: "dossier", projects: "portfolio", markets: "tape" });
@@ -3305,7 +3253,7 @@ export default function App() {
   return <div style={S.root}>
     {showHero && <Hero />}
     <Cmd open={cmd} onClose={() => setCmd(false)} onNav={(t, s) => { setTab(t); if (s) setSegment(t, s); }} />
-    <SettingsPanel apiKey={apiKey} setApiKey={setApiKey} finnhubKey={finnhubKey} setFinnhubKey={setFinnhubKey} desk={desk} setDesk={setDesk} open={showSettings} onClose={() => setShowSettings(false)} />
+    <SettingsPanel apiKey={apiKey} setApiKey={setApiKey} desk={desk} setDesk={setDesk} open={showSettings} onClose={() => setShowSettings(false)} />
     <div className="bg-fx" style={{ position: "fixed", top: -200, right: -100, width: 900, height: 900, background: "radial-gradient(circle,rgba(13,109,86,0.045) 0%,transparent 55%)", pointerEvents: "none", animation: "breathe 8s ease-in-out infinite" }} />
     <div className="bg-fx" style={{ position: "fixed", bottom: -100, left: -100, width: 700, height: 700, background: "radial-gradient(circle,rgba(31,90,158,0.035) 0%,transparent 55%)", pointerEvents: "none", animation: "breathe 10s ease-in-out infinite", animationDelay: "2s" }} />
     <div className="bg-fx" style={{ position: "fixed", top: "30%", right: -100, width: 600, height: 600, background: "radial-gradient(circle,rgba(109,84,158,0.025) 0%,transparent 55%)", pointerEvents: "none", animation: "breathe 12s ease-in-out infinite", animationDelay: "4s" }} />
@@ -3374,7 +3322,7 @@ export default function App() {
           </div>
         </div>
         <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
-          <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.2s both" }}><h2 style={S.cardTitle}><span style={{ color: "#b0741e" }}>◆</span> Sector Heatmap<Info text="Visual map of sector performance by GICS sector. Size reflects relative market cap weight. Green = positive, red = negative, yellow = flat. Click any ticker to open TradingView. Source: Finnhub.io real-time quotes (5-min cache)." link="https://www.investopedia.com/terms/s/sector-analysis.asp" linkLabel="Sector rotation & analysis" />{!pricesLive && <span style={{ marginLeft: "auto", fontSize: 8, padding: "3px 8px", borderRadius: 8, background: "rgba(176,116,30,0.08)", color: "#b0741e", border: "1px solid rgba(176,116,30,0.25)", letterSpacing: 1 }}>DEMO DATA</span>}</h2><HeatMap finnhubKey={finnhubKey} /><SourceLine>Source: Finnhub · cells sized by market-cap weight · 5-min cache</SourceLine></section>
+          <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.2s both" }}><h2 style={S.cardTitle}><span style={{ color: "#b0741e" }}>◆</span> Sector Heatmap<Info text="Visual map of sector performance by GICS sector. Size reflects relative market cap weight. Green = positive, red = negative, yellow = flat. Click any ticker to open TradingView. Source: Finnhub.io real-time quotes (5-min cache)." link="https://www.investopedia.com/terms/s/sector-analysis.asp" linkLabel="Sector rotation & analysis" />{!pricesLive && <span style={{ marginLeft: "auto", fontSize: 8, padding: "3px 8px", borderRadius: 8, background: "rgba(176,116,30,0.08)", color: "#b0741e", border: "1px solid rgba(176,116,30,0.25)", letterSpacing: 1 }}>DEMO DATA</span>}</h2><HeatMap /><SourceLine>Source: Finnhub · cells sized by market-cap weight · 5-min cache</SourceLine></section>
           <RegimeIndicator apiKey={apiKey} />
         </div>
         <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
