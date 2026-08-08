@@ -122,8 +122,20 @@ const SRC_URLS = { "Reuters": "https://reuters.com", "Bloomberg": "https://bloom
 
 // ============ API ============
 function apiHeaders(key) { return { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }; }
-function extractText(d) { if (d.error) { console.error("API error:", d.error); return null; } if (!d.content) { console.error("No content in response:", d); return null; } return d.content.filter(b => b.type === "text").map(b => b.text).join("").replace(/```json|```/g, "").trim(); }
-function extractTextMulti(d) { if (d.error) { console.error("API error:", d.error); return null; } if (!d.content) { console.error("No content in response:", d); return null; } return d.content.filter(b => b.type === "text").map(b => b.text).join("\n\n"); }
+// The last Anthropic error, in plain language, so a failed AI card can say WHY instead of just
+// "failed" — the actual reason (no credit, bad key, retired model) was previously console-only.
+let lastApiError = "";
+function apiErrorText(e) {
+  const m = String((e && e.message) || "").toLowerCase();
+  if (/credit balance|billing|insufficient|quota/.test(m)) return "your Anthropic account is out of credit";
+  if (/invalid x-api-key|authentication|unauthorized|permission/.test(m)) return "that API key was rejected — check it in Settings";
+  if (/rate|overloaded|too many/.test(m)) return "the API is rate-limited — wait a moment";
+  if (/model/.test(m)) return "that model is unavailable — the site's model ID may be retired";
+  return (e && e.message) ? String(e.message).slice(0, 90) : "the API call failed";
+}
+function noteApiResult(d) { lastApiError = d && d.error ? apiErrorText(d.error) : ""; }
+function extractText(d) { noteApiResult(d); if (d.error) { console.error("API error:", d.error); return null; } if (!d.content) { console.error("No content in response:", d); return null; } return d.content.filter(b => b.type === "text").map(b => b.text).join("").replace(/```json|```/g, "").trim(); }
+function extractTextMulti(d) { noteApiResult(d); if (d.error) { console.error("API error:", d.error); return null; } if (!d.content) { console.error("No content in response:", d); return null; } return d.content.filter(b => b.type === "text").map(b => b.text).join("\n\n"); }
 function delay(ms) { return new Promise(res => setTimeout(res, ms)); }
 
 // Global queue — ensures only ONE API call at a time with mandatory spacing
@@ -559,7 +571,7 @@ function RegimeIndicator({ apiKey }) {
     </div>}
     {!apiKey&&!data&&<p style={{color:"#8a8072",fontSize:12,textAlign:"center",padding:"12px 0",lineHeight:1.6}}>Live market regime analysis — tracks VIX, Fear & Greed Index, and 10Y Treasury yield in real time.<br/><span style={{fontSize:10,color:"#a2977f"}}>{fg?"Fear & Greed above is live for everyone — the full read is ":""}Powered by Claude AI + web search</span></p>}
     {apiKey&&!data&&!loading&&!error&&<p style={{color:"#8a8072",fontSize:12,textAlign:"center",padding:"8px 0"}}>Click Load to fetch VIX, Fear/Greed, and 10Y yield</p>}
-    {error&&!loading&&apiKey&&<p style={{color:"#b2342b",fontSize:12,textAlign:"center",padding:"8px 0"}}>Failed to load — click Load to retry</p>}
+    {error&&!loading&&apiKey&&<p style={{color:"#b2342b",fontSize:12,textAlign:"center",padding:"8px 0"}}>Failed to load — {lastApiError||"click Load to retry"}</p>}
     {loading&&<div style={{textAlign:"center",padding:"12px 0"}}><div style={{display:"inline-flex",gap:4}}>{[0,1,2].map(i=><div key={i} style={{width:5,height:5,borderRadius:3,background:"#b3551d",animation:"pulse 1s infinite",animationDelay:`${i*0.2}s`}}/>)}</div></div>}
     {data&&<div>
       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
@@ -616,7 +628,7 @@ function EarningsCal({ apiKey }) {
       </div>}
     </div>
     {!data&&!loading&&<p style={{color:"#8a8072",fontSize:12,textAlign:"center",padding:"12px 0",lineHeight:1.6}}>Upcoming earnings for the names on the watchlist, with consensus EPS.<br/><span style={{fontSize:10,color:"#a2977f"}}>Live via Finnhub in production</span></p>}
-    {error&&!loading&&apiKey&&<p style={{color:"#b2342b",fontSize:12,textAlign:"center",padding:"8px 0"}}>AI refresh failed — click ↻ to retry</p>}
+    {error&&!loading&&apiKey&&<p style={{color:"#b2342b",fontSize:12,textAlign:"center",padding:"8px 0"}}>AI refresh failed — {lastApiError||"click ↻ to retry"}</p>}
     {loading&&<div style={{textAlign:"center",padding:"12px 0"}}><div style={{display:"inline-flex",gap:4}}>{[0,1,2].map(i=><div key={i} style={{width:5,height:5,borderRadius:3,background:"#1f5a9e",animation:"pulse 1s infinite",animationDelay:`${i*0.2}s`}}/>)}</div></div>}
     {data&&data.length===0&&<p style={{color:"#8a8072",fontSize:12,textAlign:"center",padding:"10px 0",lineHeight:1.6}}>No watchlist names report in the next two weeks.</p>}
     {data&&data.length>0&&<div style={{display:"flex",flexDirection:"column",gap:4}}>{data.map((e,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 10px",borderRadius:6,background:i%2===0?"#f6eee150":"transparent"}}>
@@ -671,7 +683,7 @@ function EconCalendar({ apiKey }) {
       </div>}
     </div>
     {!data&&!loading&&<p style={{color:"#8a8072",fontSize:12,textAlign:"center",padding:"12px 0",lineHeight:1.6}}>Upcoming FOMC, CPI, NFP, GDP, and PPI releases with impact ratings.<br/><span style={{fontSize:10,color:"#a2977f"}}>From the official Fed / BLS / BEA schedules</span></p>}
-    {error&&!loading&&apiKey&&<p style={{color:"#b2342b",fontSize:12,textAlign:"center",padding:"8px 0"}}>AI refresh failed — click ↻ to retry</p>}
+    {error&&!loading&&apiKey&&<p style={{color:"#b2342b",fontSize:12,textAlign:"center",padding:"8px 0"}}>AI refresh failed — {lastApiError||"click ↻ to retry"}</p>}
     {loading&&<div style={{textAlign:"center",padding:"12px 0"}}><div style={{display:"inline-flex",gap:4}}>{[0,1,2].map(i=><div key={i} style={{width:5,height:5,borderRadius:3,background:"#990f3d",animation:"pulse 1s infinite",animationDelay:`${i*0.2}s`}}/>)}</div></div>}
     {data&&<div style={{display:"flex",flexDirection:"column",gap:4}}>{data.map((e,i)=><div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 10px",borderRadius:8,background:i%2===0?"rgba(64,52,32,0.04)":"transparent",transition:"all 0.2s"}} onMouseEnter={ev=>ev.currentTarget.style.background="rgba(13,109,86,0.03)"} onMouseLeave={ev=>ev.currentTarget.style.background=i%2===0?"rgba(64,52,32,0.04)":"transparent"}>
       <div style={{display:"flex",alignItems:"center",gap:10}}>
