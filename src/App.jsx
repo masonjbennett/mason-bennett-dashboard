@@ -3091,7 +3091,7 @@ function SettingsPanel({ apiKey, setApiKey, finnhubKey, setFinnhubKey, desk, set
   const clear = () => { setInput(""); setFhInput(""); setApiKey(""); setFinnhubKey(""); localStorage.removeItem("mb_api_key"); localStorage.removeItem("mb_finnhub_key"); };
   if (!open) return null;
   return <div style={{position:"fixed",inset:0,background:"rgba(51,48,46,0.45)",backdropFilter:"blur(12px)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",animation:"fadeIn 0.15s"}} onClick={onClose}>
-    <div className="settings-modal" style={{background:"#fffdf9",border:"1px solid #d8c8b0",borderRadius:16,width:480,padding:28,boxShadow:"0 32px 80px rgba(64,52,32,0.14)"}} onClick={e=>e.stopPropagation()}>
+    <div className="settings-modal" style={{background:"#fffdf9",border:"1px solid #d8c8b0",borderRadius:16,width:480,padding:28,boxShadow:"0 32px 80px rgba(64,52,32,0.14)",maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
         <h2 style={{color:"#33302c",fontSize:18,fontFamily:"'Instrument Serif',serif"}}>Settings</h2>
         <button onClick={onClose} style={{background:"none",border:"none",color:"#8a8072",fontSize:18,cursor:"pointer"}}>×</button>
@@ -3102,17 +3102,17 @@ function SettingsPanel({ apiKey, setApiKey, finnhubKey, setFinnhubKey, desk, set
           <input type={show?"text":"password"} value={input} onChange={e=>setInput(e.target.value)} placeholder="sk-ant-..." style={{flex:1,background:"#f6eee1",border:"1px solid #e9ddc9",borderRadius:8,padding:"10px 12px",color:"#33302c",fontSize:12,fontFamily:"'JetBrains Mono',monospace",outline:"none"}} />
           <button onClick={()=>setShow(!show)} style={{background:"#f6eee1",border:"1px solid #e9ddc9",borderRadius:8,padding:"8px 12px",color:"#8a8072",fontSize:11,cursor:"pointer"}}>{show?"Hide":"Show"}</button>
         </div>
-        <p style={{fontSize:10,color:"#8a8072",marginTop:6}}>Powers AI briefings, news feed, market regime. Get a key at console.anthropic.com</p>
+        <p style={{fontSize:10,color:"#8a8072",marginTop:6,lineHeight:1.55}}>Optional. Unlocks the AI layer only: the morning &amp; close briefings, the 7 O'Clock Note, Explain It to the Desk, and the written read on Market Regime. Everything else — live prices, rates, the Fed Ledger, the wire, every drill — works with no key at all. Calls go straight from this browser to Anthropic and are billed to your account. Get a key at console.anthropic.com</p>
       </div>
       <div style={{marginBottom:16}}>
         <label style={{fontSize:10,color:"#8a8072",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:1.5,display:"block",marginBottom:6}}>Finnhub API Key</label>
         <input type={show?"text":"password"} value={fhInput} onChange={e=>setFhInput(e.target.value)} placeholder="Finnhub API key..." style={{width:"100%",background:"#f6eee1",border:"1px solid #e9ddc9",borderRadius:8,padding:"10px 12px",color:"#33302c",fontSize:12,fontFamily:"'JetBrains Mono',monospace",outline:"none"}} />
-        <p style={{fontSize:10,color:"#8a8072",marginTop:6}}>Powers real-time stock prices. Free at finnhub.io — sign up and copy your key.</p>
+        <p style={{fontSize:10,color:"#8a8072",marginTop:6,lineHeight:1.55}}>Optional. The tape already runs on this site's own key for every reader — add yours only to pull quotes directly from your own Finnhub account instead. Free at finnhub.io</p>
       </div>
       <div style={{marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,borderTop:"1px solid #efe4d2",paddingTop:16}}>
         <div>
           <label style={{fontSize:10,color:"#8a8072",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:1.5,display:"block",marginBottom:4}}>Desk Mode</label>
-          <p style={{fontSize:10,color:"#8a8072",lineHeight:1.5}}>The editor's private study ledgers — review docket, errata, edition streak. Stored in this browser only.</p>
+          <p style={{fontSize:10,color:"#8a8072",lineHeight:1.55}}>The editor's own tools. Opens <b style={{fontWeight:600}}>My Book</b> in Markets — the paper-trading ledger, calls filed before the bell and graded against the close, price alerts, the morning and late editions — and adds the review docket, errata and syllabus to <b style={{fontWeight:600}}>Prep</b>. Everything stays in this browser; none of it is ever published.</p>
         </div>
         <button onClick={()=>setDesk(!desk)} style={{background:desk?"#0d6d5615":"#f6eee1",border:`1px solid ${desk?"#0d6d5630":"#e9ddc9"}`,borderRadius:8,padding:"8px 16px",color:desk?"#0d6d56":"#8a8072",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",fontWeight:600,flexShrink:0}}>{desk?"ON":"OFF"}</button>
       </div>
