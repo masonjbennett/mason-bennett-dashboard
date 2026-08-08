@@ -17,6 +17,11 @@
     <meta name="twitter:image" content="https://masonjbennett.com/og-image.png" />
     <meta name="theme-color" content="#faf3ea" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="MJB" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <link rel="canonical" href="https://masonjbennett.com" />
     <script type="application/ld+json">
     {
@@ -36,6 +41,11 @@
     <script>
       if (/(^|\.)masonjbennett\.com$|\.vercel\.app$/.test(location.hostname)) {
         var vs = document.createElement("script"); vs.defer = true; vs.src = "/_vercel/insights/script.js"; document.head.appendChild(vs);
+      }
+      // Register the worker on the real site only — never on localhost, where a cached shell
+      // would fight the dev server. Registration is deferred to load so it never blocks paint.
+      if ("serviceWorker" in navigator && /(^|\.)masonjbennett\.com$/.test(location.hostname)) {
+        window.addEventListener("load", function () { navigator.serviceWorker.register("/sw.js").catch(function () {}); });
       }
     </script>
     <style>

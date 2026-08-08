@@ -85,7 +85,34 @@ const ANCHOR_SEG = {
   "waterfall-room": ["projects", "prep"], "two-minute-tape": ["projects", "prep"], "redline": ["projects", "prep"],
   "lexicon": ["projects", "prep"], "bias-ledger": ["projects", "prep"], "name-that-regime": ["projects", "prep"], "explain-desk": ["projects", "prep"], "query-drill": ["projects", "prep"],
   "curve-time-machine": ["markets", "tape"], "drawdown-meter": ["markets", "tape"], "fed-ledger": ["markets", "tape"],
-  "standing-wire": ["news", null], "filings-wire": ["news", null], "reading-ledger": ["news", null],
+  "watchlist": ["markets", "tape"], "rates-page": ["markets", "tape"], "econ-calendar": ["markets", "tape"], "earnings-calendar": ["markets", "tape"],
+  "deal-sheet": ["projects", "portfolio"], "daily-drill": ["projects", "prep"],
+  "standing-wire": ["news", null], "filings-wire": ["news", null], "reading-ledger": ["news", null], "proofs-tray": ["news", null],
+};
+// House codes — the Bloomberg-style mnemonics the "/" lookup answers to. Typed input is matched
+// against these FIRST (the terminal idiom: a function code beats a ticker); anything unmatched
+// falls through to the quote lookup, so real symbols still work.
+const HOUSE_CODES = {
+  WCH: { id: "watchlist", label: "Watchlist" },
+  RTS: { id: "rates-page", label: "The Rates Page" },
+  ECO: { id: "econ-calendar", label: "Economic calendar" },
+  ERN: { id: "earnings-calendar", label: "Earnings calendar" },
+  CRV: { id: "curve-time-machine", label: "Curve Time Machine" },
+  FED: { id: "fed-ledger", label: "The Fed Ledger" },
+  DDM: { id: "drawdown-meter", label: "Drawdown Meter" },
+  WIRE: { id: "standing-wire", label: "The Standing Wire" },
+  FIL: { id: "filings-wire", label: "Filings Wire" },
+  DRL: { id: "daily-drill", label: "The Daily Drill" },
+  PZ: { id: "puzzle-corner", label: "Puzzle Corner" },
+  TEC: { id: "technicals-desk", label: "Technicals Desk" },
+  LEX: { id: "lexicon", label: "The Lexicon" },
+  SQL: { id: "query-drill", label: "The Query Drill" },
+  REG: { id: "name-that-regime", label: "Name That Regime" },
+  DEAL: { id: "deal-sheet", label: "Deal Sheet" },
+  PREP: { tab: "projects", seg: "prep", label: "Prep floor" },
+  BOOK: { tab: "markets", seg: "book", label: "My Book" },
+  NEWS: { tab: "news", label: "News & Briefings" },
+  HOME: { tab: "home", label: "Home" },
 };
 const EXPERIENCE = [
   { role: "M.S. Finance", org: "Walton College of Business", date: "2025–2026", type: "edu", detail: "4.0 GPA · Advanced Financial Modeling, Advanced Corporate Finance, Alternative Investments, New Venture (Private Equity), Financial Data Analytics II" },
@@ -181,10 +208,12 @@ function cacheGet(key, maxAgeMin = 30) { try { const c = JSON.parse(localStorage
 function cacheSet(key, data) { try { localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })); } catch {} }
 
 async function fetchBriefing(type, key, forceRefresh = false) {
-  const p = { morning: `Senior equity research analyst morning briefing. Search latest market news. Cover: 1) Overnight global markets 2) Macro/Fed developments 3) Pre-market sector moves 4) M&A/deals 5) What to watch today.\n${SRC_GUIDE}\nCite sources inline [Reuters]. End with ---SOURCES--- then JSON: [{"name":"...","url":"..."}]. Plain paragraphs, no markdown.`, close: `Senior equity research analyst close briefing. Search today's results. Cover: 1) Index closes with % 2) Session drivers 3) Stock movers 4) After-hours 5) Tomorrow watch.\n${SRC_GUIDE}\nCite inline [Reuters]. End with ---SOURCES--- then JSON: [{"name":"...","url":"..."}]. Plain paragraphs, no markdown.` };
+  // The briefing also emits flashcards for the Proofs Tray in the SAME call — no extra API spend.
+  const CARDS_GUIDE = `\nThen ---CARDS--- then JSON: [{"q":"...","a":"..."}] — 2-3 flashcards drawn ONLY from facts stated in the briefing above. Each q is a specific, checkable question (a level, a print, a deal, a driver); each a is one short factual sentence. No opinions or forecasts.`;
+  const p = { morning: `Senior equity research analyst morning briefing. Search latest market news. Cover: 1) Overnight global markets 2) Macro/Fed developments 3) Pre-market sector moves 4) M&A/deals 5) What to watch today.\n${SRC_GUIDE}\nCite sources inline [Reuters]. End with ---SOURCES--- then JSON: [{"name":"...","url":"..."}].${CARDS_GUIDE} Plain paragraphs, no markdown.`, close: `Senior equity research analyst close briefing. Search today's results. Cover: 1) Index closes with % 2) Session drivers 3) Stock movers 4) After-hours 5) Tomorrow watch.\n${SRC_GUIDE}\nCite inline [Reuters]. End with ---SOURCES--- then JSON: [{"name":"...","url":"..."}].${CARDS_GUIDE} Plain paragraphs, no markdown.` };
   if (!key) return null;
   if (!forceRefresh) { const cached = cacheGet(`mb_brief_${type}`, 60); if (cached) return cached; }
-  try { const d = await callAPI(key, { model: "claude-sonnet-5", max_tokens: 4000, tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 6 }], messages: [{ role: "user", content: p[type] }] }); const raw = extractTextMulti(d); if (!raw) return null; let text = raw, sources = []; const sep = raw.indexOf("---SOURCES---"); if (sep !== -1) { text = raw.slice(0, sep).trim(); try { const srcRaw = raw.slice(sep + 13).trim().replace(/```json|```/g, "").trim(); const srcMatch = srcRaw.match(/\[[\s\S]*\]/); sources = JSON.parse(srcMatch ? srcMatch[0] : srcRaw); } catch {} } if (!sources.length) { const m = text.match(/\[([A-Z][A-Za-z\s\.&']+?)\]/g); if (m) sources = [...new Set(m.map(x => x.slice(1, -1).trim()))].map(n => ({ name: n, url: SRC_URLS[n] || "#" })); } const result = { text, sources }; cacheSet(`mb_brief_${type}`, result); return result; } catch (e) { console.error("Briefing error:", e); return null; }
+  try { const d = await callAPI(key, { model: "claude-sonnet-5", max_tokens: 4000, tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 6 }], messages: [{ role: "user", content: p[type] }] }); const raw = extractTextMulti(d); if (!raw) return null; let sources = [], cards = []; const parseArr = s => { try { const t = s.trim().replace(/```json|```/g, "").trim(); const m = t.match(/\[[\s\S]*\]/); return JSON.parse(m ? m[0] : t); } catch { return null; } }; const cardSep = raw.indexOf("---CARDS---"); const head = cardSep !== -1 ? raw.slice(0, cardSep) : raw; if (cardSep !== -1) { const parsed = parseArr(raw.slice(cardSep + 11)); if (Array.isArray(parsed)) cards = parsed.filter(c => c && c.q && c.a).slice(0, 3).map(c => ({ q: String(c.q).trim().slice(0, 220), a: String(c.a).trim().slice(0, 320) })); } let text = head; const sep = head.indexOf("---SOURCES---"); if (sep !== -1) { text = head.slice(0, sep).trim(); const s = parseArr(head.slice(sep + 13)); if (Array.isArray(s)) sources = s; } else text = head.trim(); if (!sources.length) { const m = text.match(/\[([A-Z][A-Za-z\s\.&']+?)\]/g); if (m) sources = [...new Set(m.map(x => x.slice(1, -1).trim()))].map(n => ({ name: n, url: SRC_URLS[n] || "#" })); } const result = { text, sources, cards }; cacheSet(`mb_brief_${type}`, result); return result; } catch (e) { console.error("Briefing error:", e); return null; }
 }
 async function verifyBriefing(t, key) {
   if (!key) return null;
@@ -432,15 +461,19 @@ function MacroTape() {
     </span>)}
   </div>;
 }
-function QuoteLookup() {
+function QuoteLookup({ onCode }) {
   const [q, setQ] = useState("");
   const [res, setRes] = useState(null);
   const [busy, setBusy] = useState(false);
   const [news, setNews] = useState(null);
+  const [showCodes, setShowCodes] = useState(false);
   const ref = useRef(null);
   useEffect(() => { const h = e => { if (e.key === "/" && !e.target.closest("input") && !e.target.closest("textarea")) { e.preventDefault(); ref.current?.focus(); } }; window.addEventListener("keydown", h); return () => window.removeEventListener("keydown", h); }, []);
   const go = async () => {
     const sym = q.trim().toUpperCase();
+    // House code first — the terminal idiom. Unmatched input falls through to the quote lookup.
+    const code = HOUSE_CODES[sym];
+    if (code && onCode) { onCode(code); setQ(""); setRes(null); setNews(null); return; }
     if (!/^[A-Z.]{1,10}$/.test(sym)) return;
     setBusy(true); setRes(null); setNews(null);
     try { const r = await fetch(`/api/quotes?symbols=${sym}`); const d = await r.json(); setRes(d[sym] && d[sym].c ? { sym, ...d[sym] } : { sym, none: true }); } catch { setRes({ sym, none: true }); }
@@ -451,8 +484,9 @@ function QuoteLookup() {
   return <div style={{ marginBottom: 22 }}>
     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontFamily: "'JetBrains Mono',monospace" }}>
       <span style={{ fontSize: 9, color: "#8a8072", letterSpacing: 2 }}>QUOTE</span>
-      <input ref={ref} value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && go()} placeholder="Any US ticker — press / to focus" style={{ ...S.input, width: 250, fontSize: 11, fontFamily: "'JetBrains Mono',monospace", padding: "7px 12px" }} />
+      <input ref={ref} value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && go()} placeholder="Ticker or house code — press / to focus" style={{ ...S.input, width: 265, fontSize: 11, fontFamily: "'JetBrains Mono',monospace", padding: "7px 12px" }} />
       <button onClick={go} disabled={busy} style={{ ...S.btn, fontSize: 10, letterSpacing: 2, padding: "7px 16px", opacity: busy ? 0.5 : 1 }}>GO</button>
+      <button onClick={() => setShowCodes(s => !s)} title="House codes" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 8.5, color: showCodes ? "#0d6d56" : "#a2977f", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, textTransform: "uppercase", padding: 0 }}>{showCodes ? "hide codes" : "codes"}</button>
       {res && (res.none
         ? <span style={{ fontSize: 11, color: "#8a8072" }}>{res.sym} – no quote</span>
         : <span style={{ display: "inline-flex", gap: 12, alignItems: "center", fontSize: 12 }}>
@@ -463,6 +497,9 @@ function QuoteLookup() {
             {res.pc > 0 && <span style={{ fontSize: 9, color: "#8a8072" }}>PREV {res.pc.toFixed(2)}</span>}
           </span>)}
     </div>
+    {showCodes && <div style={{ margin: "10px 0 0 52px", maxWidth: 660, display: "flex", flexWrap: "wrap", gap: "5px 8px" }}>
+      {Object.entries(HOUSE_CODES).map(([c, d]) => <button key={c} onClick={() => { if (onCode) onCode(d); setQ(""); }} title={d.label} style={{ background: "rgba(255,253,249,0.85)", border: "1px solid #e9ddc9", borderRadius: 6, padding: "3px 8px", cursor: "pointer", fontFamily: "'JetBrains Mono',monospace", fontSize: 9, color: "#6f675c", letterSpacing: 0.5 }} onMouseEnter={e => { e.currentTarget.style.borderColor = "#0d6d5640"; e.currentTarget.style.color = "#0d6d56"; }} onMouseLeave={e => { e.currentTarget.style.borderColor = "#e9ddc9"; e.currentTarget.style.color = "#6f675c"; }}><b style={{ fontWeight: 700, color: "#0d6d56" }}>{c}</b> <span style={{ opacity: 0.8 }}>{d.label}</span></button>)}
+    </div>}
     {news && res && !res.none && news.symbol === res.sym && <div style={{ margin: "8px 0 0 52px", maxWidth: 640 }}>
       {news.items.slice(0, 3).map((n, i) => <a key={i} href={n.url} target="_blank" rel="noopener noreferrer" style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "3px 0", textDecoration: "none" }} onMouseEnter={e => e.currentTarget.style.opacity = "0.7"} onMouseLeave={e => e.currentTarget.style.opacity = "1"}>
         <span style={{ fontSize: 8, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", flexShrink: 0, minWidth: 38 }}>{n.datetime ? new Date(n.datetime * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : ""}</span>
@@ -571,7 +608,7 @@ function EarningsCal({ apiKey }) {
     })();
     return () => { c = true; };
   }, [apiKey]);
-  return <div style={{...S.card, animation:"fadeUp 0.5s ease 0.32s both"}}>
+  return <div id="earnings-calendar" style={{...S.card, animation:"fadeUp 0.5s ease 0.32s both"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:data?12:0}}>
       <h2 style={S.cardTitle}><span style={{color:"#1f5a9e"}}>◆</span> Earnings Calendar<Info text="Upcoming quarterly earnings reports for major companies. BMO = Before Market Open, AMC = After Market Close. Est EPS is the consensus analyst estimate. Source: Earnings data aggregated via AI web search from Yahoo Finance, Nasdaq, and MarketWatch." link="https://www.investopedia.com/terms/e/earningsreport.asp" linkLabel="Understanding earnings reports" /></h2>
       {apiKey && <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -626,7 +663,7 @@ function EconCalendar({ apiKey }) {
     })();
     return () => { c = true; };
   }, [apiKey]);
-  return <div style={{...S.card, animation:"fadeUp 0.5s ease 0.36s both"}}>
+  return <div id="econ-calendar" style={{...S.card, animation:"fadeUp 0.5s ease 0.36s both"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:data?12:0}}>
       <h2 style={S.cardTitle}><span style={{color:"#990f3d"}}>◆</span> Economic Calendar<Info text="Upcoming economic data releases — Fed rate decisions (FOMC), inflation (CPI/PPI), employment (NFP), GDP, and retail sales. Red dot = high market impact. Source: Federal Reserve, BLS, BEA, and Census Bureau schedules via AI web search." link="https://www.investopedia.com/terms/e/economic-calendar.asp" linkLabel="Economic indicators explained" /></h2>
       {apiKey && <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -1047,7 +1084,7 @@ function Cmd({open,onClose,onNav}){const[q,setQ]=useState("");const ref=useRef()
 
 // ============ BRIEFINGS (compact) ============
 function Briefings({apiKey}){const[morning,setMorning]=useState(null),[close,setClose]=useState(null),[vM,setVM]=useState(null),[vC,setVC]=useState(null),[swM,setSwM]=useState(null),[swC,setSwC]=useState(null),[lM,setLM]=useState(false),[lC,setLC]=useState(false),[vLM,setVLM]=useState(false),[vLC,setVLC]=useState(false),[swLM,setSwLM]=useState(false),[swLC,setSwLC]=useState(false),[tM,setTM]=useState(null),[tC,setTC]=useState(null),[showCl,setShowCl]=useState(false),[showSW,setShowSW]=useState(true),[err,setErr]=useState(""),[tab,setTab]=useState(()=>new Date().getHours()>=16?"close":"morning");const sugg=new Date().getHours()>=16?"close":"morning";
-const gen=async(type,force=false)=>{if(!apiKey){setErr("Add your Anthropic API key in Settings to generate briefings.");return;}const sL=type==="morning"?setLM:setLC,sD=type==="morning"?setMorning:setClose,sT=type==="morning"?setTM:setTC,sV=type==="morning"?setVM:setVC,sSW=type==="morning"?setSwM:setSwC,sVL=type==="morning"?setVLM:setVLC,sSWL=type==="morning"?setSwLM:setSwLC;setErr("");sL(true);sV(null);sSW(null);const r=await fetchBriefing(type,apiKey,force);if(r){sD(r);sT(new Date())}else setErr("The wire didn't answer — check your key and connection, then try again.");sL(false);if(r?.text){sVL(true);const v=await verifyBriefing(r.text,apiKey);if(v)sV(v);sVL(false);sSWL(true);const sw=await fetchSoWhat(r.text,type,apiKey);if(sw)sSW(sw);sSWL(false)}};
+const gen=async(type,force=false)=>{if(!apiKey){setErr("Add your Anthropic API key in Settings to generate briefings.");return;}const sL=type==="morning"?setLM:setLC,sD=type==="morning"?setMorning:setClose,sT=type==="morning"?setTM:setTC,sV=type==="morning"?setVM:setVC,sSW=type==="morning"?setSwM:setSwC,sVL=type==="morning"?setVLM:setVLC,sSWL=type==="morning"?setSwLM:setSwLC;setErr("");sL(true);sV(null);sSW(null);const r=await fetchBriefing(type,apiKey,force);if(r){sD(r);sT(new Date());queueProofs(r.cards,type)}else setErr("The wire didn't answer — check your key and connection, then try again.");sL(false);if(r?.text){sVL(true);const v=await verifyBriefing(r.text,apiKey);if(v)sV(v);sVL(false);sSWL(true);const sw=await fetchSoWhat(r.text,type,apiKey);if(sw)sSW(sw);sSWL(false)}};
 const data=tab==="morning"?morning:close,loading=tab==="morning"?lM:lC,verifying=tab==="morning"?vLM:vLC,verify=tab==="morning"?vM:vC,soWhat=tab==="morning"?swM:swC,swLoad=tab==="morning"?swLM:swLC,time=tab==="morning"?tM:tC;
 const SC={verified:"#0d6d56",minor_discrepancy:"#b0741e",unverified:"#b2342b"},SI={verified:"✓",minor_discrepancy:"~",unverified:"✗"},SL={verified:"Verified",minor_discrepancy:"Discrepancy",unverified:"Unverified"};
 return <div style={{...S.card,background:"linear-gradient(135deg,#f6eee1,#fdf8f0,#f6eee1)",border:"1px solid rgba(13,109,86,0.1)",boxShadow:"0 12px 48px rgba(64,52,32,0.1), 0 0 40px rgba(13,109,86,0.03), inset 0 1px 0 rgba(255,255,255,0.6)",position:"relative",overflow:"hidden"}}><div style={{position:"absolute",top:-40,right:-40,width:200,height:200,background:`radial-gradient(circle,${tab==="morning"?"rgba(176,116,30,0.03)":"rgba(90,95,184,0.05)"} 0%,transparent 70%)`,pointerEvents:"none"}}/>
@@ -1565,6 +1602,26 @@ function upsertCard(id, front, back, from, q) {
   lsSet("mjb_srs", cards);
 }
 function recordEdition(via) { const ed = lsGet("mjb_editions", {}); const t = todayISO(); if (!ed[t]) { ed[t] = { via }; lsSet("mjb_editions", ed); } }
+// The Proofs Tray — cards the briefing proposed, held for a human accept/reject before they can
+// ever reach the review deck. LLM-written cards are wrong often enough that an auto-file would
+// quietly poison spaced repetition, so nothing here is filed without a click.
+function queueProofs(cards, from) {
+  if (!Array.isArray(cards) || !cards.length) return;
+  const tray = lsGet("mjb_proofs", []);
+  const seen = new Set(tray.map(c => c.q.toLowerCase()));
+  let added = 0;
+  for (const c of cards) {
+    const q = String(c.q || "").trim(), a = String(c.a || "").trim();
+    if (!q || !a || seen.has(q.toLowerCase())) continue;
+    seen.add(q.toLowerCase());
+    tray.unshift({ q, a, from, d: todayISO() });
+    added++;
+  }
+  if (!added) return;
+  if (tray.length > 40) tray.length = 40;
+  lsSet("mjb_proofs", tray);
+  learnPing();
+}
 function recordSelfGrade({ src, qid, grade, front, back, given }) {
   const a = lsGet("mjb_attempts", []); a.push({ d: todayISO(), src, qid, ok: grade !== "missed" }); if (a.length > 2000) a.splice(0, a.length - 2000); lsSet("mjb_attempts", a);
   if (grade === "missed") {
@@ -2351,6 +2408,42 @@ function EditionStrip() {
   </div>;
 }
 
+// The Proofs Tray — today's briefing proposes a few cards; you file or spike each one. Filed cards
+// enter the same SM-2 deck as every other drill, so the deck refreshes itself from the news.
+function ProofsTray() {
+  useLearnTick();
+  const [flash, setFlash] = useState("");
+  const tray = lsGet("mjb_proofs", []);
+  const drop = i => { const t = lsGet("mjb_proofs", []); t.splice(i, 1); lsSet("mjb_proofs", t); learnPing(); };
+  const file = i => {
+    const t = lsGet("mjb_proofs", []); const c = t[i];
+    if (!c) return;
+    // q=3 ("shaky") so a fresh card is due tomorrow rather than being treated as already known.
+    upsertCard(`proof:${c.d}:${c.q.slice(0, 40)}`, c.q, c.a, "proof", 3);
+    drop(i);
+    setFlash("Filed to the review docket."); setTimeout(() => setFlash(""), 2200);
+  };
+  if (!tray.length) return <div>
+    <p style={{ fontSize: 12, color: "#8a8072", lineHeight: 1.7 }}>Nothing awaiting review. When a briefing runs it proposes two or three cards from the day's facts — they wait here until you file or spike them, and only filed cards reach the review docket.</p>
+  </div>;
+  return <div>
+    {flash && <div style={{ fontSize: 10, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, marginBottom: 10 }}>{flash}</div>}
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {tray.map((c, i) => <div key={`${c.d}-${i}-${c.q.slice(0, 12)}`} style={{ border: "1px solid #e9ddc9", borderRadius: 8, padding: "11px 13px", background: "#fffdf9" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline", marginBottom: 5 }}>
+          <span style={{ fontSize: 8, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, textTransform: "uppercase" }}>{c.from === "close" ? "Late edition" : "Morning"} · {c.d}</span>
+          <span style={{ display: "flex", gap: 10, flexShrink: 0 }}>
+            <button onClick={() => file(i)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 9, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, textTransform: "uppercase", padding: 0 }}>File</button>
+            <button onClick={() => drop(i)} title="Kill the card" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 9, color: "#b2342b", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, textTransform: "uppercase", padding: 0 }}>Spike</button>
+          </span>
+        </div>
+        <div style={{ fontSize: 12.5, color: "#33302c", lineHeight: 1.55, marginBottom: 4 }}>{c.q}</div>
+        <div style={{ fontSize: 11.5, color: "#6f675c", lineHeight: 1.55 }}>{c.a}</div>
+      </div>)}
+    </div>
+    <p style={{ fontSize: 9, color: "#a2977f", marginTop: 12, lineHeight: 1.6 }}>Written by the briefing from the day's own reporting — read each one before filing it. Nothing here enters the deck on its own.</p>
+  </div>;
+}
 function ReviewDocket() {
   useLearnTick();
   const [rev, setRev] = useState(false);
@@ -3300,10 +3393,10 @@ export default function App() {
         {seg.markets === "tape" && <>
         <MacroTape />
         <CrossAssetRows />
-        <QuoteLookup />
+        <QuoteLookup onCode={d => { if (d.id) goAnchor(d.tab || "markets", d.id); else { setTab(d.tab); if (d.seg) setSegment(d.tab, d.seg); } }} />
         <div style={{ marginBottom: 24, animation: "fadeUp 0.5s ease both", padding: "20px 24px", background: "linear-gradient(135deg, rgba(255,253,249,0.9), rgba(251,245,236,0.7))", borderRadius: 10, border: "1px solid #e3d5bf", boxShadow: "0 4px 20px rgba(64,52,32,0.07)" }}><Clock /></div>
         <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
-          <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.08s both" }}>
+          <section id="watchlist" style={{ ...S.card, animation: "fadeUp 0.5s ease 0.08s both" }}>
             <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> Watchlist<Info text="Live market prices grouped by signal: indices (SPY, QQQ, IWM), mega-cap movers (NVDA, AAPL, MSFT, JPM, TSLA), and macro indicators (TLT for rates, GLD for risk-off, UUP for dollar). Click any ticker for TradingView. Source: Finnhub.io" />{apiKey && <Info text={"Signal cheat sheet: TLT drops + SPY flat \u2192 rates rising, deal flow slows. GLD + TLT both spike \u2192 risk-off, market scared. IWM diverges from SPY \u2192 small-cap sentiment shifting (PE pipeline signal). QQQ outpaces SPY \u2192 growth/tech rotation. JPM moves on earnings \u2192 read-through on credit conditions and IB deal activity. UUP rising \u2192 dollar strengthening, pressure on international deals and EM. NVDA guidance \u2192 AI capex cycle indicator, affects entire tech sector. TLT rising + SPY rising \u2192 goldilocks (rates falling, equities up)."} linkLabel="TradingView" link="https://www.tradingview.com" />}{!pricesLive && <span style={{ marginLeft: "auto", fontSize: 8, padding: "3px 8px", borderRadius: 8, background: "rgba(176,116,30,0.08)", color: "#b0741e", border: "1px solid rgba(176,116,30,0.25)", letterSpacing: 1 }}>DEMO DATA</span>}</h2>
             <p style={{ fontSize: 11, color: "#8a8072", fontStyle: "italic", margin: "-6px 0 10px" }}>The names I track daily.</p>
             {prices.every(p => p.price === "—") && <div style={{ fontSize: 10, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 2, padding: "8px 0" }}>AWAITING WIRE <span style={{ animation: "blink 1s step-end infinite", color: "#0d6d56" }}>▮</span></div>}
@@ -3330,7 +3423,7 @@ export default function App() {
           <EconCalendar apiKey={apiKey} />
         </div>
         <div className="dash-grid-2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 18 }}>
-          <section style={{ ...S.card, animation: "fadeUp 0.5s ease 0.44s both" }}>
+          <section id="rates-page" style={{ ...S.card, animation: "fadeUp 0.5s ease 0.44s both" }}>
             <h2 style={S.cardTitle}><span style={{ color: "#1f5a9e" }}>◆</span> The Rates Page<Info text="Today's full Treasury par yield curve drawn against one month and one year ago, straight from the Treasury's daily data. The 2s10s dateline tracks how long the curve has held its shape — the single highest-signal fixed-income read of the morning." link="https://home.treasury.gov/policy-issues/financing-the-government/interest-rate-statistics" linkLabel="Treasury interest-rate statistics" /></h2>
             <RatesPlate />
           </section>
@@ -3386,6 +3479,10 @@ export default function App() {
           <StandingWire desk={desk} />
         </div>
         <Briefings apiKey={apiKey} />
+        {desk && <div id="proofs-tray" style={{ ...S.card, marginTop: 16 }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#b0741e" }}>◆</span> The Proofs Tray<Info text="Every briefing also sets two or three flashcards from the day's own facts. They wait here for a read: File sends a card into the same spaced-repetition deck as the drills, Spike kills it. Nothing is filed automatically — machine-written cards are wrong often enough that an unread one would quietly poison the deck. Private to this browser." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="news" id="proofs-tray" /></span></h2>
+          <ProofsTray />
+        </div>}
         <div id="filings-wire" style={{ ...S.card, marginTop: 16 }}>
           <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> Filings Wire<Info text="Material corporate events straight from the primary source: 8-K material-event reports, SC 13D activist stakes, and S-1 IPO registrations, live from SEC EDGAR's current-filings feed. Public-domain data; every line links to the filing itself on sec.gov." link="https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent" linkLabel="EDGAR latest filings" /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="news" id="filings-wire" /></span></h2>
           <FilingsWire />
@@ -3402,7 +3499,7 @@ export default function App() {
         <SegControl items={[{ id: "portfolio", l: "Portfolio" }, { id: "prep", l: "Prep", note: "drills & learning" }]} active={seg.projects} onChange={s => setSegment("projects", s)} />
         {seg.projects === "portfolio" && <>
         <h1 style={S.pageTitle}>Projects</h1><p style={{ color: "#6f675c", marginBottom: 32, fontSize: 14 }}>Graduate coursework and independent builds — financial modeling, econometrics, and quantitative analysis.</p>
-        <div style={{ ...S.card, marginBottom: 16 }}>
+        <div id="deal-sheet" style={{ ...S.card, marginBottom: 16 }}>
           <h2 style={S.cardTitle}><span style={{ color: "#33302c" }}>◆</span> Deal Sheet<span style={{ marginLeft: "auto", fontSize: 8, color: "#a2977f", letterSpacing: 1 }}>STUDENT RECONSTRUCTIONS OF REAL TRANSACTIONS</span></h2>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(230px,100%),1fr))", gap: 14 }}>
             {DEALS.map(d => <div key={d.co} id={d.id} className="tombstone" style={{ border: "1px solid #33302c", outline: "1px solid #33302c", outlineOffset: -5, borderRadius: 2, padding: "30px 18px 20px", textAlign: "center", background: "#fffdf9", display: "flex", flexDirection: "column" }}>
@@ -3471,7 +3568,7 @@ export default function App() {
         </>}
         {seg.projects === "prep" && <>
         <h1 style={S.pageTitle}>The Prep Floor</h1><p style={{ color: "#6f675c", marginBottom: 32, fontSize: 14 }}>Interview-prep drills and a spaced-repetition learning engine — seeded generators, dated daily editions, and a house question bank. Everything regenerates on its own; every mark stays in your browser.</p>
-        <div style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease 0.05s both" }}>
+        <div id="daily-drill" style={{ ...S.card, marginBottom: 18, animation: "fadeUp 0.5s ease 0.05s both" }}>
           <h2 style={S.cardTitle}><span style={{ color: "#b0741e" }}>◆</span> The Daily Drill<Info text="One dated edition per day: six stations mixed across every drill generator on the site — technicals at rising difficulty, a tape-signal check, a three-statement ripple, and the paper LBO. Interleaving is deliberate: identifying WHICH method applies is the skill interviews test. Same edition for every reader; marks stay in your browser." /></h2>
           <DailyDrill onGoPuzzle={() => goAnchor("projects", "puzzle-corner")} />
         </div>
