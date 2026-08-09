@@ -3439,11 +3439,15 @@ export default function App() {
     </div>
 
     <header style={S.header}>
-      <div className="mjb-mark" style={{ fontFamily: "'Instrument Serif',serif", fontSize: 16, color: "#262421", minWidth: 44 }}>MJB</div>
+      {/* The two outer groups take an equal share so the nav sits on the masthead's center line.
+          Under plain space-between the 44px mark and the ~260px button cluster pushed it 107px
+          left of the axis the name and tagline above establish. flex:1 self-corrects as the
+          cluster's width changes (the settings pill grows from a gear to "API SYNC"). */}
+      <div className="mjb-mark" style={{ flex: 1, fontFamily: "'Instrument Serif',serif", fontSize: 16, color: "#262421", minWidth: 44 }}>MJB</div>
       <nav style={{ display: "flex", gap: 2, background: "rgba(255,253,249,0.85)", borderRadius: 10, padding: 4, border: "1px solid #e3d5bf", boxShadow: "inset 0 2px 6px rgba(64,52,32,0.07)" }}>
         {tabs.map((t, i) => <button key={t.id} onClick={() => setTab(t.id)} style={{ ...S.tab, ...(tab === t.id ? S.tabA : {}) }}><span style={{ fontSize: 8, opacity: 0.3, marginRight: 4 }}>{i + 1}</span>{t.l}</button>)}
       </nav>
-      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+      <div className="header-actions" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 5 }}>
         <a href="/resume.pdf" target="_blank" rel="noopener noreferrer" style={{ ...S.btn, textDecoration: "none", display: "flex", alignItems: "center", gap: 5, fontSize: 10, padding: "5px 12px" }} title="Download Resume">Resume</a>
         {(() => {
           // The pill reports what is actually configured. It used to key off the Anthropic browser
@@ -3947,6 +3951,9 @@ export default function App() {
         .masthead-tag{font-size:6.5px!important;letter-spacing:2px!important}
         .mjb-mark{display:none!important}
         header{flex-wrap:wrap!important;padding:10px 14px!important;gap:8px!important}
+        /* Desktop centering is off here: the header wraps and the mark is hidden, so the
+           action row is alone on its line and should stay left as it always has. */
+        .header-actions{flex:0 1 auto!important;justify-content:flex-start!important}
         header nav{order:3;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
         header nav button{white-space:nowrap;font-size:11px!important;padding:6px 10px!important}
         main{padding:14px!important}
@@ -3978,7 +3985,10 @@ export default function App() {
 
 const S = {
   root: { background: "#faf3ea", minHeight: "100vh", color: "#33302c", fontFamily: "'Space Grotesk',sans-serif" },
-  header: { display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 32px", borderBottom: "1px solid #e0d1ba", background: "rgba(250,244,235,0.92)", backdropFilter: "blur(30px) saturate(1.4)", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 4px 30px rgba(64,52,32,0.06)" },
+  // gap floors the space between the mark, nav and button cluster. With the outer groups on
+  // flex:1 the cluster gets squeezed toward its min-content width on narrow desktops, and without
+  // a gap it would sit flush against the nav. (The <=768px rule overrides this for the wrapped layout.)
+  header: { display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, padding: "14px 32px", borderBottom: "1px solid #e0d1ba", background: "rgba(250,244,235,0.92)", backdropFilter: "blur(30px) saturate(1.4)", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 4px 30px rgba(64,52,32,0.06)" },
   tab: { background: "none", border: "none", color: "#8a8072", fontSize: 12, padding: "8px 16px", cursor: "pointer", borderRadius: 10, fontWeight: 500, transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)", display: "flex", alignItems: "center", gap: 4 },
   tabA: { color: "#262421", background: "linear-gradient(135deg, rgba(13,109,86,0.15), rgba(31,90,158,0.1))", boxShadow: "0 0 20px rgba(13,109,86,0.15), 0 2px 8px rgba(64,52,32,0.07), inset 0 1px 0 rgba(255,255,255,0.7), inset 0 -2px 0 #0d6d56", fontWeight: 600 },
   card: { background: "linear-gradient(145deg, #fffdf9, #fbf5ec)", border: "1px solid #e3d5bf", borderRadius: 10, padding: 24, boxShadow: "0 8px 32px rgba(64,52,32,0.08), 0 1px 0 rgba(255,255,255,0.6) inset", transition: "all 0.3s cubic-bezier(0.4,0,0.2,1)" },
