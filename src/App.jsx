@@ -3177,6 +3177,135 @@ function PuzzleCorner() {
 }
 
 // ============ MAIN ============
+// ============ DESK RECORDS (backup & transfer) ============
+// Briefings sync through the desk; everything else the owner accumulates — the SM-2 deck, the
+// streak, errata, the diary, the paper book — is per-device localStorage with no copy anywhere.
+// That stays deliberate (mutable on two devices needs real conflict rules, which a briefing's
+// immutable per-day record doesn't), but it left the whole record on a single point of failure.
+// An iOS home-screen app compounds it: standalone display gets its OWN storage container, so the
+// installed app and Safari accumulate separate histories with no way to reconcile them.
+//
+// This is the manual channel — a full dump out, a deliberate replace back in. No merge, because
+// merging is exactly the conflict problem that was deferred; a snapshot has no such question.
+//
+// THE RULE IS STRUCTURAL, NOT A LIST. Take every mjb_ key (mb_ is credentials and dead legacy
+// caches, never exported) and drop the ones holding a cacheSet envelope. Both halves matter: a
+// hand-listed key set would go stale the first time a drill is added — and a backup that silently
+// stops covering something is worse than none, because it is trusted — while prefix alone sweeps
+// in the market-data caches that also live under mjb_ (the curve, FX, crypto, fear & greed), which
+// bloated the payload ~35x and would push stale quotes onto the other device on restore.
+const RECORD_PREFIX = "mjb_";
+// cacheSet writes exactly {data, ts} and nothing else does, so the shape identifies a cache with
+// no list to maintain: anything cached later is excluded automatically.
+function isCacheEnvelope(raw) {
+  try {
+    const v = JSON.parse(raw);
+    return !!v && typeof v === "object" && !Array.isArray(v)
+      && typeof v.ts === "number" && "data" in v && Object.keys(v).length === 2;
+  } catch { return false; }
+}
+// Values are kept as RAW STRINGS, never parsed and re-serialised: mjb_desk is written with a bare
+// setItem while the rest are JSON, and a round trip through JSON.parse would have to guess which
+// is which. Byte-for-byte in, byte-for-byte out.
+function collectRecords() {
+  const keys = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (!k || !k.startsWith(RECORD_PREFIX)) continue;
+    const raw = localStorage.getItem(k);
+    if (raw == null || isCacheEnvelope(raw)) continue;
+    keys[k] = raw;
+  }
+  return { kind: "mjb-desk-backup", v: 1, exported: new Date().toISOString(), keys };
+}
+function countOf(raw) { try { const v = JSON.parse(raw); return Array.isArray(v) ? v.length : (v && typeof v === "object") ? Object.keys(v).length : 0; } catch { return 0; } }
+const plural = (n, one, many) => `${n} ${n === 1 ? one : (many || one + "s")}`;
+const recordTally = keys => [plural(countOf(keys.mjb_srs), "card"), plural(countOf(keys.mjb_editions), "edition"), plural(countOf(keys.mjb_diary), "diary entry", "diary entries"), plural(countOf(keys.mjb_paper), "position")].join(" · ");
+// The stored stamp is a full ISO instant, but it renders through toISO so the date shown matches
+// the filename and the rest of the site. Reading it straight off the string shows the UTC day,
+// which is already tomorrow on a Central evening — the backup would claim a date you weren't on.
+const backupDay = iso => { const d = new Date(iso); return isNaN(d.getTime()) ? "on an unknown date" : `on ${toISO(d)}`; };
+function parseBackup(text) {
+  let p; try { p = JSON.parse(text); } catch { throw new Error("that isn't valid JSON"); }
+  if (!p || p.kind !== "mjb-desk-backup" || !p.keys || typeof p.keys !== "object") throw new Error("that isn't a desk backup file");
+  const entries = Object.entries(p.keys).filter(([k, v]) => k.startsWith(RECORD_PREFIX) && typeof v === "string");
+  if (!entries.length) throw new Error("that backup holds no records");
+  return { ...p, entries };
+}
+// Clears the existing record before writing so a restore is a true snapshot: a key the backup
+// doesn't carry would otherwise survive and quietly contradict everything around it.
+function restoreRecords(entries) {
+  // Backwards, because removeItem reindexes. Caches are left alone — they aren't records, and
+  // clearing them would only force a round of needless refetches after the reload.
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const k = localStorage.key(i);
+    if (!k || !k.startsWith(RECORD_PREFIX)) continue;
+    const raw = localStorage.getItem(k);
+    if (raw != null && !isCacheEnvelope(raw)) localStorage.removeItem(k);
+  }
+  for (const [k, v] of entries) localStorage.setItem(k, v);
+}
+function DeskRecords() {
+  const [msg, setMsg] = useState(""), [err, setErr] = useState(""), [paste, setPaste] = useState(""), [pending, setPending] = useState(null), [showPaste, setShowPaste] = useState(false);
+  const fileRef = useRef();
+  const mine = collectRecords();
+  const stamp = todayISO();
+  const flash = t => { setMsg(t); setErr(""); setTimeout(() => setMsg(""), 2600); };
+  const download = () => {
+    const blob = new Blob([JSON.stringify(mine, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = `mjb-desk-${stamp}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    flash("Backup downloaded.");
+  };
+  // Clipboard is the load-bearing path on iOS, where a standalone home-screen app can't reliably
+  // save or open a file — copy here, paste in the other context.
+  const copy = async () => {
+    const text = JSON.stringify(mine);
+    try { await navigator.clipboard.writeText(text); flash("Backup copied — paste it in the other browser."); }
+    catch { setShowPaste(true); setPaste(text); setErr("Clipboard blocked — the backup is in the box below; select all and copy."); }
+  };
+  const stage = text => { try { setErr(""); setPending(parseBackup(text)); } catch (e) { setPending(null); setErr(e.message); } };
+  const onFile = e => {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = () => stage(String(r.result));
+    r.onerror = () => setErr("couldn't read that file");
+    r.readAsText(f); e.target.value = "";
+  };
+  const confirmRestore = () => { restoreRecords(pending.entries); setPending(null); setMsg("Restored — reloading…"); setTimeout(() => location.reload(), 700); };
+  const B = { background: "#f6eee1", border: "1px solid #e9ddc9", borderRadius: 8, padding: "7px 12px", color: "#6f675c", fontSize: 10, cursor: "pointer", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 0.5 };
+  return <div style={{ marginBottom: 16, borderTop: "1px solid #efe4d2", paddingTop: 16 }}>
+    <label style={{ fontSize: 10, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 1.5, display: "block", marginBottom: 6 }}>Desk Records</label>
+    <p style={{ fontSize: 10, color: "#8a8072", lineHeight: 1.55, marginBottom: 8 }}>Everything the desk remembers about you — the review deck, the streak, errata, the diary and the paper book — lives in this browser alone and syncs nowhere. On an iPhone the home-screen app keeps its own copy, separate from Safari. Back it up here, and carry it between the two.</p>
+    <p style={{ fontSize: 10, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", marginBottom: 10 }}>In this browser: {recordTally(mine.keys)}</p>
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+      <button onClick={copy} style={B}>Copy backup</button>
+      <button onClick={download} style={B}>Download file</button>
+      <button onClick={() => fileRef.current && fileRef.current.click()} style={B}>Restore from file</button>
+      <button onClick={() => setShowPaste(!showPaste)} style={B}>{showPaste ? "Hide box" : "Paste backup"}</button>
+      <input ref={fileRef} type="file" accept="application/json,.json" onChange={onFile} style={{ display: "none" }} />
+    </div>
+    {showPaste && <div style={{ marginBottom: 8 }}>
+      <textarea value={paste} onChange={e => setPaste(e.target.value)} placeholder="Paste a backup here, then Read it" rows={3} style={{ width: "100%", background: "#f6eee1", border: "1px solid #e9ddc9", borderRadius: 8, padding: "8px 10px", color: "#33302c", fontSize: 10, fontFamily: "'JetBrains Mono',monospace", outline: "none", resize: "vertical" }} />
+      <button onClick={() => stage(paste)} style={{ ...B, marginTop: 6 }}>Read pasted backup</button>
+    </div>}
+    {err && <p style={{ fontSize: 10, color: "#b2342b", fontFamily: "'JetBrains Mono',monospace", lineHeight: 1.5, marginBottom: 6 }}>Couldn't restore — {err}.</p>}
+    {msg && <p style={{ fontSize: 10, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", marginBottom: 6 }}>{msg}</p>}
+    {pending && <div style={{ border: "1px solid #b0741e30", background: "#b0741e08", borderRadius: 8, padding: "10px 12px" }}>
+      <p style={{ fontSize: 10, color: "#33302c", lineHeight: 1.6, marginBottom: 8 }}>
+        That backup was taken <b style={{ fontWeight: 600 }}>{backupDay(pending.exported)}</b> and holds {recordTally(pending.keys)}.<br />
+        Restoring <b style={{ fontWeight: 600 }}>replaces</b> this browser's {recordTally(mine.keys)}. There's no merge and no undo.
+      </p>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button onClick={confirmRestore} style={{ ...B, background: "#b2342b10", borderColor: "#b2342b30", color: "#b2342b", fontWeight: 600 }}>Replace my records</button>
+        <button onClick={() => setPending(null)} style={B}>Cancel</button>
+      </div>
+    </div>}
+  </div>;
+}
+
 function SettingsPanel({ apiKey, setApiKey, syncSecret, setSyncSecret, desk, setDesk, open, onClose }) {
   const [input, setInput] = useState(apiKey || "");
   const [sync, setSync] = useState(syncSecret || "");
@@ -3221,6 +3350,7 @@ function SettingsPanel({ apiKey, setApiKey, syncSecret, setSyncSecret, desk, set
         </div>
         <button onClick={()=>setDesk(!desk)} style={{background:desk?"#0d6d5615":"#f6eee1",border:`1px solid ${desk?"#0d6d5630":"#e9ddc9"}`,borderRadius:8,padding:"8px 16px",color:desk?"#0d6d56":"#8a8072",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",fontWeight:600,flexShrink:0}}>{desk?"ON":"OFF"}</button>
       </div>
+      <DeskRecords />
       <p style={{fontSize:9,color:"#a2977f",marginBottom:16,lineHeight:1.6}}>Both live in this browser only, and neither is ever committed to code. The Anthropic key leaves it only for Anthropic; the sync secret goes only to this site's own briefing desk, to prove the request is yours.</p>
       <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
         <button onClick={clear} style={{background:"none",border:"1px solid #b2342b20",borderRadius:8,padding:"8px 16px",color:"#b2342b",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>Clear All</button>
