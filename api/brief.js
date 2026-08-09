@@ -62,10 +62,10 @@ const DATELINE = () => `Today is ${todayLongCT()} (US Central). If the US market
 const BRIEF_PROMPTS = {
   morning: () => `${DATELINE()}
 
-Senior equity research analyst morning briefing. Search latest market news. Cover: 1) Overnight global markets 2) Macro/Fed developments 3) Pre-market sector moves 4) M&A/deals 5) What to watch today.\n${SRC_GUIDE}\nCite sources inline [Reuters]. End with ---SOURCES--- then JSON: [{"name":"...","url":"..."}].${CARDS_GUIDE} Plain paragraphs, no markdown. Begin with the briefing itself — no preamble and no narration about what you are about to do or search for.`,
+Senior equity research analyst morning briefing. Search latest market news. Cover: 1) Overnight global markets 2) Macro/Fed developments 3) Pre-market sector moves 4) M&A/deals 5) What to watch today.\n${SRC_GUIDE}\nCite sources inline [Reuters]. End with ---SOURCES--- then JSON: [{"name":"...","url":"..."}].${CARDS_GUIDE} Plain paragraphs, no markdown. Begin with the briefing itself — no preamble and no narration about what you are about to do or search for. Write the briefing in your own words as continuous prose: each numbered section is one or two flowing paragraphs, never a lead-in followed by a quoted block. Do not reproduce source sentences verbatim or put quotations on their own lines. Citations sit inline inside the sentence they support, e.g. "The S&P 500 closed at 7,757.64, a record [CNBC]."`,
   close: () => `${DATELINE()}
 
-Senior equity research analyst close briefing. Search today's results. Cover: 1) Index closes with % 2) Session drivers 3) Stock movers 4) After-hours 5) Tomorrow watch.\n${SRC_GUIDE}\nCite inline [Reuters]. End with ---SOURCES--- then JSON: [{"name":"...","url":"..."}].${CARDS_GUIDE} Plain paragraphs, no markdown. Begin with the briefing itself — no preamble and no narration about what you are about to do or search for.`,
+Senior equity research analyst close briefing. Search today's results. Cover: 1) Index closes with % 2) Session drivers 3) Stock movers 4) After-hours 5) Tomorrow watch.\n${SRC_GUIDE}\nCite inline [Reuters]. End with ---SOURCES--- then JSON: [{"name":"...","url":"..."}].${CARDS_GUIDE} Plain paragraphs, no markdown. Begin with the briefing itself — no preamble and no narration about what you are about to do or search for. Write the briefing in your own words as continuous prose: each numbered section is one or two flowing paragraphs, never a lead-in followed by a quoted block. Do not reproduce source sentences verbatim or put quotations on their own lines. Citations sit inline inside the sentence they support, e.g. "The S&P 500 closed at 7,757.64, a record [CNBC]."`,
 };
 const SRC_URLS = { "Reuters": "https://reuters.com", "Bloomberg": "https://bloomberg.com", "CNBC": "https://cnbc.com", "Wall Street Journal": "https://wsj.com", "WSJ": "https://wsj.com", "Financial Times": "https://ft.com", "FT": "https://ft.com", "MarketWatch": "https://marketwatch.com", "AP": "https://apnews.com", "Yahoo Finance": "https://finance.yahoo.com", "Barron's": "https://barrons.com", "Seeking Alpha": "https://seekingalpha.com" };
 
@@ -178,6 +178,22 @@ function blocksToText(d, joiner) {
 // LEADING first-person process narration, and only whole paragraphs — a briefing that legitimately
 // begins with a headline or a section number is untouched.
 const PREAMBLE = /^(i'?ll\b|i will\b|i'?m going to\b|i need\b|let me\b|first,? let me\b|okay[,.]|sure[,.])/i;
+// Backstop for the same behaviour the prompt now forbids. When the model sets a quotation on its
+// own line, the blank lines around it reach the renderer as real paragraph breaks and a sentence
+// arrives split across three of them — the citation stranded at the head of the next fragment. A
+// paragraph that does not end in terminal punctuation is not a paragraph, so glue it to the one
+// after it. Conservative on purpose: it only ever JOINS, so the worst case is prose left as the
+// model wrote it, never text lost.
+function reflow(text) {
+  const out = [];
+  for (const para of text.split(/\n\s*\n/)) {
+    const t = para.trim();
+    if (!t) continue;
+    if (out.length && !/[.!?:;"”)]$/.test(out[out.length - 1])) out[out.length - 1] += " " + t;
+    else out.push(t);
+  }
+  return out.join("\n\n");
+}
 function stripPreamble(text) {
   const paras = text.split(/\n\s*\n/);
   while (paras.length > 1 && PREAMBLE.test(paras[0].trim())) paras.shift();
@@ -221,7 +237,7 @@ async function stepBrief(type, deadline) {
     const m = text.match(/\[([A-Z][A-Za-z\s\.&']+?)\]/g);
     if (m) sources = [...new Set(m.map(x => x.slice(1, -1).trim()))].map(n => ({ name: n, url: SRC_URLS[n] || "#" }));
   }
-  text = stripPreamble(text);
+  text = reflow(stripPreamble(text));
   if (!text) throw new Error("the model returned an empty briefing");
   return { text, sources, cards, searches };
 }
