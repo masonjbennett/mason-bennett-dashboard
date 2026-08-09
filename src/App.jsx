@@ -136,7 +136,6 @@ const LINKS = [
   { label: "Resume", url: "/resume.pdf", ic: "cv" },
   { label: "Email", url: "mailto:bennettmasonj@gmail.com", ic: "@" },
 ];
-const SRC_GUIDE = `SOURCE RULES: PRIORITIZE: Reuters, Bloomberg, CNBC, FT, WSJ, AP, MarketWatch, Barron's, Yahoo Finance, SEC.gov. EXCLUDE: partisan outlets, opinion blogs, editorials, social media. Prefer factual reporting over commentary.`;
 const QLINKS = [
   { n: "Bloomberg", u: "https://bloomberg.com" }, { n: "Reuters", u: "https://reuters.com" },
   { n: "WSJ", u: "https://wsj.com" }, { n: "FT", u: "https://ft.com" },
@@ -145,7 +144,6 @@ const QLINKS = [
   { n: "Finviz", u: "https://finviz.com" }, { n: "TradingView", u: "https://tradingview.com" },
   { n: "PitchBook", u: "https://pitchbook.com" },
 ];
-const SRC_URLS = { "Reuters": "https://reuters.com", "Bloomberg": "https://bloomberg.com", "CNBC": "https://cnbc.com", "Wall Street Journal": "https://wsj.com", "WSJ": "https://wsj.com", "Financial Times": "https://ft.com", "FT": "https://ft.com", "MarketWatch": "https://marketwatch.com", "AP": "https://apnews.com", "Yahoo Finance": "https://finance.yahoo.com", "Barron's": "https://barrons.com", "Seeking Alpha": "https://seekingalpha.com" };
 
 // ============ API ============
 function apiHeaders(key) { return { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" }; }
@@ -162,7 +160,6 @@ function apiErrorText(e) {
 }
 function noteApiResult(d) { lastApiError = d && d.error ? apiErrorText(d.error) : ""; }
 function extractText(d) { noteApiResult(d); if (d.error) { console.error("API error:", d.error); return null; } if (!d.content) { console.error("No content in response:", d); return null; } return d.content.filter(b => b.type === "text").map(b => b.text).join("").replace(/```json|```/g, "").trim(); }
-function extractTextMulti(d) { noteApiResult(d); if (d.error) { console.error("API error:", d.error); return null; } if (!d.content) { console.error("No content in response:", d); return null; } return d.content.filter(b => b.type === "text").map(b => b.text).join("\n\n"); }
 function delay(ms) { return new Promise(res => setTimeout(res, ms)); }
 
 // Global queue — ensures only ONE API call at a time with mandatory spacing
@@ -207,21 +204,37 @@ async function callAPI(key, body) {
 function cacheGet(key, maxAgeMin = 30) { try { const c = JSON.parse(localStorage.getItem(key)); if (c && Date.now() - c.ts < maxAgeMin * 60000) return c.data; } catch {} return null; }
 function cacheSet(key, data) { try { localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })); } catch {} }
 
-async function fetchBriefing(type, key, forceRefresh = false) {
-  // The briefing also emits flashcards for the Proofs Tray in the SAME call — no extra API spend.
-  const CARDS_GUIDE = `\nThen ---CARDS--- then JSON: [{"q":"...","a":"..."}] — 2-3 flashcards drawn ONLY from facts stated in the briefing above. Each q is a specific, checkable question (a level, a print, a deal, a driver); each a is one short factual sentence. No opinions or forecasts.`;
-  const p = { morning: `Senior equity research analyst morning briefing. Search latest market news. Cover: 1) Overnight global markets 2) Macro/Fed developments 3) Pre-market sector moves 4) M&A/deals 5) What to watch today.\n${SRC_GUIDE}\nCite sources inline [Reuters]. End with ---SOURCES--- then JSON: [{"name":"...","url":"..."}].${CARDS_GUIDE} Plain paragraphs, no markdown.`, close: `Senior equity research analyst close briefing. Search today's results. Cover: 1) Index closes with % 2) Session drivers 3) Stock movers 4) After-hours 5) Tomorrow watch.\n${SRC_GUIDE}\nCite inline [Reuters]. End with ---SOURCES--- then JSON: [{"name":"...","url":"..."}].${CARDS_GUIDE} Plain paragraphs, no markdown.` };
-  if (!key) return null;
-  if (!forceRefresh) { const cached = cacheGet(`mb_brief_${type}`, 60); if (cached) return cached; }
-  try { const d = await callAPI(key, { model: "claude-sonnet-5", max_tokens: 4000, tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 6 }], messages: [{ role: "user", content: p[type] }] }); const raw = extractTextMulti(d); if (!raw) return null; let sources = [], cards = []; const parseArr = s => { try { const t = s.trim().replace(/```json|```/g, "").trim(); const m = t.match(/\[[\s\S]*\]/); return JSON.parse(m ? m[0] : t); } catch { return null; } }; const cardSep = raw.indexOf("---CARDS---"); const head = cardSep !== -1 ? raw.slice(0, cardSep) : raw; if (cardSep !== -1) { const parsed = parseArr(raw.slice(cardSep + 11)); if (Array.isArray(parsed)) cards = parsed.filter(c => c && c.q && c.a).slice(0, 3).map(c => ({ q: String(c.q).trim().slice(0, 220), a: String(c.a).trim().slice(0, 320) })); } let text = head; const sep = head.indexOf("---SOURCES---"); if (sep !== -1) { text = head.slice(0, sep).trim(); const s = parseArr(head.slice(sep + 13)); if (Array.isArray(s)) sources = s; } else text = head.trim(); if (!sources.length) { const m = text.match(/\[([A-Z][A-Za-z\s\.&']+?)\]/g); if (m) sources = [...new Set(m.map(x => x.slice(1, -1).trim()))].map(n => ({ name: n, url: SRC_URLS[n] || "#" })); } const result = { text, sources, cards }; cacheSet(`mb_brief_${type}`, result); return result; } catch (e) { console.error("Briefing error:", e); return null; }
+// ============ BRIEFING SYNC ============
+// Briefings are the one piece of site state that is NOT per-browser. They're drafted AND stored by
+// api/brief.js — the Anthropic key for them lives in Vercel env, not in this browser — so the same
+// day's briefing is on the desktop and the phone instead of evaporating with a localStorage cache.
+// Everything here needs the sync secret from Settings; a visitor without one never calls the desk.
+// Deliberately NOT cached client-side: the store is the single source of truth, and a stale local
+// copy is exactly the failure this replaced (see the never-cache-a-failed-payload note in CLAUDE.md).
+let lastSyncError = "";
+async function briefCall(url, init) {
+  try {
+    const r = await fetch(url, init);
+    let d = null; try { d = await r.json(); } catch {}
+    if (!r.ok) { lastSyncError = (d && d.error) || `the desk answered ${r.status}`; return null; }
+    // A 200 that isn't JSON means something other than the desk answered — in local dev that's
+    // Vite's SPA fallback serving index.html, since /api only exists in production.
+    if (!d) { lastSyncError = "the desk sent an unreadable reply (in local dev, /api only runs in production)"; return null; }
+    lastSyncError = ""; return d;
+  } catch { lastSyncError = "the desk is unreachable — check your connection"; return null; }
 }
-async function verifyBriefing(t, key) {
-  if (!key) return null;
-  try { const d = await callAPI(key, { model: "claude-sonnet-5", max_tokens: 3000, tools: [{ type: "web_search_20260209", name: "web_search", max_uses: 6 }], messages: [{ role: "user", content: `Fact-check this briefing. Extract factual claims, verify each via web search. Return ONLY JSON: {"summary":{"verified":0,"unverified":0,"discrepancy":0,"total":0,"confidence_pct":0},"claims":[{"claim":"...","status":"verified|unverified|minor_discrepancy","note":"...","source":"..."}]}\n\n"""\n${t}\n"""` }] }); const raw = extractText(d); if (!raw) return null; const match = raw.match(/\{[\s\S]*\}/); if (match) return JSON.parse(match[0]); return JSON.parse(raw); } catch (e) { console.error("Verify error:", e); return null; }
+// Today's stored briefing for one edition, or null if nothing has been drafted yet.
+async function loadStoredBrief(type, secret) {
+  if (!secret) return null;
+  const d = await briefCall(`/api/brief?type=${type}`, { headers: { "x-mjb-sync": secret } });
+  return d && d.found ? d.brief : null;
 }
-async function fetchSoWhat(t, type, key) {
-  if (!key) return null;
-  try { const d = await callAPI(key, { model: "claude-sonnet-5", max_tokens: 3000, messages: [{ role: "user", content: `Senior strategist: from this ${type} briefing, identify 3-5 most impactful developments. Return ONLY JSON array: [{"headline":"5-8 words","development":"one sentence","why_it_matters":"2-3 sentences","who_affected":"sectors/companies","second_order":"what happens next","takeaway":"one actionable sentence"}]\n\n"""\n${t}\n"""` }] }); const raw = extractText(d); if (!raw) return null; const match = raw.match(/\[[\s\S]*\]/); if (match) return JSON.parse(match[0]); return JSON.parse(raw); } catch (e) { console.error("SoWhat error:", e); return null; }
+// One step of the chain — "brief" | "verify" | "sowhat" — each returning the whole updated record.
+// Split into three requests so each serverless invocation stays short and partial results reach the
+// store (and the other device) as they land. Must be called in order; steps 2-3 read step 1's text.
+async function runBriefStep(type, step, secret, force) {
+  if (!secret) { lastSyncError = "add the sync secret in Settings"; return null; }
+  return briefCall("/api/brief", { method: "POST", headers: { "Content-Type": "application/json", "x-mjb-sync": secret }, body: JSON.stringify({ type, step, force: !!force }) });
 }
 async function fetchRegime(key) {
   if (!key) return null;
@@ -1083,9 +1096,26 @@ function Hero(){const[ph,setPh]=useState(0);useEffect(()=>{const timers=[setTime
 function Cmd({open,onClose,onNav}){const[q,setQ]=useState("");const ref=useRef();const items=[{l:"Home",t:"home"},{l:"Selected Work",t:"projects"},{l:"Markets",t:"markets"},{l:"News",t:"news"},{l:"Recruiter packet",t:"recruiter"},{l:"Prep — drills & learning",t:"projects",seg:"prep"},{l:"Markets — my book",t:"markets",seg:"book"},...QLINKS.map(l=>({l:l.n,u:l.u}))];const f=items.filter(i=>i.l.toLowerCase().includes(q.toLowerCase()));useEffect(()=>{if(open&&ref.current){ref.current.focus();setQ("")}},[open]);if(!open)return null;return <div style={{position:"fixed",inset:0,background:"rgba(51,48,46,0.45)",backdropFilter:"blur(12px)",zIndex:1000,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:100,animation:"fadeIn 0.15s"}} onClick={onClose}><div style={{background:"#fffdf9",border:"1px solid #d8c8b0",borderRadius:16,width:520,overflow:"hidden",boxShadow:"0 32px 80px rgba(64,52,32,0.14)"}} onClick={e=>e.stopPropagation()} className="cmd-modal"><div style={{padding:"16px 20px",borderBottom:"1px solid #e9ddc9",display:"flex",alignItems:"center",gap:12}}><span style={{color:"#0d6d56"}}>⌘</span><input ref={ref} value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..." style={{flex:1,background:"none",border:"none",outline:"none",color:"#33302c",fontSize:15}}/><kbd style={{fontSize:9,padding:"2px 7px",borderRadius:4,background:"#e9ddc9",color:"#8a8072",border:"1px solid #d8c8b0",fontFamily:"'JetBrains Mono',monospace"}}>ESC</kbd></div><div style={{maxHeight:320,overflowY:"auto",padding:6}}>{f.map((item,i)=><button key={i} onClick={()=>{if(item.t)onNav(item.t,item.seg);else window.open(item.u,"_blank");onClose()}} style={{display:"flex",alignItems:"center",gap:12,width:"100%",padding:"11px 14px",background:"none",border:"none",color:"#33302c",fontSize:14,cursor:"pointer",borderRadius:10,textAlign:"left",transition:"background 0.1s"}} onMouseEnter={e=>e.currentTarget.style.background="#e9ddc9"} onMouseLeave={e=>e.currentTarget.style.background="none"}><span style={{color:"#0d6d56",width:20,textAlign:"center"}}>→</span><span>{item.l}</span>{item.u&&<span style={{marginLeft:"auto",fontSize:10,color:"#8a8072"}}>↗</span>}</button>)}</div></div></div>;}
 
 // ============ BRIEFINGS (compact) ============
-function Briefings({apiKey}){const[morning,setMorning]=useState(null),[close,setClose]=useState(null),[vM,setVM]=useState(null),[vC,setVC]=useState(null),[swM,setSwM]=useState(null),[swC,setSwC]=useState(null),[lM,setLM]=useState(false),[lC,setLC]=useState(false),[vLM,setVLM]=useState(false),[vLC,setVLC]=useState(false),[swLM,setSwLM]=useState(false),[swLC,setSwLC]=useState(false),[tM,setTM]=useState(null),[tC,setTC]=useState(null),[showCl,setShowCl]=useState(false),[showSW,setShowSW]=useState(true),[err,setErr]=useState(""),[tab,setTab]=useState(()=>new Date().getHours()>=16?"close":"morning");const sugg=new Date().getHours()>=16?"close":"morning";
-const gen=async(type,force=false)=>{if(!apiKey){setErr("Add your Anthropic API key in Settings to generate briefings.");return;}const sL=type==="morning"?setLM:setLC,sD=type==="morning"?setMorning:setClose,sT=type==="morning"?setTM:setTC,sV=type==="morning"?setVM:setVC,sSW=type==="morning"?setSwM:setSwC,sVL=type==="morning"?setVLM:setVLC,sSWL=type==="morning"?setSwLM:setSwLC;setErr("");sL(true);sV(null);sSW(null);const r=await fetchBriefing(type,apiKey,force);if(r){sD(r);sT(new Date());queueProofs(r.cards,type)}else setErr("The wire didn't answer — check your key and connection, then try again.");sL(false);if(r?.text){sVL(true);const v=await verifyBriefing(r.text,apiKey);if(v)sV(v);sVL(false);sSWL(true);const sw=await fetchSoWhat(r.text,type,apiKey);if(sw)sSW(sw);sSWL(false)}};
-const data=tab==="morning"?morning:close,loading=tab==="morning"?lM:lC,verifying=tab==="morning"?vLM:vLC,verify=tab==="morning"?vM:vC,soWhat=tab==="morning"?swM:swC,swLoad=tab==="morning"?swLM:swLC,time=tab==="morning"?tM:tC;
+function Briefings({syncSecret}){const[recs,setRecs]=useState({morning:null,close:null}),[busy,setBusy]=useState(""),[busyTab,setBusyTab]=useState(""),[showCl,setShowCl]=useState(false),[showSW,setShowSW]=useState(true),[err,setErr]=useState(""),[tab,setTab]=useState(()=>new Date().getHours()>=16?"close":"morning");const sugg=new Date().getHours()>=16?"close":"morning";
+// On load, pull whatever the desk already holds for today — the whole point of the sync: a briefing
+// drafted on the desktop is already here when the phone opens, instead of waiting on a second
+// (re-billed) generation. Its Proofs Tray cards are queued on THIS device too, since the tray is
+// per-device state and queueProofs dedupes by question — so either device can file them.
+useEffect(()=>{if(!syncSecret){setRecs({morning:null,close:null});return}let live=true;(async()=>{const[m,c]=await Promise.all([loadStoredBrief("morning",syncSecret),loadStoredBrief("close",syncSecret)]);if(!live)return;setRecs({morning:m,close:c});if(m&&m.cards)queueProofs(m.cards,"morning");if(c&&c.cards)queueProofs(c.cards,"close")})();return()=>{live=false}},[syncSecret]);
+// Draft → fact-check → implications, one request each, in order (steps 2-3 read step 1 back out of
+// the store). A step the stored record already carries is skipped: another device did that work,
+// and re-running it would just re-bill the same call.
+const gen=async(type,force=false)=>{if(!syncSecret){setErr("Add the sync secret in Settings and the desk drafts the briefing for every device.");return}setErr("");setBusyTab(type);setBusy("brief");
+  let cur=await runBriefStep(type,"brief",syncSecret,force);
+  if(!cur){setErr(`The wire didn't answer — ${lastSyncError||"try again"}.`);setBusy("");setBusyTab("");return}
+  setRecs(r=>({...r,[type]:cur}));queueProofs(cur.cards,type);
+  for(const[step,field,label]of[["verify","verify","fact-check"],["sowhat","soWhat","implications pass"]]){
+    if(cur[field])continue;setBusy(step);
+    const next=await runBriefStep(type,step,syncSecret);
+    if(next){cur=next;setRecs(r=>({...r,[type]:next}))}
+    else setErr(`The ${label} didn't finish — ${lastSyncError||"try again"}. The briefing itself still stands.`)}
+  setBusy("");setBusyTab("")};
+const data=recs[tab],here=busyTab===tab,loading=here&&busy==="brief",verifying=here&&busy==="verify",swLoad=here&&busy==="sowhat",verify=data&&data.verify,soWhat=data&&data.soWhat,time=data&&data.ts?new Date(data.ts):null;
 const SC={verified:"#0d6d56",minor_discrepancy:"#b0741e",unverified:"#b2342b"},SI={verified:"✓",minor_discrepancy:"~",unverified:"✗"},SL={verified:"Verified",minor_discrepancy:"Discrepancy",unverified:"Unverified"};
 // One checked claim. Claims that FAILED the check print by default (see Briefings) — a single
 // confidence score invites trusting the whole briefing at a glance, so the disputed lines lead.
@@ -1101,6 +1131,7 @@ const ClaimRow = ({ c }) => <div style={{display:"flex",gap:8,padding:"5px 8px",
 return <div style={{...S.card,background:"linear-gradient(135deg,#f6eee1,#fdf8f0,#f6eee1)",border:"1px solid rgba(13,109,86,0.1)",boxShadow:"0 12px 48px rgba(64,52,32,0.1), 0 0 40px rgba(13,109,86,0.03), inset 0 1px 0 rgba(255,255,255,0.6)",position:"relative",overflow:"hidden"}}><div style={{position:"absolute",top:-40,right:-40,width:200,height:200,background:`radial-gradient(circle,${tab==="morning"?"rgba(176,116,30,0.03)":"rgba(90,95,184,0.05)"} 0%,transparent 70%)`,pointerEvents:"none"}}/>
 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18,position:"relative",flexWrap:"wrap",gap:12}}><div><div style={{display:"flex",gap:6,marginBottom:8}}>{["morning","close"].map(t=><button key={t} onClick={()=>setTab(t)} style={{fontSize:12,padding:"6px 16px",borderRadius:8,cursor:"pointer",fontWeight:600,transition:"all 0.25s",border:"1px solid",display:"flex",alignItems:"center",gap:8,background:tab===t?(t==="morning"?"#b0741e10":"#56599e10"):"transparent",borderColor:tab===t?(t==="morning"?"#b0741e30":"#56599e30"):"#e9ddc9",color:tab===t?(t==="morning"?"#b0741e":"#56599e"):"#8a8072"}}><span style={{display:"inline-flex"}}>{t==="morning"?<SunIc/>:<MoonIc/>}</span>{t==="morning"?"Morning":"Close"} Brief{sugg===t&&<span style={{width:5,height:5,borderRadius:3,background:t==="morning"?"#b0741e":"#56599e",animation:"pulse 2s infinite"}}/>}</button>)}</div><p style={{color:"#8a8072",fontSize:10,fontFamily:"'JetBrains Mono',monospace"}}>AI briefing → fact-check → implications {time?`· ${time.toLocaleTimeString()}`:""}</p></div><button onClick={()=>gen(tab,!!data)} disabled={loading||verifying} style={{...S.btn,opacity:(loading||verifying)?0.5:1}}>{loading?"⟳ Generating...":verifying||swLoad?"⟳ Analyzing...":data?"↻ Regenerate":"Generate Brief"}</button></div>
 {err&&<p style={{fontSize:11,color:"#b2342b",marginBottom:12,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.5}}>{err}</p>}
+{data&&data.stored===false&&<p style={{fontSize:10,color:"#b0741e",marginBottom:12,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.5}}>Drafted, but the store wouldn't take it — this edition won't reach your other devices.</p>}
 {!data&&!loading&&<div style={{textAlign:"center",padding:"36px 0"}}><div style={{marginBottom:12,opacity:0.2,display:"flex",justifyContent:"center",color:"#8a8072"}}>{tab==="morning"?<SunIc size={40}/>:<MoonIc size={40}/>}</div><p style={{color:"#6f675c",fontSize:13}}>{tab==="morning"?"Pre-market briefing with overnight futures, macro, and what to watch":"End-of-day summary with closes, movers, and tomorrow's catalysts"}</p></div>}
 {loading&&<div style={{padding:"32px 0",textAlign:"center"}}><div style={{display:"inline-flex",gap:8}}>{[0,1,2,3].map(i=><div key={i} style={{width:7,height:7,borderRadius:4,background:tab==="morning"?"#b0741e":"#56599e",animation:"pulse 1.2s infinite",animationDelay:`${i*0.2}s`}}/>)}</div><p style={{color:"#8a8072",fontSize:12,marginTop:14,fontFamily:"'JetBrains Mono',monospace"}}>Step 1/3 — Searching & drafting...</p></div>}
 {data&&<div>
@@ -3146,11 +3177,20 @@ function PuzzleCorner() {
 }
 
 // ============ MAIN ============
-function SettingsPanel({ apiKey, setApiKey, desk, setDesk, open, onClose }) {
+function SettingsPanel({ apiKey, setApiKey, syncSecret, setSyncSecret, desk, setDesk, open, onClose }) {
   const [input, setInput] = useState(apiKey || "");
+  const [sync, setSync] = useState(syncSecret || "");
   const [show, setShow] = useState(false);
-  const save = () => { const k = input.trim(); setApiKey(k); localStorage.setItem("mb_api_key", k); onClose(); };
-  const clear = () => { setInput(""); setApiKey(""); localStorage.removeItem("mb_api_key"); };
+  const [showSync, setShowSync] = useState(false);
+  const save = () => {
+    const k = input.trim(); setApiKey(k); localStorage.setItem("mb_api_key", k);
+    const s = sync.trim(); setSyncSecret(s); localStorage.setItem("mb_sync_secret", s);
+    onClose();
+  };
+  const clear = () => {
+    setInput(""); setApiKey(""); localStorage.removeItem("mb_api_key");
+    setSync(""); setSyncSecret(""); localStorage.removeItem("mb_sync_secret");
+  };
   if (!open) return null;
   return <div style={{position:"fixed",inset:0,background:"rgba(51,48,46,0.45)",backdropFilter:"blur(12px)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",animation:"fadeIn 0.15s"}} onClick={onClose}>
     <div className="settings-modal" style={{background:"#fffdf9",border:"1px solid #d8c8b0",borderRadius:16,width:480,padding:28,boxShadow:"0 32px 80px rgba(64,52,32,0.14)",maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
@@ -3164,7 +3204,15 @@ function SettingsPanel({ apiKey, setApiKey, desk, setDesk, open, onClose }) {
           <input type={show?"text":"password"} value={input} onChange={e=>setInput(e.target.value)} placeholder="sk-ant-..." style={{flex:1,background:"#f6eee1",border:"1px solid #e9ddc9",borderRadius:8,padding:"10px 12px",color:"#33302c",fontSize:12,fontFamily:"'JetBrains Mono',monospace",outline:"none"}} />
           <button onClick={()=>setShow(!show)} style={{background:"#f6eee1",border:"1px solid #e9ddc9",borderRadius:8,padding:"8px 12px",color:"#8a8072",fontSize:11,cursor:"pointer"}}>{show?"Hide":"Show"}</button>
         </div>
-        <p style={{fontSize:10,color:"#8a8072",marginTop:6,lineHeight:1.55}}>Optional. Unlocks the AI layer only: the morning &amp; close briefings, the 7 O'Clock Note, Explain It to the Desk, and the written read on Market Regime. Everything else — live prices, rates, the Fed Ledger, the wire, every drill — works with no key at all. Calls go straight from this browser to Anthropic and are billed to your account. Get a key at console.anthropic.com</p>
+        <p style={{fontSize:10,color:"#8a8072",marginTop:6,lineHeight:1.55}}>Optional. Unlocks the browser-side AI cards: the 7 O'Clock Note, Explain It to the Desk, and the written read on Market Regime. The briefings no longer use this key — they're drafted on the server (see Briefing Sync below). Everything else — live prices, rates, the Fed Ledger, the wire, every drill — works with no key at all. Calls go straight from this browser to Anthropic and are billed to your account. Get a key at console.anthropic.com</p>
+      </div>
+      <div style={{marginBottom:16,borderTop:"1px solid #efe4d2",paddingTop:16}}>
+        <label style={{fontSize:10,color:"#8a8072",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:1.5,display:"block",marginBottom:6}}>Briefing Sync Secret</label>
+        <div style={{display:"flex",gap:8}}>
+          <input type={showSync?"text":"password"} value={sync} onChange={e=>setSync(e.target.value)} placeholder="the SYNC_SECRET set in Vercel" style={{flex:1,background:"#f6eee1",border:"1px solid #e9ddc9",borderRadius:8,padding:"10px 12px",color:"#33302c",fontSize:12,fontFamily:"'JetBrains Mono',monospace",outline:"none"}} />
+          <button onClick={()=>setShowSync(!showSync)} style={{background:"#f6eee1",border:"1px solid #e9ddc9",borderRadius:8,padding:"8px 12px",color:"#8a8072",fontSize:11,cursor:"pointer"}}>{showSync?"Hide":"Show"}</button>
+        </div>
+        <p style={{fontSize:10,color:"#8a8072",marginTop:6,lineHeight:1.55}}>Unlocks the morning &amp; close briefings and tethers them across devices. The briefing is drafted by this site's own server — the Anthropic key for it lives in Vercel, never in a browser — and the day's edition is stored there, so whichever device drafts it, the others open to the same one. Paste the same secret on every device.</p>
       </div>
       <div style={{marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center",gap:12,borderTop:"1px solid #efe4d2",paddingTop:16}}>
         <div>
@@ -3173,7 +3221,7 @@ function SettingsPanel({ apiKey, setApiKey, desk, setDesk, open, onClose }) {
         </div>
         <button onClick={()=>setDesk(!desk)} style={{background:desk?"#0d6d5615":"#f6eee1",border:`1px solid ${desk?"#0d6d5630":"#e9ddc9"}`,borderRadius:8,padding:"8px 16px",color:desk?"#0d6d56":"#8a8072",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",fontWeight:600,flexShrink:0}}>{desk?"ON":"OFF"}</button>
       </div>
-      <p style={{fontSize:9,color:"#a2977f",marginBottom:16}}>Stored in this browser only — never sent to this site's server or committed to code.</p>
+      <p style={{fontSize:9,color:"#a2977f",marginBottom:16,lineHeight:1.6}}>Both live in this browser only, and neither is ever committed to code. The Anthropic key leaves it only for Anthropic; the sync secret goes only to this site's own briefing desk, to prove the request is yours.</p>
       <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
         <button onClick={clear} style={{background:"none",border:"1px solid #b2342b20",borderRadius:8,padding:"8px 16px",color:"#b2342b",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace"}}>Clear All</button>
         <button onClick={save} style={{background:"#0d6d5615",border:"1px solid #0d6d5630",borderRadius:8,padding:"8px 20px",color:"#0d6d56",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",fontWeight:600}}>Save</button>
@@ -3332,6 +3380,9 @@ function FedLedger() {
 
 export default function App() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem("mb_api_key") || "");
+  // Not an Anthropic key — the shared secret that lets this browser talk to api/brief.js. See the
+  // Briefing Sync block in Settings.
+  const [syncSecret, setSyncSecret] = useState(() => localStorage.getItem("mb_sync_secret") || "");
   // Quotes now always run through the server-side proxy, so a reader's own Finnhub key is no longer
   // used anywhere. Drop any key a previous version stored rather than leaving it in localStorage.
   useEffect(() => { try { localStorage.removeItem("mb_finnhub_key"); localStorage.removeItem("mb_prices"); localStorage.removeItem("mb_heatmap"); } catch {} }, []);
@@ -3364,7 +3415,7 @@ export default function App() {
   return <div style={S.root}>
     {showHero && <Hero />}
     <Cmd open={cmd} onClose={() => setCmd(false)} onNav={(t, s) => { setTab(t); if (s) setSegment(t, s); }} />
-    <SettingsPanel apiKey={apiKey} setApiKey={setApiKey} desk={desk} setDesk={setDesk} open={showSettings} onClose={() => setShowSettings(false)} />
+    <SettingsPanel apiKey={apiKey} setApiKey={setApiKey} syncSecret={syncSecret} setSyncSecret={setSyncSecret} desk={desk} setDesk={setDesk} open={showSettings} onClose={() => setShowSettings(false)} />
     <div className="bg-fx" style={{ position: "fixed", top: -200, right: -100, width: 900, height: 900, background: "radial-gradient(circle,rgba(13,109,86,0.045) 0%,transparent 55%)", pointerEvents: "none", animation: "breathe 8s ease-in-out infinite" }} />
     <div className="bg-fx" style={{ position: "fixed", bottom: -100, left: -100, width: 700, height: 700, background: "radial-gradient(circle,rgba(31,90,158,0.035) 0%,transparent 55%)", pointerEvents: "none", animation: "breathe 10s ease-in-out infinite", animationDelay: "2s" }} />
     <div className="bg-fx" style={{ position: "fixed", top: "30%", right: -100, width: 600, height: 600, background: "radial-gradient(circle,rgba(109,84,158,0.025) 0%,transparent 55%)", pointerEvents: "none", animation: "breathe 12s ease-in-out infinite", animationDelay: "4s" }} />
@@ -3394,7 +3445,15 @@ export default function App() {
       </nav>
       <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
         <a href="/resume.pdf" target="_blank" rel="noopener noreferrer" style={{ ...S.btn, textDecoration: "none", display: "flex", alignItems: "center", gap: 5, fontSize: 10, padding: "5px 12px" }} title="Download Resume">Resume</a>
-        <button onClick={() => setShowSettings(true)} style={{ display: "flex", alignItems: "center", gap: 5, background: apiKey ? "#0d6d5608" : "rgba(255,253,249,0.85)", border: `1px solid ${apiKey ? "#0d6d5620" : "#e9ddc9"}`, borderRadius: 8, padding: "5px 10px", color: apiKey ? "#0d6d56" : "#8a8072", fontSize: 10, cursor: "pointer", fontFamily: "JetBrains Mono, monospace" }} title={apiKey ? "API Connected" : "Settings"}>{apiKey ? <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 5, height: 5, borderRadius: 3, background: "#0d6d56" }} />API</span> : <GearIc />}</button>
+        {(() => {
+          // The pill reports what is actually configured. It used to key off the Anthropic browser
+          // key alone, which went stale the moment briefings moved server-side: it would read
+          // "API Connected" while the sync secret was unset, and drop back to a bare gear if the
+          // key were cleared even though briefings still worked. Both credentials now light it.
+          const lit = [apiKey && "API", syncSecret && "SYNC"].filter(Boolean);
+          const on = lit.length > 0;
+          return <button onClick={() => setShowSettings(true)} style={{ display: "flex", alignItems: "center", gap: 5, background: on ? "#0d6d5608" : "rgba(255,253,249,0.85)", border: `1px solid ${on ? "#0d6d5620" : "#e9ddc9"}`, borderRadius: 8, padding: "5px 10px", color: on ? "#0d6d56" : "#8a8072", fontSize: 10, cursor: "pointer", fontFamily: "JetBrains Mono, monospace" }} title={on ? `Settings — ${apiKey ? "Anthropic key connected" : "no Anthropic key"}, ${syncSecret ? "briefing sync connected" : "no briefing sync"}` : "Settings"}>{on ? <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}><span style={{ width: 5, height: 5, borderRadius: 3, background: "#0d6d56" }} />{lit.join(" ")}</span> : <GearIc />}</button>;
+        })()}
         <button onClick={() => setCmd(true)} style={{ display: "flex", alignItems: "center", gap: 5, background: "#f6eee1", border: "1px solid #e9ddc9", borderRadius: 8, padding: "5px 10px", color: "#8a8072", fontSize: 10, cursor: "pointer", fontFamily: "JetBrains Mono, monospace" }}>⌘K</button>
         {LINKS.slice(0, 2).map(l => <a key={l.label} href={l.url} target="_blank" rel="noopener noreferrer" style={{ color: "#8a8072", textDecoration: "none", width: 30, height: 30, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 7, border: "1px solid #e9ddc9", transition: "all 0.25s" }}><span style={{ fontSize: 9, fontWeight: 700, fontFamily: "JetBrains Mono, monospace" }}>{l.ic}</span></a>)}
       </div>
@@ -3491,12 +3550,15 @@ export default function App() {
         </>}
       </div>}
 
-      {tab === "news" && <div style={{ animation: "fadeUp 0.4s ease both" }}><Kicker n="04" t="News & Briefings" />
+      {tab === "news" && <div style={{ animation: "fadeUp 0.4s ease both" }}><Kicker n="04" t={syncSecret ? "News & Briefings" : "News"} />
         <div id="standing-wire" style={{ ...S.card, marginBottom: 16 }}>
           <h2 style={S.cardTitle}><span style={{ color: "#0d6d56" }}>◆</span> The Standing Wire<Info text="An always-on headline wire from official feeds — Reuters, WSJ, CNBC, MarketWatch, Yahoo Finance. Front Page groups the same story across outlets into one line, Techmeme-style; The River is the raw chronological tape. Every headline links to the publisher. No key required." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="news" id="standing-wire" /></span></h2>
           <StandingWire desk={desk} />
         </div>
-        <Briefings apiKey={apiKey} />
+        {/* Editor-only. Briefings can no longer be generated by a visitor (the Anthropic key is
+            server-side now), so showing the card to one would put a permanently dead Generate
+            button on the recruiter-facing wire. The rest of this tab is keyless and live. */}
+        {syncSecret && <Briefings syncSecret={syncSecret} />}
         {desk && <div id="proofs-tray" style={{ ...S.card, marginTop: 16 }}>
           <h2 style={S.cardTitle}><span style={{ color: "#b0741e" }}>◆</span> The Proofs Tray<Info text="Every briefing also sets two or three flashcards from the day's own facts. They wait here for a read: File sends a card into the same spaced-repetition deck as the drills, Spike kills it. Nothing is filed automatically — machine-written cards are wrong often enough that an unread one would quietly poison the deck. Private to this browser." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="news" id="proofs-tray" /></span></h2>
           <ProofsTray />
