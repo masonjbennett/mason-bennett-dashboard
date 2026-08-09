@@ -23,10 +23,16 @@
 import { get, put } from "@vercel/blob";
 import { timingSafeEqual } from "node:crypto";
 
-// The three calls are sequential inside a step only for retries; a single searching call is the
-// long pole. 120s leaves generous headroom under the 300s Hobby ceiling without letting a wedged
-// upstream hold a connection open for five minutes.
-export const config = { maxDuration: 120 };
+// A single searching call is the long pole, and it is slower than it looks: step 1 makes up to six
+// web searches AND writes 4000 tokens of prose, and step 2 does its own six on top. 120s was set
+// here first and produced a bare 504 on the very first live run — the browser chain this replaced
+// had no time limit at all, so nothing capped it until the move to serverless. Sit at the 300s
+// Hobby ceiling and let DEADLINE_MS below fail cleanly before the platform does.
+export const config = { maxDuration: 300 };
+// Abort with room to spare inside maxDuration. Past the platform limit the invocation is killed
+// mid-flight and the client gets a 504 with no explanation; aborting ourselves turns the same
+// timeout into a named error that says which step ran long.
+const DEADLINE_MS = 285000;
 
 const MODEL = "claude-sonnet-5";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
@@ -87,21 +93,36 @@ const delay = ms => new Promise(r => setTimeout(r, ms));
 // Plain language, so a failed card can say WHY instead of just "failed".
 function errText(e) {
   const m = String((e && e.message) || e || "").toLowerCase();
+  // Timeouts first, and deliberately so. Our own timeout message names the model, and the broad
+  // /model/ rule below would otherwise rewrite "took too long" into "that model is unavailable —
+  // the model ID may be retired", sending anyone reading it to debug a model ID that is fine.
+  if (/took too long/.test(m)) return String(e.message);
   if (/credit balance|billing|insufficient|quota/.test(m)) return "the Anthropic account is out of credit";
   if (/invalid x-api-key|authentication|unauthorized|permission/.test(m)) return "the server's Anthropic key was rejected";
   if (/rate|overloaded|too many/.test(m)) return "the API is rate-limited — wait a moment";
   if (/model/.test(m)) return "that model is unavailable — the site's model ID may be retired";
   return (e && e.message) ? String(e.message).slice(0, 120) : "the API call failed";
 }
-async function callAnthropic(body) {
+async function callAnthropic(body, deadline) {
   // thinking disabled by default: Sonnet 5 runs adaptive thinking when the field is omitted, which
   // spends the max_tokens budget these prompts need for prose.
   for (let i = 0; i < 3; i++) {
-    const r = await fetch(ANTHROPIC_URL, {
-      method: "POST",
-      headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ thinking: { type: "disabled" }, ...body }),
-    });
+    const left = deadline - Date.now();
+    if (left <= 0) throw new Error("the briefing took too long — the desk ran out of time before the model answered");
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), left);
+    let r;
+    try {
+      r = await fetch(ANTHROPIC_URL, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-api-key": process.env.ANTHROPIC_KEY, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ thinking: { type: "disabled" }, ...body }),
+        signal: ctrl.signal,
+      });
+    } catch (e) {
+      if (e && (e.name === "AbortError" || e.name === "TimeoutError")) throw new Error("the briefing took too long — the model was still searching when the desk ran out of time");
+      throw e;
+    } finally { clearTimeout(timer); }
     if (r.status === 429 || r.status === 529) {
       if (i < 2) { await delay(5000 * (i + 1)); continue; }
       // Say so plainly. Falling through to parse the body here would surface a rate limit as
@@ -125,11 +146,11 @@ const parseArr = s => { try { const t = String(s).trim().replace(/```json|```/g,
 const parseObj = s => { try { const t = String(s).trim().replace(/```json|```/g, "").trim(); const m = t.match(/\{[\s\S]*\}/); return JSON.parse(m ? m[0] : t); } catch { return null; } };
 
 // Step 1 — draft the briefing, and split off its sources and Proofs Tray cards.
-async function stepBrief(type) {
+async function stepBrief(type, deadline) {
   const raw = blocksToText(await callAnthropic({
     model: MODEL, max_tokens: 4000, tools: [WEB_SEARCH],
     messages: [{ role: "user", content: BRIEF_PROMPTS[type] }],
-  }), "\n\n");
+  }, deadline), "\n\n");
   let sources = [], cards = [];
   const cardSep = raw.indexOf("---CARDS---");
   const head = cardSep !== -1 ? raw.slice(0, cardSep) : raw;
@@ -154,21 +175,21 @@ async function stepBrief(type) {
   return { text, sources, cards };
 }
 // Step 2 — fact-check the stored briefing against the web.
-async function stepVerify(t) {
+async function stepVerify(t, deadline) {
   const raw = blocksToText(await callAnthropic({
     model: MODEL, max_tokens: 3000, tools: [WEB_SEARCH],
     messages: [{ role: "user", content: `Fact-check this briefing. Extract factual claims, verify each via web search. Return ONLY JSON: {"summary":{"verified":0,"unverified":0,"discrepancy":0,"total":0,"confidence_pct":0},"claims":[{"claim":"...","status":"verified|unverified|minor_discrepancy","note":"...","source":"..."}]}\n\n"""\n${t}\n"""` }],
-  }), "");
+  }, deadline), "");
   const v = parseObj(raw);
   if (!v || !v.summary) throw new Error("the fact-check came back unreadable");
   return v;
 }
 // Step 3 — the implications layer.
-async function stepSoWhat(t, type) {
+async function stepSoWhat(t, type, deadline) {
   const raw = blocksToText(await callAnthropic({
     model: MODEL, max_tokens: 3000,
     messages: [{ role: "user", content: `Senior strategist: from this ${type} briefing, identify 3-5 most impactful developments. Return ONLY JSON array: [{"headline":"5-8 words","development":"one sentence","why_it_matters":"2-3 sentences","who_affected":"sectors/companies","second_order":"what happens next","takeaway":"one actionable sentence"}]\n\n"""\n${t}\n"""` }],
-  }), "");
+  }, deadline), "");
   const sw = parseArr(raw);
   if (!Array.isArray(sw) || !sw.length) throw new Error("the implications came back unreadable");
   return sw;
@@ -193,6 +214,7 @@ export default async function handler(req, res) {
   if (!process.env.ANTHROPIC_KEY) return res.status(503).json({ error: "the server has no Anthropic key configured" });
 
   const step = String(body.step || "");
+  const deadline = Date.now() + DEADLINE_MS;
   try {
     if (step === "brief") {
       // Returning the stored copy unless forced is what stops two devices double-billing the same
@@ -201,15 +223,15 @@ export default async function handler(req, res) {
         const existing = await readRecord(date, type);
         if (existing && existing.text) return res.status(200).json({ ...existing, stored: true, reused: true });
       }
-      const rec = { v: 1, date, type, ts: Date.now(), ...(await stepBrief(type)) };
+      const rec = { v: 1, date, type, ts: Date.now(), ...(await stepBrief(type, deadline)) };
       return res.status(200).json({ ...rec, stored: await writeRecord(rec) });
     }
     if (step !== "verify" && step !== "sowhat") return res.status(400).json({ error: "step must be brief, verify, or sowhat" });
 
     const rec = await readRecord(date, type);
     if (!rec || !rec.text) return res.status(409).json({ error: "no briefing stored for today yet — draft it first" });
-    if (step === "verify") rec.verify = await stepVerify(rec.text);
-    else rec.soWhat = await stepSoWhat(rec.text, type);
+    if (step === "verify") rec.verify = await stepVerify(rec.text, deadline);
+    else rec.soWhat = await stepSoWhat(rec.text, type, deadline);
     rec.ts = Date.now();
     return res.status(200).json({ ...rec, stored: await writeRecord(rec) });
   } catch (e) {
