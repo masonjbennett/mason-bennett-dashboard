@@ -10,24 +10,24 @@
 // anyone could read the store or spend Mason's Anthropic credit poisoning it. Every method checks
 // SYNC_SECRET first and nothing else runs until it passes.
 //
-// THREE STEPS, THREE INVOCATIONS. One briefing is three Anthropic calls (draft → fact-check →
-// implications) and the searching ones can each run a minute. The client drives them as three
-// separate POSTs rather than one long request: each invocation stays short, partial results land in
-// the store as they finish (a second device sees the text before the fact-check is done), and the
-// front end keeps its Step 1/3 · 2/3 · 3/3 progress. Steps 2 and 3 read the text back from the
-// store rather than trusting a client-supplied body, so a caller can't slip its own text past the
-// fact-checker. They must stay SEQUENTIAL — both do a read-modify-write of the same record.
+// ONE STEP PER INVOCATION. A briefing is up to three Anthropic calls — draft, then implications
+// automatically, with the fact-check left to a button because it runs its own searches and costs
+// about what the draft did. Each is its own POST rather than one long request: every invocation
+// stays short, partial results land in the store as they finish (a second device sees the text
+// before the rest arrives), and the front end can show real progress. verify and sowhat read the
+// text back from the store rather than trusting a client-supplied body, so a caller can't slip its
+// own text past the fact-checker. They must stay SEQUENTIAL — both read-modify-write one record.
 //
 // Env: SYNC_SECRET (required), ANTHROPIC_KEY (required to generate), plus BLOB_READ_WRITE_TOKEN,
 // added automatically when the Blob store is created in the Vercel dashboard.
 import { get, put } from "@vercel/blob";
 import { timingSafeEqual } from "node:crypto";
 
-// A single searching call is the long pole, and it is slower than it looks: step 1 makes up to six
-// web searches AND writes 4000 tokens of prose, and step 2 does its own six on top. 120s was set
-// here first and produced a bare 504 on the very first live run — the browser chain this replaced
-// had no time limit at all, so nothing capped it until the move to serverless. Sit at the 300s
-// Hobby ceiling and let DEADLINE_MS below fail cleanly before the platform does.
+// The searching draft is the long pole and is far slower than it looks. 120s here produced a bare
+// 504 on the first live run; 285s then timed out too, at six searches. The browser chain this
+// replaced had no time limit at all, so nothing capped it until the move to serverless. Sit at the
+// 300s Hobby ceiling and let DEADLINE_MS fail cleanly before the platform does — a timeout that
+// names itself costs the same as a 504 but doesn't send you debugging the wrong thing.
 export const config = { maxDuration: 300 };
 // Abort with room to spare inside maxDuration. Past the platform limit the invocation is killed
 // mid-flight and the client gets a 504 with no explanation; aborting ourselves turns the same
@@ -36,7 +36,13 @@ const DEADLINE_MS = 285000;
 
 const MODEL = "claude-sonnet-5";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
-const WEB_SEARCH = { type: "web_search_20260209", name: "web_search", max_uses: 6 };
+// Six searches could not finish inside a 285s deadline and still billed ~$0.52 for the attempt.
+// The cost and the latency have the same cause: the search tool runs an agentic loop that appends
+// each result set to the context and re-sends the whole thing on the next turn, so both tokens and
+// wall-clock compound rather than add. Three keeps real coverage of a five-topic brief while
+// cutting the deepest turns, which are the expensive slow ones. Tune up from a run that completes,
+// never down from one that doesn't — a failed attempt costs the same as a successful one.
+const WEB_SEARCH = { type: "web_search_20260209", name: "web_search", max_uses: 3 };
 
 // ============ PROMPTS (kept verbatim from the browser-side chain they replace) ============
 const SRC_GUIDE = `SOURCE RULES: PRIORITIZE: Reuters, Bloomberg, CNBC, FT, WSJ, AP, MarketWatch, Barron's, Yahoo Finance, SEC.gov. EXCLUDE: partisan outlets, opinion blogs, editorials, social media. Prefer factual reporting over commentary.`;
@@ -127,7 +133,12 @@ async function callAnthropic(body, deadline, label) {
       throw e;
     } finally { clearTimeout(timer); }
     if (r.status === 429 || r.status === 529) {
-      if (i < 2) { await delay(5000 * (i + 1)); continue; }
+      // Only retry a failure that arrived FAST. A searching call that is rate-limited deep into its
+      // loop has already done — and been billed for — every search it made, so retrying it re-buys
+      // the whole thing at full price and burns the deadline as well. A quick 429 is the cheap case
+      // worth retrying; a slow one means stop and say so.
+      const spent = Date.now() - (deadline - DEADLINE_MS);
+      if (i < 2 && spent < 30000) { await delay(5000 * (i + 1)); continue; }
       // Say so plainly. Falling through to parse the body here would surface a rate limit as
       // "no content in response", which sends anyone debugging it in the wrong direction.
       throw new Error("rate-limited — too many requests; wait a moment and try again");
@@ -152,7 +163,7 @@ const parseObj = s => { try { const t = String(s).trim().replace(/```json|```/g,
 // Step 1 — draft the briefing, and split off its sources and Proofs Tray cards.
 async function stepBrief(type, deadline) {
   const raw = blocksToText(await callAnthropic({
-    model: MODEL, max_tokens: 4000, tools: [WEB_SEARCH],
+    model: MODEL, max_tokens: 2500, tools: [WEB_SEARCH],
     messages: [{ role: "user", content: BRIEF_PROMPTS[type] }],
   }, deadline, "draft"), "\n\n");
   let sources = [], cards = [];
