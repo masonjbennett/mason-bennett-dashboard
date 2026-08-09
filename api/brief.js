@@ -36,13 +36,16 @@ const DEADLINE_MS = 285000;
 
 const MODEL = "claude-sonnet-5";
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
-// Six searches could not finish inside a 285s deadline and still billed ~$0.52 for the attempt.
-// The cost and the latency have the same cause: the search tool runs an agentic loop that appends
-// each result set to the context and re-sends the whole thing on the next turn, so both tokens and
-// wall-clock compound rather than add. Three keeps real coverage of a five-topic brief while
-// cutting the deepest turns, which are the expensive slow ones. Tune up from a run that completes,
-// never down from one that doesn't — a failed attempt costs the same as a successful one.
-const WEB_SEARCH = { type: "web_search_20260209", name: "web_search", max_uses: 3 };
+// allowed_callers:["direct"] is the whole ballgame here, not a tuning knob. On web_search_20260209
+// this field DEFAULTS to ["code_execution_20260120"] — dynamic filtering — which means web search
+// is not offered to the model as a tool at all, only as a function inside a code sandbox. The model
+// then batches several searches into one code block, blows max_uses in a single step, gets
+// max_uses_exceeded, and spends the rest of the invocation retrying and explaining that it cannot
+// find a standalone web_search. That, not slow searching, is what burned two 285s timeouts and
+// ~$1.12: the deadline was a symptom. Direct calls make it one search per use, no sandbox, no
+// batching. Five covers the five topics the briefing prompts ask for; the docs put simple factual
+// queries at 1-3 and multi-entity research at 10+.
+const WEB_SEARCH = { type: "web_search_20260209", name: "web_search", max_uses: 5, allowed_callers: ["direct"] };
 
 // ============ PROMPTS (kept verbatim from the browser-side chain they replace) ============
 const SRC_GUIDE = `SOURCE RULES: PRIORITIZE: Reuters, Bloomberg, CNBC, FT, WSJ, AP, MarketWatch, Barron's, Yahoo Finance, SEC.gov. EXCLUDE: partisan outlets, opinion blogs, editorials, social media. Prefer factual reporting over commentary.`;
@@ -162,10 +165,19 @@ const parseObj = s => { try { const t = String(s).trim().replace(/```json|```/g,
 
 // Step 1 — draft the briefing, and split off its sources and Proofs Tray cards.
 async function stepBrief(type, deadline) {
-  const raw = blocksToText(await callAnthropic({
+  const d = await callAnthropic({
     model: MODEL, max_tokens: 2500, tools: [WEB_SEARCH],
     messages: [{ role: "user", content: BRIEF_PROMPTS[type] }],
-  }, deadline, "draft"), "\n\n");
+  }, deadline, "draft");
+  // FAIL CLOSED ON AN UNSEARCHED BRIEFING. When the search tool was unreachable the model wrote a
+  // long, well-formed apology instead — and because it mentioned "[Reuters]" while explaining that
+  // it could not cite Reuters, the inline-citation fallback below manufactured a source for it, and
+  // the whole apology was stored as that day's briefing. A briefing that never searched is not a
+  // briefing whatever it cost to draft, so reject it here rather than let it reach the store, the
+  // other device, or the Proofs Tray. usage.server_tool_use is the only honest witness to this.
+  const searches = (d && d.usage && d.usage.server_tool_use && d.usage.server_tool_use.web_search_requests) || 0;
+  if (!searches) throw new Error("the briefing ran without a single web search — refusing to store one written from memory");
+  const raw = blocksToText(d, "\n\n");
   let sources = [], cards = [];
   const cardSep = raw.indexOf("---CARDS---");
   const head = cardSep !== -1 ? raw.slice(0, cardSep) : raw;
@@ -187,7 +199,7 @@ async function stepBrief(type, deadline) {
     if (m) sources = [...new Set(m.map(x => x.slice(1, -1).trim()))].map(n => ({ name: n, url: SRC_URLS[n] || "#" }));
   }
   if (!text) throw new Error("the model returned an empty briefing");
-  return { text, sources, cards };
+  return { text, sources, cards, searches };
 }
 // Step 2 — fact-check the stored briefing against the web.
 async function stepVerify(t, deadline) {
