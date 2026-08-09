@@ -51,9 +51,21 @@ const WEB_SEARCH = { type: "web_search_20260209", name: "web_search", max_uses: 
 const SRC_GUIDE = `SOURCE RULES: PRIORITIZE: Reuters, Bloomberg, CNBC, FT, WSJ, AP, MarketWatch, Barron's, Yahoo Finance, SEC.gov. EXCLUDE: partisan outlets, opinion blogs, editorials, social media. Prefer factual reporting over commentary.`;
 // The briefing also emits flashcards for the Proofs Tray in the SAME call — no extra API spend.
 const CARDS_GUIDE = `\nThen ---CARDS--- then JSON: [{"q":"...","a":"..."}] — 2-3 flashcards drawn ONLY from facts stated in the briefing above. Each q is a specific, checkable question (a level, a print, a deal, a driver); each a is one short factual sentence. No opinions or forecasts.`;
+// The model has no clock. Left to itself it reconstructs the date from whatever the search results
+// imply — it got Sunday 9 Aug right by inference, but a briefing that has to deduce what day it is
+// will eventually deduce wrong, and every "overnight", "today" and "this week" in these prompts
+// hangs off that. Central, because the store keys on Central and Mason reads it in DFW.
+const todayLongCT = () => new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", weekday: "long", year: "numeric", month: "long", day: "numeric" }).format(new Date());
+const DATELINE = () => `Today is ${todayLongCT()} (US Central). If the US market is closed today, brief for the next trading session and say which day you are briefing for.`;
+// Written as functions of the date, so the dateline is evaluated per request rather than frozen at
+// cold start — a warm serverless instance can outlive the day it booted on.
 const BRIEF_PROMPTS = {
-  morning: `Senior equity research analyst morning briefing. Search latest market news. Cover: 1) Overnight global markets 2) Macro/Fed developments 3) Pre-market sector moves 4) M&A/deals 5) What to watch today.\n${SRC_GUIDE}\nCite sources inline [Reuters]. End with ---SOURCES--- then JSON: [{"name":"...","url":"..."}].${CARDS_GUIDE} Plain paragraphs, no markdown.`,
-  close: `Senior equity research analyst close briefing. Search today's results. Cover: 1) Index closes with % 2) Session drivers 3) Stock movers 4) After-hours 5) Tomorrow watch.\n${SRC_GUIDE}\nCite inline [Reuters]. End with ---SOURCES--- then JSON: [{"name":"...","url":"..."}].${CARDS_GUIDE} Plain paragraphs, no markdown.`,
+  morning: () => `${DATELINE()}
+
+Senior equity research analyst morning briefing. Search latest market news. Cover: 1) Overnight global markets 2) Macro/Fed developments 3) Pre-market sector moves 4) M&A/deals 5) What to watch today.\n${SRC_GUIDE}\nCite sources inline [Reuters]. End with ---SOURCES--- then JSON: [{"name":"...","url":"..."}].${CARDS_GUIDE} Plain paragraphs, no markdown. Begin with the briefing itself — no preamble and no narration about what you are about to do or search for.`,
+  close: () => `${DATELINE()}
+
+Senior equity research analyst close briefing. Search today's results. Cover: 1) Index closes with % 2) Session drivers 3) Stock movers 4) After-hours 5) Tomorrow watch.\n${SRC_GUIDE}\nCite inline [Reuters]. End with ---SOURCES--- then JSON: [{"name":"...","url":"..."}].${CARDS_GUIDE} Plain paragraphs, no markdown. Begin with the briefing itself — no preamble and no narration about what you are about to do or search for.`,
 };
 const SRC_URLS = { "Reuters": "https://reuters.com", "Bloomberg": "https://bloomberg.com", "CNBC": "https://cnbc.com", "Wall Street Journal": "https://wsj.com", "WSJ": "https://wsj.com", "Financial Times": "https://ft.com", "FT": "https://ft.com", "MarketWatch": "https://marketwatch.com", "AP": "https://apnews.com", "Yahoo Finance": "https://finance.yahoo.com", "Barron's": "https://barrons.com", "Seeking Alpha": "https://seekingalpha.com" };
 
@@ -160,6 +172,17 @@ function blocksToText(d, joiner) {
   if (!t.trim()) throw new Error("the model returned an empty briefing");
   return t;
 }
+// Belt and braces behind the "no preamble" instruction. The first live briefing opened with "I need
+// more specific, current data... Let me get the latest Fed/macro news", which was the model
+// narrating its plan and which then got stored as the opening line of the day's news. Only strips
+// LEADING first-person process narration, and only whole paragraphs — a briefing that legitimately
+// begins with a headline or a section number is untouched.
+const PREAMBLE = /^(i'?ll\b|i will\b|i'?m going to\b|i need\b|let me\b|first,? let me\b|okay[,.]|sure[,.])/i;
+function stripPreamble(text) {
+  const paras = text.split(/\n\s*\n/);
+  while (paras.length > 1 && PREAMBLE.test(paras[0].trim())) paras.shift();
+  return paras.join("\n\n").trim();
+}
 const parseArr = s => { try { const t = String(s).trim().replace(/```json|```/g, "").trim(); const m = t.match(/\[[\s\S]*\]/); return JSON.parse(m ? m[0] : t); } catch { return null; } };
 const parseObj = s => { try { const t = String(s).trim().replace(/```json|```/g, "").trim(); const m = t.match(/\{[\s\S]*\}/); return JSON.parse(m ? m[0] : t); } catch { return null; } };
 
@@ -167,7 +190,7 @@ const parseObj = s => { try { const t = String(s).trim().replace(/```json|```/g,
 async function stepBrief(type, deadline) {
   const d = await callAnthropic({
     model: MODEL, max_tokens: 2500, tools: [WEB_SEARCH],
-    messages: [{ role: "user", content: BRIEF_PROMPTS[type] }],
+    messages: [{ role: "user", content: BRIEF_PROMPTS[type]() }],
   }, deadline, "draft");
   // FAIL CLOSED ON AN UNSEARCHED BRIEFING. When the search tool was unreachable the model wrote a
   // long, well-formed apology instead — and because it mentioned "[Reuters]" while explaining that
@@ -198,6 +221,7 @@ async function stepBrief(type, deadline) {
     const m = text.match(/\[([A-Z][A-Za-z\s\.&']+?)\]/g);
     if (m) sources = [...new Set(m.map(x => x.slice(1, -1).trim()))].map(n => ({ name: n, url: SRC_URLS[n] || "#" }));
   }
+  text = stripPreamble(text);
   if (!text) throw new Error("the model returned an empty briefing");
   return { text, sources, cards, searches };
 }
