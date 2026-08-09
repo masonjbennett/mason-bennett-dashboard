@@ -3951,10 +3951,13 @@ export default function App() {
         .masthead-tag{font-size:6.5px!important;letter-spacing:2px!important}
         .mjb-mark{display:none!important}
         header{flex-wrap:wrap!important;padding:10px 14px!important;gap:8px!important}
-        /* Desktop centering is off here: the header wraps and the mark is hidden, so the
-           action row is alone on its line and should stay left as it always has. */
-        .header-actions{flex:0 1 auto!important;justify-content:flex-start!important}
-        header nav{order:3;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+        /* The header wraps into two rows here, both centered under a centered masthead: the
+           action row alone on the first, the nav full-width on the second. The nav uses
+           "safe center" deliberately — plain center in a scroll container pushes the first
+           tab past the left edge with no way to scroll back to it once the tabs outgrow
+           the width. safe falls back to flex-start exactly then. */
+        .header-actions{flex:1!important;justify-content:center!important}
+        header nav{order:3;width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch;justify-content:safe center}
         header nav button{white-space:nowrap;font-size:11px!important;padding:6px 10px!important}
         main{padding:14px!important}
         .dash-grid-2{grid-template-columns:1fr!important}
