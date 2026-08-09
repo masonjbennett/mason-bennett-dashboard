@@ -103,7 +103,10 @@ function errText(e) {
   if (/model/.test(m)) return "that model is unavailable — the site's model ID may be retired";
   return (e && e.message) ? String(e.message).slice(0, 120) : "the API call failed";
 }
-async function callAnthropic(body, deadline) {
+// Logs the whole usage object rather than picking fields out of it: the exact shape of the
+// server-tool counters isn't worth guessing at, and what matters is that the real token and search
+// numbers land in the Vercel logs so the search caps can be tuned from data instead of estimates.
+async function callAnthropic(body, deadline, label) {
   // thinking disabled by default: Sonnet 5 runs adaptive thinking when the field is omitted, which
   // spends the max_tokens budget these prompts need for prose.
   for (let i = 0; i < 3; i++) {
@@ -132,6 +135,7 @@ async function callAnthropic(body, deadline) {
     let d = null; try { d = await r.json(); } catch {}
     if (d && d.error) throw new Error(d.error.message || d.error.type || "API error");
     if (!r.ok) throw new Error(`the API answered ${r.status}`);
+    if (d && d.usage) console.log(`[brief] ${label} usage ${JSON.stringify(d.usage)}`);
     return d;
   }
   throw new Error("the API call failed");
@@ -150,7 +154,7 @@ async function stepBrief(type, deadline) {
   const raw = blocksToText(await callAnthropic({
     model: MODEL, max_tokens: 4000, tools: [WEB_SEARCH],
     messages: [{ role: "user", content: BRIEF_PROMPTS[type] }],
-  }, deadline), "\n\n");
+  }, deadline, "draft"), "\n\n");
   let sources = [], cards = [];
   const cardSep = raw.indexOf("---CARDS---");
   const head = cardSep !== -1 ? raw.slice(0, cardSep) : raw;
@@ -179,7 +183,7 @@ async function stepVerify(t, deadline) {
   const raw = blocksToText(await callAnthropic({
     model: MODEL, max_tokens: 3000, tools: [WEB_SEARCH],
     messages: [{ role: "user", content: `Fact-check this briefing. Extract factual claims, verify each via web search. Return ONLY JSON: {"summary":{"verified":0,"unverified":0,"discrepancy":0,"total":0,"confidence_pct":0},"claims":[{"claim":"...","status":"verified|unverified|minor_discrepancy","note":"...","source":"..."}]}\n\n"""\n${t}\n"""` }],
-  }, deadline), "");
+  }, deadline, "fact-check"), "");
   const v = parseObj(raw);
   if (!v || !v.summary) throw new Error("the fact-check came back unreadable");
   return v;
@@ -189,7 +193,7 @@ async function stepSoWhat(t, type, deadline) {
   const raw = blocksToText(await callAnthropic({
     model: MODEL, max_tokens: 3000,
     messages: [{ role: "user", content: `Senior strategist: from this ${type} briefing, identify 3-5 most impactful developments. Return ONLY JSON array: [{"headline":"5-8 words","development":"one sentence","why_it_matters":"2-3 sentences","who_affected":"sectors/companies","second_order":"what happens next","takeaway":"one actionable sentence"}]\n\n"""\n${t}\n"""` }],
-  }, deadline), "");
+  }, deadline, "so-what"), "");
   const sw = parseArr(raw);
   if (!Array.isArray(sw) || !sw.length) throw new Error("the implications came back unreadable");
   return sw;
