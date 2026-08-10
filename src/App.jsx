@@ -229,6 +229,25 @@ async function loadStoredBrief(type, secret) {
   const d = await briefCall(`/api/brief?type=${type}`, { headers: { "x-mjb-sync": secret } });
   return d && d.found ? d.brief : null;
 }
+// ---- The archive. Every edition ever drafted is still in the store; these two read it back.
+// Both are pure reads: no Anthropic call, no generation, nothing written, nothing billed.
+//
+// Which editions exist — [{date, types:[...]}], newest first — so the stepper walks real days
+// instead of probing for them. null means the desk couldn't answer, and the archive stays hidden
+// rather than claiming he has no history.
+async function loadBriefIndex(secret) {
+  if (!secret) return null;
+  const d = await briefCall("/api/brief?index=1", { headers: { "x-mjb-sync": secret } });
+  return d && Array.isArray(d.entries) ? d.entries : null;
+}
+// One archived edition. Returns {ok, brief} rather than just the record because "nothing was filed
+// that day" and "the desk didn't answer" are different sentences, and collapsing them would have the
+// archive quietly report a network blip as a day Mason never briefed.
+async function loadArchivedBrief(type, secret, date) {
+  if (!secret) return { ok: false, brief: null };
+  const d = await briefCall(`/api/brief?type=${type}&date=${encodeURIComponent(date)}`, { headers: { "x-mjb-sync": secret } });
+  return d ? { ok: true, brief: d.found ? d.brief : null } : { ok: false, brief: null };
+}
 // One step of the chain — "brief" | "verify" | "sowhat" — each returning the whole updated record.
 // Split into three requests so each serverless invocation stays short and partial results reach the
 // store (and the other device) as they land. Must be called in order; steps 2-3 read step 1's text.
@@ -1096,36 +1115,73 @@ function Hero(){const[ph,setPh]=useState(0);useEffect(()=>{const timers=[setTime
 function Cmd({open,onClose,onNav}){const[q,setQ]=useState("");const ref=useRef();const items=[{l:"Home",t:"home"},{l:"Selected Work",t:"projects"},{l:"Markets",t:"markets"},{l:"News",t:"news"},{l:"Recruiter packet",t:"recruiter"},{l:"Prep — drills & learning",t:"projects",seg:"prep"},{l:"Markets — my book",t:"markets",seg:"book"},...QLINKS.map(l=>({l:l.n,u:l.u}))];const f=items.filter(i=>i.l.toLowerCase().includes(q.toLowerCase()));useEffect(()=>{if(open&&ref.current){ref.current.focus();setQ("")}},[open]);if(!open)return null;return <div style={{position:"fixed",inset:0,background:"rgba(51,48,46,0.45)",backdropFilter:"blur(12px)",zIndex:1000,display:"flex",alignItems:"flex-start",justifyContent:"center",paddingTop:100,animation:"fadeIn 0.15s"}} onClick={onClose}><div style={{background:"#fffdf9",border:"1px solid #d8c8b0",borderRadius:16,width:520,overflow:"hidden",boxShadow:"0 32px 80px rgba(64,52,32,0.14)"}} onClick={e=>e.stopPropagation()} className="cmd-modal"><div style={{padding:"16px 20px",borderBottom:"1px solid #e9ddc9",display:"flex",alignItems:"center",gap:12}}><span style={{color:"#0d6d56"}}>⌘</span><input ref={ref} value={q} onChange={e=>setQ(e.target.value)} placeholder="Search..." style={{flex:1,background:"none",border:"none",outline:"none",color:"#33302c",fontSize:15}}/><kbd style={{fontSize:9,padding:"2px 7px",borderRadius:4,background:"#e9ddc9",color:"#8a8072",border:"1px solid #d8c8b0",fontFamily:"'JetBrains Mono',monospace"}}>ESC</kbd></div><div style={{maxHeight:320,overflowY:"auto",padding:6}}>{f.map((item,i)=><button key={i} onClick={()=>{if(item.t)onNav(item.t,item.seg);else window.open(item.u,"_blank");onClose()}} style={{display:"flex",alignItems:"center",gap:12,width:"100%",padding:"11px 14px",background:"none",border:"none",color:"#33302c",fontSize:14,cursor:"pointer",borderRadius:10,textAlign:"left",transition:"background 0.1s"}} onMouseEnter={e=>e.currentTarget.style.background="#e9ddc9"} onMouseLeave={e=>e.currentTarget.style.background="none"}><span style={{color:"#0d6d56",width:20,textAlign:"center"}}>→</span><span>{item.l}</span>{item.u&&<span style={{marginLeft:"auto",fontSize:10,color:"#8a8072"}}>↗</span>}</button>)}</div></div></div>;}
 
 // ============ BRIEFINGS (compact) ============
-function Briefings({syncSecret}){const[recs,setRecs]=useState({morning:null,close:null}),[busy,setBusy]=useState(""),[busyTab,setBusyTab]=useState(""),[showCl,setShowCl]=useState(false),[showSW,setShowSW]=useState(true),[err,setErr]=useState(""),[tab,setTab]=useState(()=>new Date().getHours()>=16?"close":"morning");const sugg=new Date().getHours()>=16?"close":"morning";
+// An edition is addressed by [date, type]. Nothing has ever deleted one, so the store holds every
+// briefing it has taken since the day it was created — `date` is what this whole card renders, and
+// the archive stepper is what makes the back catalogue reachable at all. Generation stays pinned to
+// TODAY (api/brief.js refuses a back-dated POST): reading is free, drafting costs real money.
+const briefKey=(date,type)=>`${date}|${type}`;
+// Central, matching api/brief.js's todayCT() exactly. Both sides have to agree on which calendar day
+// "today" is, or the client asks for an edition the desk filed under a different date.
+const briefToday=()=>new Intl.DateTimeFormat("en-CA",{timeZone:"America/Chicago",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+// Built from the parts, NOT new Date("2026-08-10") — that parses as UTC and then prints as the day
+// before for anyone west of Greenwich, which is everyone who reads this site.
+const fmtEdition=iso=>{const[y,m,d]=iso.split("-").map(Number);return new Date(y,m-1,d).toLocaleDateString("en-US",{weekday:"short",day:"numeric",month:"short"})};
+function Briefings({syncSecret}){const today=briefToday();
+// recs is keyed date|type across the whole archive, so stepping back to a day already read is
+// instant. Session-only and deliberately never in localStorage — a stale local copy is the exact
+// failure the server-side store replaced. A key present with a null value means "asked, none filed".
+const[recs,setRecs]=useState({}),[idx,setIdx]=useState(null),[date,setDate]=useState(today),[pulling,setPulling]=useState(false),[archErr,setArchErr]=useState("");
+const[busy,setBusy]=useState(""),[busyTab,setBusyTab]=useState(""),[showCl,setShowCl]=useState(false),[showSW,setShowSW]=useState(true),[err,setErr]=useState(""),[tab,setTab]=useState(()=>new Date().getHours()>=16?"close":"morning");const sugg=new Date().getHours()>=16?"close":"morning",isToday=date===today;
 // On load, pull whatever the desk already holds for today — the whole point of the sync: a briefing
 // drafted on the desktop is already here when the phone opens, instead of waiting on a second
-// (re-billed) generation. Its Proofs Tray cards are queued on THIS device too, since the tray is
-// per-device state and queueProofs dedupes by question — so either device can file them.
-useEffect(()=>{if(!syncSecret){setRecs({morning:null,close:null});return}let live=true;(async()=>{const[m,c]=await Promise.all([loadStoredBrief("morning",syncSecret),loadStoredBrief("close",syncSecret)]);if(!live)return;setRecs({morning:m,close:c});if(m&&m.cards)queueProofs(m.cards,"morning");if(c&&c.cards)queueProofs(c.cards,"close")})();return()=>{live=false}},[syncSecret]);
+// (re-billed) generation. The archive index rides along in the same round trip.
+useEffect(()=>{if(!syncSecret){setRecs({});setIdx(null);return}let live=true;(async()=>{const[m,c,ix]=await Promise.all([loadStoredBrief("morning",syncSecret),loadStoredBrief("close",syncSecret),loadBriefIndex(syncSecret)]);if(!live)return;setRecs(r=>({...r,[briefKey(today,"morning")]:m,[briefKey(today,"close")]:c}));if(ix)setIdx(ix);
+// Proofs are queued from TODAY'S editions only, and the tray is per-device state so either device
+// can file them. Never from an archived one: queueProofs dedupes against the tray's current
+// contents, not against cards already filed or spiked, so re-queueing an old briefing every time
+// Mason reads it back would resurrect cards he has already dealt with.
+if(m&&m.cards)queueProofs(m.cards,"morning");if(c&&c.cards)queueProofs(c.cards,"close")})();return()=>{live=false}},[syncSecret]);
+// Archived editions are fetched on demand, one at a time, and only for a day not already read this
+// session. Today's pair never comes through here — the effect above owns those.
+useEffect(()=>{const k=briefKey(date,tab);if(!syncSecret||isToday||k in recs){setPulling(false);return}let live=true;setPulling(true);setArchErr("");(async()=>{const{ok,brief}=await loadArchivedBrief(tab,syncSecret,date);if(!live)return;setPulling(false);
+// Only a real answer is recorded. A failed read is left out of recs on purpose, so stepping back
+// to that day retries it rather than reporting "none filed" forever on one dropped request.
+if(ok)setRecs(r=>({...r,[k]:brief}));else setArchErr(lastSyncError||"the desk didn't answer")})();return()=>{live=false}},[date,tab,syncSecret]);
+// The stepper walks only days the index says exist — no probing, no dead ends. Today is always in
+// the list, including when the index hasn't yet caught up with a briefing drafted minutes ago.
+const dates=(()=>{const s=new Set((idx||[]).map(e=>e.date));s.add(today);return[...s].sort().reverse()})();
+const typesOn=d=>{const e=(idx||[]).find(x=>x.date===d);return e?e.types:["morning","close"]};
+const at=dates.indexOf(date);
+// dates run newest-first, so stepping to an older edition means stepping FORWARD through the array.
+const go=step=>{const d=dates[at+step];if(!d)return;const t=typesOn(d);setDate(d);setArchErr("");if(t.length&&!t.includes(tab))setTab(t[0])};
 // Draft → fact-check → implications, one request each, in order (steps 2-3 read step 1 back out of
 // the store). A step the stored record already carries is skipped: another device did that work,
 // and re-running it would just re-bill the same call.
-const gen=async(type,force=false)=>{if(!syncSecret){setErr("Add the sync secret in Settings and the desk drafts the briefing for every device.");return}setErr("");setBusyTab(type);setBusy("brief");
+const gen=async(type,force=false)=>{if(!syncSecret){setErr("Add the sync secret in Settings and the desk drafts the briefing for every device.");return}
+  // Today only, always. The controls that call this are hidden on an archived day, and the desk
+  // would refuse a back-dated draft anyway — this is the third lock on spending money to rewrite
+  // a day that has already been read.
+  if(!isToday)return;setErr("");setBusyTab(type);setBusy("brief");
   let cur=await runBriefStep(type,"brief",syncSecret,force);
   if(!cur){setErr(`The wire didn't answer — ${lastSyncError||"try again"}.`);setBusy("");setBusyTab("");return}
-  setRecs(r=>({...r,[type]:cur}));queueProofs(cur.cards,type);
+  setRecs(r=>({...r,[briefKey(today,type)]:cur}));queueProofs(cur.cards,type);
   // The fact-check is NOT in the automatic chain. It runs its own six web searches over a briefing
   // that has already been drafted, which costs about as much again as the draft itself — and it
   // grades what you've read rather than producing it. So it waits for a click; see factCheck below.
   for(const[step,field,label]of[["sowhat","soWhat","implications pass"]]){
     if(cur[field])continue;setBusy(step);
     const next=await runBriefStep(type,step,syncSecret);
-    if(next){cur=next;setRecs(r=>({...r,[type]:next}))}
+    if(next){cur=next;setRecs(r=>({...r,[briefKey(today,type)]:next}))}
     else setErr(`The ${label} didn't finish — ${lastSyncError||"try again"}. The briefing itself still stands.`)}
   setBusy("");setBusyTab("")};
 // Run on demand, once, over the briefing already in the store. Merges into the same record, so the
 // check reaches the other devices too rather than being re-bought on each one.
-const factCheck=async()=>{if(!data||data.verify||busy)return;setErr("");setBusyTab(tab);setBusy("verify");
+const factCheck=async()=>{if(!data||data.verify||busy||!isToday)return;setErr("");setBusyTab(tab);setBusy("verify");
   const next=await runBriefStep(tab,"verify",syncSecret);
-  if(next)setRecs(r=>({...r,[tab]:next}));
+  if(next)setRecs(r=>({...r,[briefKey(today,tab)]:next}));
   else setErr(`The fact-check didn't finish — ${lastSyncError||"try again"}. The briefing itself still stands.`);
   setBusy("");setBusyTab("")};
-const data=recs[tab],here=busyTab===tab,loading=here&&busy==="brief",verifying=here&&busy==="verify",swLoad=here&&busy==="sowhat",verify=data&&data.verify,soWhat=data&&data.soWhat,time=data&&data.ts?new Date(data.ts):null;
+const data=recs[briefKey(date,tab)]||null,here=isToday&&busyTab===tab,loading=here&&busy==="brief",verifying=here&&busy==="verify",swLoad=here&&busy==="sowhat",verify=data&&data.verify,soWhat=data&&data.soWhat,time=data&&data.ts?new Date(data.ts):null;
 const SC={verified:"#0d6d56",minor_discrepancy:"#b0741e",unverified:"#b2342b"},SI={verified:"✓",minor_discrepancy:"~",unverified:"✗"},SL={verified:"Verified",minor_discrepancy:"Discrepancy",unverified:"Unverified"};
 // One checked claim. Claims that FAILED the check print by default (see Briefings) — a single
 // confidence score invites trusting the whole briefing at a glance, so the disputed lines lead.
@@ -1139,18 +1195,48 @@ const ClaimRow = ({ c }) => <div style={{display:"flex",gap:8,padding:"5px 8px",
   <span style={{fontSize:8,padding:"2px 6px",borderRadius:8,fontFamily:"'JetBrains Mono',monospace",background:`${SC[c.status]}10`,color:SC[c.status],alignSelf:"flex-start"}}>{SL[c.status]}</span>
 </div>;
 return <div style={{...S.card,background:"linear-gradient(135deg,#f6eee1,#fdf8f0,#f6eee1)",border:"1px solid rgba(13,109,86,0.1)",boxShadow:"0 12px 48px rgba(64,52,32,0.1), 0 0 40px rgba(13,109,86,0.03), inset 0 1px 0 rgba(255,255,255,0.6)",position:"relative",overflow:"hidden"}}><div style={{position:"absolute",top:-40,right:-40,width:200,height:200,background:`radial-gradient(circle,${tab==="morning"?"rgba(176,116,30,0.03)":"rgba(90,95,184,0.05)"} 0%,transparent 70%)`,pointerEvents:"none"}}/>
-<div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18,position:"relative",flexWrap:"wrap",gap:12}}><div><div style={{display:"flex",gap:6,marginBottom:8}}>{["morning","close"].map(t=><button key={t} onClick={()=>setTab(t)} style={{fontSize:12,padding:"6px 16px",borderRadius:8,cursor:"pointer",fontWeight:600,transition:"all 0.25s",border:"1px solid",display:"flex",alignItems:"center",gap:8,background:tab===t?(t==="morning"?"#b0741e10":"#56599e10"):"transparent",borderColor:tab===t?(t==="morning"?"#b0741e30":"#56599e30"):"#e9ddc9",color:tab===t?(t==="morning"?"#b0741e":"#56599e"):"#8a8072"}}><span style={{display:"inline-flex"}}>{t==="morning"?<SunIc/>:<MoonIc/>}</span>{t==="morning"?"Morning":"Close"} Brief{sugg===t&&<span style={{width:5,height:5,borderRadius:3,background:t==="morning"?"#b0741e":"#56599e",animation:"pulse 2s infinite"}}/>}</button>)}</div><p style={{color:"#8a8072",fontSize:10,fontFamily:"'JetBrains Mono',monospace"}}>AI briefing → fact-check → implications {time?`· ${time.toLocaleTimeString()}`:""}</p></div><button onClick={()=>gen(tab,!!data)} disabled={loading||verifying} style={{...S.btn,opacity:(loading||verifying)?0.5:1}}>{loading?"⟳ Generating...":verifying||swLoad?"⟳ Analyzing...":data?"↻ Regenerate":"Generate Brief"}</button></div>
+{/* The archive dateline. Appears only once there is more than one day to walk — over a store
+    holding a single edition it would be a control that does nothing. ◀ is OLDER: the archive runs
+    backwards in time, which is the direction `dates` runs too. */}
+{dates.length>1&&(()=>{const step=(glyph,g,label)=>{const off=!dates[at+g];return <button onClick={()=>go(g)} disabled={off} title={label} aria-label={label} style={{background:"none",border:"1px solid #e9ddc9",borderRadius:8,width:28,height:26,display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0,color:off?"#d8c8b0":"#0d6d56",fontSize:10,cursor:off?"default":"pointer",fontFamily:"'JetBrains Mono',monospace"}}>{glyph}</button>};
+return <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:16,paddingBottom:12,borderBottom:"1px solid #e9ddc9",position:"relative"}}>
+  <span style={{fontSize:9,color:"#a2977f",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:2}}>Archive</span>
+  {!isToday&&<button onClick={()=>{setDate(today);setArchErr("")}} style={{background:"none",border:"1px solid #0d6d5625",borderRadius:8,padding:"4px 10px",color:"#0d6d56",fontSize:9,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",letterSpacing:1,textTransform:"uppercase"}}>Back to today</button>}
+  <div style={{display:"flex",alignItems:"center",gap:6,marginLeft:"auto"}}>
+    {step("◀",1,"Older edition")}
+    <span style={{fontSize:11,color:"#33302c",fontFamily:"'JetBrains Mono',monospace",letterSpacing:0.5,minWidth:104,textAlign:"center"}}>{isToday?"Today":fmtEdition(date)}</span>
+    {step("▶",-1,"Newer edition")}
+  </div>
+</div>;})()}
+<div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18,position:"relative",flexWrap:"wrap",gap:12}}><div><div style={{display:"flex",gap:6,marginBottom:8}}>{["morning","close"].map(t=>{
+/* On an archived day the index already knows which editions were filed, so the one that wasn't is
+   dimmed rather than hidden — still clickable, because the index can lag a briefing drafted minutes
+   ago, and a control that vanishes teaches nothing about why. */
+const filed=isToday||typesOn(date).includes(t);
+return <button key={t} onClick={()=>{setTab(t);setArchErr("")}} style={{fontSize:12,padding:"6px 16px",borderRadius:8,cursor:"pointer",fontWeight:600,transition:"all 0.25s",border:"1px solid",display:"flex",alignItems:"center",gap:8,opacity:filed?1:0.45,background:tab===t?(t==="morning"?"#b0741e10":"#56599e10"):"transparent",borderColor:tab===t?(t==="morning"?"#b0741e30":"#56599e30"):"#e9ddc9",color:tab===t?(t==="morning"?"#b0741e":"#56599e"):"#8a8072"}}><span style={{display:"inline-flex"}}>{t==="morning"?<SunIc/>:<MoonIc/>}</span>{t==="morning"?"Morning":"Close"} Brief{isToday&&sugg===t&&<span style={{width:5,height:5,borderRadius:3,background:t==="morning"?"#b0741e":"#56599e",animation:"pulse 2s infinite"}}/>}</button>})}</div><p style={{color:"#8a8072",fontSize:10,fontFamily:"'JetBrains Mono',monospace"}}>{isToday?"AI briefing → fact-check → implications":`Archived edition · ${fmtEdition(date)}`} {time?`· ${isToday?time.toLocaleTimeString():time.toLocaleString([],{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"})}`:""}</p></div>
+{/* Drafting controls are TODAY-only. On an archived day there is nothing to generate — the day is
+    over, the model can't search it, and a Regenerate button there would offer to spend money
+    overwriting a briefing he came back to read. */}
+{isToday&&<button onClick={()=>gen(tab,!!data)} disabled={loading||verifying} style={{...S.btn,opacity:(loading||verifying)?0.5:1}}>{loading?"⟳ Generating...":verifying||swLoad?"⟳ Analyzing...":data?"↻ Regenerate":"Generate Brief"}</button>}</div>
 {err&&<p style={{fontSize:11,color:"#b2342b",marginBottom:12,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.5}}>{err}</p>}
 {data&&data.stored===false&&<p style={{fontSize:10,color:"#b0741e",marginBottom:12,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.5}}>Drafted, but the store wouldn't take it — this edition won't reach your other devices.</p>}
-{!data&&!loading&&<div style={{textAlign:"center",padding:"36px 0"}}><div style={{marginBottom:12,opacity:0.2,display:"flex",justifyContent:"center",color:"#8a8072"}}>{tab==="morning"?<SunIc size={40}/>:<MoonIc size={40}/>}</div><p style={{color:"#6f675c",fontSize:13}}>{tab==="morning"?"Pre-market briefing with overnight futures, macro, and what to watch":"End-of-day summary with closes, movers, and tomorrow's catalysts"}</p></div>}
+{archErr&&<p style={{fontSize:11,color:"#b2342b",marginBottom:12,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.5}}>That edition didn't come back — {archErr}.</p>}
+{/* Three different nothings, and they are not interchangeable: today's briefing hasn't been drafted
+    yet (a pitch and a button), that day's edition was never filed (a fact, and not a fault), or the
+    read failed (archErr above, which leaves this silent so it can't say "none filed" about a day
+    that has one). */}
+{!data&&!loading&&!pulling&&!archErr&&<div style={{textAlign:"center",padding:"36px 0"}}><div style={{marginBottom:12,opacity:0.2,display:"flex",justifyContent:"center",color:"#8a8072"}}>{tab==="morning"?<SunIc size={40}/>:<MoonIc size={40}/>}</div><p style={{color:"#6f675c",fontSize:13}}>{!isToday?`No ${tab} briefing was filed on ${fmtEdition(date)}.`:tab==="morning"?"Pre-market briefing with overnight futures, macro, and what to watch":"End-of-day summary with closes, movers, and tomorrow's catalysts"}</p></div>}
+{pulling&&<div style={{padding:"32px 0",textAlign:"center"}}><div style={{display:"inline-flex",gap:8}}>{[0,1,2].map(i=><div key={i} style={{width:7,height:7,borderRadius:4,background:"#8a8072",animation:"pulse 1.2s infinite",animationDelay:`${i*0.2}s`}}/>)}</div><p style={{color:"#8a8072",fontSize:12,marginTop:14,fontFamily:"'JetBrains Mono',monospace"}}>Pulling {fmtEdition(date)} from the archive...</p></div>}
 {loading&&<div style={{padding:"32px 0",textAlign:"center"}}><div style={{display:"inline-flex",gap:8}}>{[0,1,2,3].map(i=><div key={i} style={{width:7,height:7,borderRadius:4,background:tab==="morning"?"#b0741e":"#56599e",animation:"pulse 1.2s infinite",animationDelay:`${i*0.2}s`}}/>)}</div><p style={{color:"#8a8072",fontSize:12,marginTop:14,fontFamily:"'JetBrains Mono',monospace"}}>Step 1/2 — Searching & drafting...</p></div>}
 {data&&<div>
 {verifying&&!verify&&<div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",borderRadius:8,background:"#b0741e06",border:"1px solid #b0741e12",marginBottom:12}}><div style={{display:"flex",gap:4}}>{[0,1,2].map(i=><div key={i} style={{width:5,height:5,borderRadius:3,background:"#b0741e",animation:"pulse 1s infinite",animationDelay:`${i*0.2}s`}}/>)}</div><span style={{color:"#b0741e",fontSize:11,fontFamily:"'JetBrains Mono',monospace"}}>Fact-checking — searching each claim...</span></div>}
 {data&&!verify&&!verifying&&<div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap",padding:"8px 12px",borderRadius:8,background:"#b0741e06",border:"1px solid #b0741e12",marginBottom:12}}>
   <span style={{color:"#8a8072",fontSize:10,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.5}}>NOT YET FACT-CHECKED</span>
   {/* The cost warning belongs on the control, not the page. It exists so the check isn't clicked
-      reflexively — it re-searches every claim and bills about what the briefing itself did. */}
-  <button onClick={factCheck} disabled={!!busy} title="Searches each claim on the web — costs about as much again as the briefing" style={{background:"#b0741e10",border:"1px solid #b0741e30",borderRadius:8,padding:"6px 14px",color:"#b0741e",fontSize:10,cursor:busy?"default":"pointer",fontFamily:"'JetBrains Mono',monospace",fontWeight:600,letterSpacing:0.5,opacity:busy?0.5:1,flexShrink:0}}>Fact-check it</button>
+      reflexively — it re-searches every claim and bills about what the briefing itself did. Gone on
+      an archived edition: the desk only fact-checks today, and re-searching last week's claims
+      against this week's web would grade the briefing against a world it never described. */}
+  {isToday&&<button onClick={factCheck} disabled={!!busy} title="Searches each claim on the web — costs about as much again as the briefing" style={{background:"#b0741e10",border:"1px solid #b0741e30",borderRadius:8,padding:"6px 14px",color:"#b0741e",fontSize:10,cursor:busy?"default":"pointer",fontFamily:"'JetBrains Mono',monospace",fontWeight:600,letterSpacing:0.5,opacity:busy?0.5:1,flexShrink:0}}>Fact-check it</button>}
 </div>}
 {verify&&<div style={{padding:"10px 14px",borderRadius:10,background:"#f6eee1",border:"1px solid #e9ddc9",marginBottom:14}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}><div style={{display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:10,fontFamily:"'JetBrains Mono',monospace",color:"#8a8072",textTransform:"uppercase",letterSpacing:1.5}}>Verification</span>{(()=>{const bad=(verify.summary.unverified||0)+(verify.summary.discrepancy||0);return bad>0
   ?<span style={{fontSize:11,padding:"2px 10px",borderRadius:20,fontFamily:"'JetBrains Mono',monospace",fontWeight:700,background:"#b2342b10",color:"#b2342b"}}>{bad} of {verify.summary.total} unconfirmed</span>

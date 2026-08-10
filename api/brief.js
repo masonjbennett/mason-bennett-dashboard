@@ -6,6 +6,11 @@
 // stable per-day pathname, so a briefing generated on the desktop is already on the phone when it
 // opens the site — instead of evaporating with the old 60-minute localStorage cache.
 //
+// READS SPAN THE WHOLE ARCHIVE; WRITES ONLY EVER TOUCH TODAY. Nothing here has ever deleted a
+// briefing, so every edition since the store was created is still sitting in it — GET ?date= reads
+// any one of them back and GET ?index reads the list of what exists, both free. POST stays pinned to
+// today: a back-dated draft would cost money to write history the model can no longer search.
+//
 // AUTH IS MANDATORY, NOT OPTIONAL. masonjbennett.com is a public site; without the shared secret
 // anyone could read the store or spend Mason's Anthropic credit poisoning it. Every method checks
 // SYNC_SECRET first and nothing else runs until it passes.
@@ -20,7 +25,7 @@
 //
 // Env: SYNC_SECRET (required), ANTHROPIC_KEY (required to generate), plus BLOB_READ_WRITE_TOKEN,
 // added automatically when the Blob store is created in the Vercel dashboard.
-import { get, put } from "@vercel/blob";
+import { get, list, put } from "@vercel/blob";
 import { timingSafeEqual } from "node:crypto";
 
 // The searching draft is the long pole and is far slower than it looks. 120s here produced a bare
@@ -74,6 +79,49 @@ const SRC_URLS = { "Reuters": "https://reuters.com", "Bloomberg": "https://bloom
 // evening close briefing from the morning one the client is showing on the same calendar day.
 const todayCT = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Chicago", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 const pathFor = (date, type) => `mjb/brief/${date}-${type}.json`;
+// The one place a caller-supplied string is allowed to become part of a Blob pathname, so it is
+// strict rather than merely tidy. The regex alone stops traversal (`../../etc/passwd` never matches);
+// the round-trip through Date is what stops 2026-02-31 — a string that passes the regex but names a
+// day that never existed. Future dates are refused too: nothing can be stored ahead of today, so a
+// request for one is a bug or a probe either way. Returns the clean date, or null to reject.
+// Deliberately NO floor date: the index below is the authority on what exists, and a hardcoded
+// earliest-edition constant could only ever drift out of agreement with it.
+function validDate(s) {
+  const t = String(s || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(t)) return null;
+  const d = new Date(`${t}T00:00:00Z`);
+  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== t) return null;
+  return t <= todayCT() ? t : null; // ISO dates compare correctly as strings
+}
+
+// Which editions the store actually holds — [{date, types:[...]}], newest first. This is what makes
+// the archive walkable: without it the client would have to probe dates blindly and could not tell
+// "nothing filed that day" from "a day I haven't guessed yet".
+//
+// Pure read. No Anthropic call, no cost, nothing written.
+//
+// Paginated on purpose. Two editions a weekday is ~500 records a year against a 1000-per-page
+// default, so this stops working silently in year two if the cursor is ignored. The guard is there
+// because a loop that trusts a remote hasMore forever is one bad response away from never returning.
+async function listEditions() {
+  const byDate = new Map();
+  let cursor, pages = 0;
+  do {
+    const r = await list({ prefix: "mjb/brief/", limit: 1000, cursor });
+    for (const b of (r && r.blobs) || []) {
+      // Match the pathname this file writes, and ignore anything else that ever lands in the folder.
+      const m = /^mjb\/brief\/(\d{4}-\d{2}-\d{2})-(morning|close)\.json$/.exec(b.pathname || "");
+      if (!m) continue;
+      const e = byDate.get(m[1]) || { date: m[1], types: [] };
+      if (!e.types.includes(m[2])) e.types.push(m[2]);
+      byDate.set(m[1], e);
+    }
+    cursor = r && r.hasMore ? r.cursor : null;
+  } while (cursor && ++pages < 20);
+  return [...byDate.values()]
+    .map(e => ({ date: e.date, types: ["morning", "close"].filter(t => e.types.includes(t)) })) // store order isn't edition order
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+}
 
 // useCache:false is REQUIRED here, not a tuning knob. The three steps overwrite the same pathname
 // seconds apart, and a cached read can serve a version up to 60s stale — which would have step 2
@@ -268,10 +316,32 @@ export default async function handler(req, res) {
   if (!process.env.SYNC_SECRET) return res.status(503).json({ error: "briefing sync is not configured on this deployment" });
   if (!authed(req)) return res.status(401).json({ error: "that sync secret was rejected — check it in Settings" });
 
+  // The archive index — the only route here that isn't about one edition, so it is answered before
+  // the type check rather than being made to carry a type it doesn't have.
+  if (req.method === "GET" && req.query.index !== undefined) {
+    try {
+      return res.status(200).json({ today: todayCT(), entries: await listEditions() });
+    } catch (e) {
+      // Say the index is missing rather than returning an empty one: an empty list is indis-
+      // tinguishable from "he has no briefings", and the client would hide the archive as though
+      // nothing had ever been filed.
+      console.error("brief index failed:", e && e.message);
+      return res.status(502).json({ error: "the archive index is unavailable" });
+    }
+  }
+
   const body = parseBody(req);
   const type = String((req.method === "POST" ? body.type : req.query.type) || "");
   if (type !== "morning" && type !== "close") return res.status(400).json({ error: "type must be morning or close" });
-  const date = todayCT();
+
+  // GET reads any day; POST only ever writes TODAY. Generation is deliberately not addressable by
+  // date — every draft costs real money, the model can only search the present, and a back-dated
+  // request would overwrite the record of a day already read rather than recover it.
+  let date = todayCT();
+  if (req.method === "GET" && req.query.date !== undefined) {
+    date = validDate(req.query.date);
+    if (!date) return res.status(400).json({ error: "date must be YYYY-MM-DD, a real day, and not in the future" });
+  }
 
   if (req.method === "GET") {
     const rec = await readRecord(date, type);
