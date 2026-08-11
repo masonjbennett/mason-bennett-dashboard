@@ -461,6 +461,21 @@ async function writeInto(dir, name, text) {
   await w.write(text);
   await w.close();
 }
+// VS Code opens .md as source, which is why the briefings looked like code. This makes it open
+// RENDERED — but scoped to this folder only, because the same setting applied globally would do it
+// to every README and CLAUDE.md he ever edits, and reaching for "Open With → Text Editor" to fix a
+// typo is a worse trade than pressing Ctrl+Shift+V occasionally.
+//
+// Written ONCE and never overwritten: it is his file after the first sync, and anything he adds to
+// it has to survive. Takes effect when the folder is opened as a workspace (File → Open Folder),
+// which is how a folder of briefings gets browsed anyway.
+async function ensureEditorHint(handle) {
+  try {
+    const dir = await handle.getDirectoryHandle(".vscode", { create: true });
+    try { await dir.getFileHandle("settings.json"); return; } catch {} // already there — leave it be
+    await writeInto(dir, "settings.json", JSON.stringify({ "workbench.editorAssociations": { "*.md": "vscode.markdown.preview.editor" } }, null, 2) + "\n");
+  } catch {}
+}
 
 // Back-fill everything the folder is missing. Returns a tally rather than throwing on a single bad
 // edition: one unreachable record must not abandon the other ninety-nine.
@@ -483,6 +498,7 @@ async function syncBriefFolder(handle, secret, onProgress) {
     // sync claim it found something.
     if (e.date === today || !have.has(file)) jobs.push({ date: e.date, type, file, fresh: !have.has(file) });
   }
+  await ensureEditorHint(handle);
   let written = 0, refreshed = 0, failed = 0, i = 0;
   // Sequential, not parallel: this hits Mason's own serverless function once per edition, a routine
   // run is one or two of them, and the only slow case is a first sync or a long absence — where a
