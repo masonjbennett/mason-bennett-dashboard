@@ -1464,7 +1464,24 @@ const dates=(()=>{const s=new Set((idx||[]).map(e=>e.date));s.add(today);return[
 const typesOn=d=>{const e=(idx||[]).find(x=>x.date===d);return e?e.types:["morning","close"]};
 const at=dates.indexOf(date);
 // dates run newest-first, so stepping to an older edition means stepping FORWARD through the array.
-const go=step=>{const d=dates[at+step];if(!d)return;const t=typesOn(d);setDate(d);setArchErr("");if(t.length&&!t.includes(tab))setTab(t[0])};
+const jump=d=>{if(!d)return;const t=typesOn(d);setDate(d);setArchErr("");if(t.length&&!t.includes(tab))setTab(t[0])};
+const go=step=>jump(dates[at+step]);
+// The run of issues, built from the index alone — no extra fetch, no Anthropic spend. It exists so
+// that a cron which quietly stops firing is VISIBLE: a briefing that never arrived leaves no trace
+// anywhere else in the UI, and "I didn't get one this morning" is easy to mistake for "I forgot to
+// look". Non-trading days are drawn faint rather than as gaps, because the cron is weekdays-only and
+// a blank Saturday is the system working.
+const RUN_DAYS=28;
+const runStrip=(()=>{const filed=new Map((idx||[]).map(e=>[e.date,e.types]));const out=[];
+  for(let i=RUN_DAYS-1;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);const iso=toISO(d);
+    out.push({iso,types:filed.get(iso)||[],trading:isTradingDay(d)})}
+  return out})();
+// From the build brief: a draft plus its implications pass runs about $0.30. Fact-checks cost about
+// the same again but the index cannot see which days carry one, so they are excluded and SAID to be
+// excluded — an estimate that quietly understates the bill is worse than no estimate.
+const BRIEF_COST=0.3;
+const monthKey=today.slice(0,7);
+const monthCount=(idx||[]).filter(e=>e.date.slice(0,7)===monthKey).reduce((n,e)=>n+e.types.length,0);
 // Draft → fact-check → implications, one request each, in order (steps 2-3 read step 1 back out of
 // the store). A step the stored record already carries is skipped: another device did that work,
 // and re-running it would just re-bill the same call.
@@ -1510,13 +1527,28 @@ return <div style={{...S.card,background:"linear-gradient(135deg,#f6eee1,#fdf8f0
     holding a single edition it would be a control that does nothing. ◀ is OLDER: the archive runs
     backwards in time, which is the direction `dates` runs too. */}
 {dates.length>1&&(()=>{const step=(glyph,g,label)=>{const off=!dates[at+g];return <button onClick={()=>go(g)} disabled={off} title={label} aria-label={label} style={{background:"none",border:"1px solid #e9ddc9",borderRadius:8,width:28,height:26,display:"inline-flex",alignItems:"center",justifyContent:"center",padding:0,color:off?"#d8c8b0":"#0d6d56",fontSize:10,cursor:off?"default":"pointer",fontFamily:"'JetBrains Mono',monospace"}}>{glyph}</button>};
-return <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginBottom:16,paddingBottom:12,borderBottom:"1px solid #e9ddc9",position:"relative"}}>
+return <div style={{marginBottom:16,paddingBottom:12,borderBottom:"1px solid #e9ddc9",position:"relative"}}>
+  <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
   <span style={{fontSize:9,color:"#a2977f",fontFamily:"'JetBrains Mono',monospace",textTransform:"uppercase",letterSpacing:2}}>Archive</span>
   {!isToday&&<button onClick={()=>{setDate(today);setArchErr("")}} style={{background:"none",border:"1px solid #0d6d5625",borderRadius:8,padding:"4px 10px",color:"#0d6d56",fontSize:9,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",letterSpacing:1,textTransform:"uppercase"}}>Back to today</button>}
   <div style={{display:"flex",alignItems:"center",gap:6,marginLeft:"auto"}}>
     {step("◀",1,"Older edition")}
     <span style={{fontSize:11,color:"#33302c",fontFamily:"'JetBrains Mono',monospace",letterSpacing:0.5,minWidth:104,textAlign:"center"}}>{isToday?"Today":fmtEdition(date)}</span>
     {step("▶",-1,"Newer edition")}
+  </div>
+  </div>
+  {/* Four weeks of issues at a glance. Colour carries the whole meaning: solid = both editions,
+      half = one, a visible hairline = a trading day that filed nothing, and barely-there = a day
+      the desk was never meant to run. Only filed days are clickable — a tile that jumps nowhere
+      would imply an edition exists to open. */}
+  <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",marginTop:11}}>
+    <div style={{display:"flex",gap:2}}>{runStrip.map(d=>{const n=d.types.length,on=n>0;
+      const label=`${fmtEdition(d.iso)} — ${on?d.types.map(t=>t==="morning"?"morning":"close").join(" + "):d.trading?"nothing filed":"no session"}`;
+      return <button key={d.iso} onClick={()=>on&&jump(d.iso)} disabled={!on} title={label} aria-label={label}
+        style={{width:7,height:13,borderRadius:2,padding:0,border:"none",cursor:on?"pointer":"default",
+          background:n>1?"#0d6d56":n===1?"#0d6d5659":d.trading?"#ddcfb8":"#f0e6d5",
+          outline:d.iso===date?"1px solid #0d6d56":"none",outlineOffset:1}}/>})}</div>
+    <span style={{fontSize:9,color:"#a2977f",fontFamily:"'JetBrains Mono',monospace",letterSpacing:0.5,marginLeft:"auto"}} title="Drafting only — a fact-check costs about the same again, and the index can't see which days carry one.">{monthCount} edition{monthCount===1?"":"s"} this month · about ${(monthCount*BRIEF_COST).toFixed(2)} drafted</span>
   </div>
 </div>;})()}
 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18,position:"relative",flexWrap:"wrap",gap:12}}><div><div style={{display:"flex",gap:6,marginBottom:8}}>{["morning","close"].map(t=>{
