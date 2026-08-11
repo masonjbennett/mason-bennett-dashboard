@@ -354,7 +354,107 @@ function briefMarkdown(rec) {
   }
   return L.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
 }
-const briefFileName = (date, type) => `${date}-${type}.md`;
+// ---- The readable copy. Same record, same order, rendered into the paper/ink brand so a double
+// click opens something that looks like the site instead of a wall of source.
+//
+// Fonts are STACKS, never downloads. The three site faces are asked for and Georgia / Segoe UI /
+// Consolas carry it on any Windows box otherwise, which keeps each file ~9KB and working offline
+// forever. Embedding the real webfonts would add ~60KB to every one of several hundred files — tens
+// of megabytes a year — for a difference only the author would ever notice.
+const BRIEF_CSS = `
+:root{--paper:#faf3ea;--ink:#262421;--ink2:#33302c;--body:#4a443c;--mute:#6f675c;--faint:#8a8072;--hair:#e3d5bf;--hair2:#efe4d2;--teal:#0d6d56;--navy:#1f5a9e;--plum:#6d549e;--bronze:#b0741e;--claret:#990f3d;--card:#fffdf9}
+*{box-sizing:border-box}
+body{margin:0;background:var(--paper);color:var(--body);font:16px/1.75 'Space Grotesk','Segoe UI',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+.rule{height:6px;background:var(--ink)}.rule2{height:2px;background:var(--teal);margin-bottom:34px}
+.sheet{max-width:760px;margin:0 auto;padding:0 28px 64px}
+.kick{font:600 9px/1 'JetBrains Mono',Consolas,monospace;letter-spacing:2.5px;text-transform:uppercase;color:var(--teal);margin-bottom:14px}
+h1{font:400 40px/1.1 'Instrument Serif','Palatino Linotype',Georgia,serif;color:var(--ink);letter-spacing:-.015em;margin:0 0 10px}
+.dateline{font:10px/1.6 'JetBrains Mono',Consolas,monospace;letter-spacing:1px;text-transform:uppercase;color:var(--faint);padding-bottom:20px;border-bottom:1px solid var(--hair);margin-bottom:26px}
+p{margin:0 0 15px}
+.c{font:500 12px 'JetBrains Mono',Consolas,monospace;color:var(--teal);opacity:.75;white-space:nowrap}
+h2{font:600 9px/1 'JetBrains Mono',Consolas,monospace;letter-spacing:2.5px;text-transform:uppercase;color:var(--mute);margin:38px 0 16px;padding-bottom:9px;border-bottom:1px solid var(--hair);display:flex;align-items:center;gap:9px}
+h2::before{content:"";width:16px;height:2px;background:var(--teal);flex:none}
+.srcs{display:flex;flex-wrap:wrap;gap:7px;padding:0;margin:0;list-style:none}
+.srcs a{display:inline-flex;align-items:center;gap:7px;padding:6px 13px;border:1px solid var(--hair);border-radius:8px;background:var(--card);color:var(--mute);font:12px 'JetBrains Mono',Consolas,monospace;text-decoration:none}
+.srcs a:hover{border-color:#0d6d5640;color:var(--teal)}.srcs .n{font-size:9px;opacity:.45}
+.sw{border:1px solid var(--hair);border-left:3px solid var(--plum);border-radius:10px;background:var(--card);padding:18px 20px;margin-bottom:12px}
+.sw h3{font:600 17px/1.3 'Instrument Serif','Palatino Linotype',Georgia,serif;color:var(--ink);margin:0 0 8px;display:flex;gap:11px;align-items:baseline}
+.sw h3 .num{font:700 10px 'JetBrains Mono',Consolas,monospace;color:var(--plum);flex:none}
+.sw .dev{margin:0 0 12px;color:var(--mute);font-size:14px}
+.row{display:flex;gap:12px;margin-bottom:7px;font-size:14px;line-height:1.6}
+.row .lab{font:700 8.5px/1.9 'JetBrains Mono',Consolas,monospace;letter-spacing:.8px;flex:0 0 92px;text-transform:uppercase}
+.l1{color:var(--teal)}.l2{color:var(--navy)}.l3{color:var(--bronze)}
+.take{margin-top:12px;padding:9px 13px;border-radius:8px;background:#6d549e0d;border:1px solid #6d549e1f;font-size:14px;color:var(--ink2)}
+.take b{font:700 8.5px 'JetBrains Mono',Consolas,monospace;letter-spacing:.8px;color:var(--plum);display:block;margin-bottom:3px;text-transform:uppercase}
+.fc{border:1px solid var(--hair);border-radius:10px;background:#f6eee1;padding:14px 16px}
+.fc .sum{font:11px 'JetBrains Mono',Consolas,monospace;color:var(--faint);margin-bottom:11px;text-transform:uppercase;letter-spacing:.8px}
+.claim{display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--hair2);font-size:13.5px;line-height:1.55}
+.claim:first-of-type{border-top:0}
+.chip{font:700 8px 'JetBrains Mono',Consolas,monospace;letter-spacing:.6px;padding:3px 8px;border-radius:9px;height:fit-content;flex:none;text-transform:uppercase}
+.ok{background:#0d6d5614;color:var(--teal)}.warn{background:#b0741e14;color:var(--bronze)}.bad{background:#990f3d14;color:var(--claret)}
+.claim .note{color:var(--mute);font-size:12.5px;display:block;margin-top:2px}
+.foot{margin-top:44px;padding-top:16px;border-top:1px solid var(--hair);font:9px/1.7 'JetBrains Mono',Consolas,monospace;letter-spacing:1px;text-transform:uppercase;color:#a2977f}
+.toc{margin-bottom:40px}.toc a{display:block;padding:7px 0;border-bottom:1px solid var(--hair2);color:var(--ink2);text-decoration:none;font-size:14px}
+.toc a:hover{color:var(--teal)}.toc .d{font:10px 'JetBrains Mono',Consolas,monospace;color:var(--faint);margin-right:10px}
+.ed{border-top:1px solid var(--hair);margin-top:56px;padding-top:40px}.ed:first-of-type{border-top:0;margin-top:0;padding-top:0}
+@media(max-width:620px){.sheet{padding:0 18px 48px}h1{font-size:30px}.row{flex-direction:column;gap:2px}.row .lab{flex:none}}
+@media print{body{background:#fff}.sheet{max-width:none;padding:0}a{color:inherit}.ed{page-break-before:always}}
+@media(prefers-color-scheme:dark){:root{--paper:#1c1a18;--ink:#f2ece2;--ink2:#e6ded2;--body:#c9c0b3;--mute:#a79d8f;--faint:#8d8376;--hair:#3a352f;--hair2:#2e2a25;--card:#232019;--teal:#4bbf9c;--navy:#7aa9e0;--plum:#b49ae0;--bronze:#d8a24e;--claret:#e2698f}}`;
+const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+// Inline [Reuters] citations get picked out in quiet teal. Escaping happens FIRST and the pattern
+// only ever wraps its own match, so nothing the model wrote can introduce markup of its own.
+const citeHTML = s => esc(s).replace(/\[([A-Z][^\]]{1,28})\]/g, '<span class="c">[$1]</span>');
+function briefBodyHTML(rec) {
+  const L = [];
+  L.push(`<div class="kick">masonjbennett.com &middot; ${rec.type === "morning" ? "Morning" : "Close"} Briefing</div>`);
+  L.push(`<h1>${esc(mdLongDate(rec.date))}</h1>`);
+  const filed = rec.ts ? new Date(rec.ts).toLocaleString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" }) : null;
+  L.push(`<div class="dateline">${[filed && `Filed ${filed} CT`, rec.searches && `${rec.searches} web searches`].filter(Boolean).map(esc).join(" &middot; ")}</div>`);
+  for (const p of String(rec.text).split(/\n\s*\n/)) { const t = p.trim(); if (t) L.push(`<p>${citeHTML(t)}</p>`); }
+  if (Array.isArray(rec.sources) && rec.sources.length) {
+    L.push(`<h2>Sources cited</h2><ul class="srcs">`);
+    rec.sources.forEach((s, i) => L.push(`<li><a href="${esc(s.url || "#")}" target="_blank" rel="noopener noreferrer"><span class="n">${String(i + 1).padStart(2, "0")}</span>${esc(s.name || "Source")}</a></li>`));
+    L.push(`</ul>`);
+  }
+  if (Array.isArray(rec.soWhat) && rec.soWhat.length) {
+    L.push(`<h2>So what</h2>`);
+    rec.soWhat.forEach((x, i) => {
+      L.push(`<div class="sw"><h3><span class="num">${String(i + 1).padStart(2, "0")}</span>${esc(x.headline || "")}</h3>`);
+      if (x.development) L.push(`<p class="dev">${citeHTML(x.development)}</p>`);
+      for (const [k, v, c] of [["Why it matters", x.why_it_matters, "l1"], ["Who affected", x.who_affected, "l2"], ["Second order", x.second_order, "l3"]])
+        if (v) L.push(`<div class="row"><span class="lab ${c}">${k}</span><span>${citeHTML(v)}</span></div>`);
+      if (x.takeaway) L.push(`<div class="take"><b>Takeaway</b>${citeHTML(x.takeaway)}</div>`);
+      L.push(`</div>`);
+    });
+  }
+  if (rec.verify && rec.verify.summary) {
+    const s = rec.verify.summary, CH = { verified: ["ok", "Sourced"], minor_discrepancy: ["warn", "Discrepancy"], unverified: ["bad", "Unverified"] };
+    L.push(`<h2>Fact-check</h2><div class="fc"><div class="sum">${s.verified || 0} of ${s.total || 0} claims sourced &middot; ${s.confidence_pct || 0}% self-scored</div>`);
+    // Flagged claims lead, exactly as on the site: a confidence score alone invites trusting the
+    // whole briefing at a glance, so the disputed lines have to be the ones met first.
+    const order = (rec.verify.claims || []).slice().sort((a, b) => (a.status === "verified" ? 1 : 0) - (b.status === "verified" ? 1 : 0));
+    for (const c of order) {
+      const [cls, label] = CH[c.status] || ["warn", String(c.status || "")];
+      L.push(`<div class="claim"><span class="chip ${cls}">${esc(label)}</span><span>${esc(c.claim || "")}${c.note ? `<span class="note">${esc(c.note)}${c.source ? ` &mdash; ${esc(c.source)}` : ""}</span>` : ""}</span></div>`);
+    }
+    L.push(`</div>`);
+  }
+  return L.join("\n");
+}
+const htmlPage = (title, inner) => `<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(title)}</title><style>${BRIEF_CSS}</style></head>
+<body><div class="rule"></div><div class="rule2"></div><div class="sheet">
+${inner}
+<div class="foot">Drafted by the briefing desk at masonjbennett.com &middot; sources listed above &middot; read them before relying on any of it</div>
+</div></body></html>`;
+const briefHTML = rec => htmlPage(`${rec.type === "morning" ? "Morning" : "Close"} Briefing — ${mdLongDate(rec.date)}`, briefBodyHTML(rec));
+
+// The readable copy is what sits at the top level, because opening the folder and double-clicking
+// today's edition is the thing done every morning. The .md and the .json are the same names one
+// level down — same archive, three formats, one naming scheme.
+const briefFileName = (date, type) => `${date}-${type}.html`;
+const MD_SUBDIR = "markdown", RAW_SUBDIR = "raw";
 async function writeInto(dir, name, text) {
   const fh = await dir.getFileHandle(name, { create: true });
   const w = await fh.createWritable();
@@ -393,14 +493,14 @@ async function syncBriefFolder(handle, secret, onProgress) {
       const { ok, brief } = await loadArchivedBrief(j.type, secret, j.date);
       if (!ok) { failed++; continue; }
       if (!brief || !brief.text) continue; // the index listed it, the store didn't have it — not an error
-      await writeInto(handle, j.file, briefMarkdown(brief));
-      // The lossless copy, kept out of the way in raw/ so the folder he browses is only the readable
-      // ones. Written alongside the .md, so deleting a .json alone won't bring it back until that
-      // edition is written again.
-      try {
-        const raw = await handle.getDirectoryHandle("raw", { create: true });
-        await writeInto(raw, `${j.date}-${j.type}.json`, JSON.stringify(brief, null, 2));
-      } catch {}
+      await writeInto(handle, j.file, briefHTML(brief));
+      // Two more copies, one level down and under the same name. The Markdown is what stays
+      // greppable across months and opens in Word; the JSON is lossless. Only the .html decides
+      // whether an edition counts as filed, so deleting one of these alone won't bring it back
+      // until that edition is written again — which for a past day means never.
+      for (const [dir, name, text] of [[MD_SUBDIR, `${j.date}-${j.type}.md`, briefMarkdown(brief)], [RAW_SUBDIR, `${j.date}-${j.type}.json`, JSON.stringify(brief, null, 2)]]) {
+        try { await writeInto(await handle.getDirectoryHandle(dir, { create: true }), name, text); } catch {}
+      }
       if (j.fresh) written++; else refreshed++;
     } catch { failed++; }
   }
@@ -419,16 +519,25 @@ async function exportBriefMonth(secret, month, onProgress) {
   for (const e of days) for (const type of e.types) {
     if (onProgress) onProgress(++i, total);
     const { brief } = await loadArchivedBrief(type, secret, e.date);
-    if (brief && brief.text) parts.push(briefMarkdown(brief));
+    // The contents row already carries the ISO date in its own column, so the label is the weekday
+    // and the edition — repeating the full date there just said the same thing twice.
+    if (brief && brief.text) parts.push({ id: `${e.date}-${type}`, title: `${mdLongDate(e.date).split(",")[0]} · ${type === "morning" ? "Morning" : "Close"}`, html: briefBodyHTML(brief) });
   }
   if (!parts.length) throw new Error("no briefings were filed that month");
   const [y, m] = month.split("-").map(Number);
-  const head = `# Briefings — ${MD_MONTHS[m - 1]} ${y}\n\n*${parts.length} editions · masonjbennett.com*\n\n---\n\n`;
-  return { text: head + parts.join("\n---\n\n"), count: parts.length };
+  const label = `${MD_MONTHS[m - 1]} ${y}`;
+  // A contents list, because the point of a month in one file is jumping to a day. Anchors are the
+  // ISO date and type, so a link into a specific edition keeps working if the file is renamed.
+  const toc = parts.map(p => `<a href="#${p.id}"><span class="d">${esc(p.id.slice(0, 10))}</span>${esc(p.title)}</a>`).join("\n");
+  const body = `<div class="kick">masonjbennett.com &middot; Archive</div><h1>Briefings — ${esc(label)}</h1>
+<div class="dateline">${parts.length} edition${parts.length === 1 ? "" : "s"}</div>
+<div class="toc">${toc}</div>
+${parts.map(p => `<div class="ed" id="${p.id}">${p.html}</div>`).join("\n")}`;
+  return { text: htmlPage(`Briefings — ${label}`, body), count: parts.length };
 }
 function downloadText(name, text) {
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(new Blob([text], { type: "text/markdown" }));
+  a.href = URL.createObjectURL(new Blob([text], { type: name.endsWith(".html") ? "text/html" : "text/markdown" }));
   a.download = name;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
@@ -3579,7 +3688,7 @@ function BriefingFolder({ syncSecret }) {
     setErr(""); setBusy("Gathering...");
     try {
       const { text, count } = await exportBriefMonth(syncSecret, month, (i, n) => setBusy(`Reading ${i} of ${n}...`));
-      downloadText(`briefings-${month}.md`, text);
+      downloadText(`briefings-${month}.html`, text);
       flash(`${count} edition${count === 1 ? "" : "s"} downloaded.`);
     } catch (e) { setErr(e.message || "the export didn't finish"); }
     setBusy("");
@@ -3590,7 +3699,7 @@ function BriefingFolder({ syncSecret }) {
   const s = st && st.status;
   return <div style={{ marginBottom: 16, borderTop: "1px solid #efe4d2", paddingTop: 16 }}>
     <label style={{ fontSize: 10, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 1.5, display: "block", marginBottom: 6 }}>Briefing Folder</label>
-    <p style={{ fontSize: 10, color: "#8a8072", lineHeight: 1.55, marginBottom: 8 }}>Keeps a Markdown copy of every briefing in a folder on this PC, back-filling whatever is missing each time you open the site. The desk stays the original — this is a mirror of it, so deleting a file here changes nothing there. Point it at a <b style={{ fontWeight: 600 }}>OneDrive folder</b> and Windows carries them to your phone on its own.</p>
+    <p style={{ fontSize: 10, color: "#8a8072", lineHeight: 1.55, marginBottom: 8 }}>Keeps a copy of every briefing in a folder on this PC, back-filling whatever is missing each time you open the site. Each edition lands three ways under one name — a formatted <b style={{ fontWeight: 600 }}>.html</b> to read at the top level, the same text as <b style={{ fontWeight: 600 }}>.md</b> in <i>markdown/</i> for searching, and the lossless record in <i>raw/</i>. The desk stays the original — this is a mirror of it, so deleting a file here changes nothing there. Point it at a <b style={{ fontWeight: 600 }}>OneDrive folder</b> and Windows carries them to your phone on its own.</p>
     {!syncSecret && <p style={{ fontSize: 10, color: "#b0741e", fontFamily: "'JetBrains Mono',monospace", lineHeight: 1.5, marginBottom: 8 }}>Add the sync secret above first — the folder is filled from the briefing desk.</p>}
     {s === "unsupported" && <p style={{ fontSize: 10, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", lineHeight: 1.5, marginBottom: 8 }}>This browser can't write to a folder — that's Chrome or Edge on Windows only. The month download below works here.</p>}
     {s === "ready" && <p style={{ fontSize: 10, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", marginBottom: 8 }}>Filing to {st.name} · syncs on open</p>}
@@ -3603,9 +3712,9 @@ function BriefingFolder({ syncSecret }) {
     </div>
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
       <select value={month} onChange={e => setMonth(e.target.value)} style={{ ...B, cursor: "pointer", opacity: 1 }}>{months.map(m => <option key={m} value={m}>{MD_MONTHS[+m.slice(5) - 1]} {m.slice(0, 4)}</option>)}</select>
-      <button onClick={exportMonth} disabled={!!busy || !syncSecret} style={B}>Download that month (.md)</button>
+      <button onClick={exportMonth} disabled={!!busy || !syncSecret} style={B}>Download that month (.html)</button>
     </div>
-    <p style={{ fontSize: 9, color: "#a2977f", lineHeight: 1.6 }}>One file holding every edition of the month, which is the only shape iOS can take — and often the better one for reading a week back.</p>
+    <p style={{ fontSize: 9, color: "#a2977f", lineHeight: 1.6 }}>One formatted file holding every edition of the month, with a contents list at the top. The only shape iOS can take — and often the better one for reading a week back.</p>
     {busy && <p style={{ fontSize: 10, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", marginTop: 6 }}>{busy}</p>}
     {msg && <p style={{ fontSize: 10, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", marginTop: 6 }}>{msg}</p>}
     {err && <p style={{ fontSize: 10, color: "#b2342b", fontFamily: "'JetBrains Mono',monospace", lineHeight: 1.5, marginTop: 6 }}>Couldn't finish — {err}.</p>}
