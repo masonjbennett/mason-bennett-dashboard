@@ -3653,19 +3653,27 @@ export default function App() {
     <div className="bg-fx" style={{ position: "fixed", top: "30%", right: -100, width: 600, height: 600, background: "radial-gradient(circle,rgba(109,84,158,0.025) 0%,transparent 55%)", pointerEvents: "none", animation: "breathe 12s ease-in-out infinite", animationDelay: "4s" }} />
     <div className="bg-fx" style={{ position: "fixed", inset: 0, opacity: 0.045, backgroundImage: "url('data:image/svg+xml,%3Csvg viewBox=%220 0 256 256%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22n%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.9%22 numOctaves=%224%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22/%3E%3C/svg%3E')", pointerEvents: "none" }} />
 
-    {/* gap is load-bearing, not decoration. space-between only spaces columns out of the space
-        LEFT OVER, and these three columns have never had any: measured on the live site they total
-        ~2280px of content, so the bar would need a 2345px window to sit on one line and every real
-        screen renders all three wrapped and butted together at exactly 0px apart — which is what
-        drove the 2s10s ▲ into the ● of the availability line. gap guarantees the channel at any
-        width; the two columns either side of the quotes were also cut back to earn the room. */}
+    {/* Two separate things hold this row together, and both were learned by measuring it.
+        (1) gap is load-bearing, not decoration. space-between only spaces columns out of the space
+        LEFT OVER, and these three columns had none: they totalled ~2280px of content, so the bar
+        needed a 2345px window to sit on one line and every real screen rendered all three wrapped
+        and butted together at exactly 0px apart — which drove the 2s10s ▲ into the ● beside it.
+        (2) The side columns carry `flex:1 1 0` — the SAME pattern as .masthead-side below — because
+        space-between equalises the GAPS, not the position: it centres the middle column only when
+        the two side columns happen to be equal width. They weren't (294px vs 147px), so the quotes
+        strip sat 74px right of centre while the masthead name directly beneath it sat at 0. Equal
+        side columns centre the middle by construction, at any width.
+        The left column's text is sized to that budget, not to taste: each side gets ~200px at
+        1280 and ~243px at 1366, and the old "· DALLAS–FORT WORTH, TX" needed 295px, which bought
+        perfect centring at the price of a two-line bar on a laptop. Lengthen it again and the wrap
+        comes back — "Dallas–Fort Worth, TX" still appears three other places on the site. */}
     <div className="status-bar" style={{ background: "#2b2825", padding: "7px 32px", display: "flex", justifyContent: "space-between", gap: 28, fontSize: 9, fontFamily: "JetBrains Mono, monospace", color: "#cfc5b4", letterSpacing: 1, position: "relative", zIndex: 2 }}>
-      <span>UNIVERSITY OF ARKANSAS · DALLAS–FORT WORTH, TX</span>
-      <span className="statusbar-quotes" style={{ display: "flex", gap: 18 }}>{pricesLive && ["SPY", "QQQ", "TLT", "GLD"].map(sym => { const t = prices.find(p => p.symbol === sym); if (!t || t.price === "—") return null; const up = parseFloat(t.change) >= 0; return <span key={sym} style={{ display: "inline-flex", gap: 6 }}><span style={{ color: "#7d7568" }}>{sym}</span><span style={{ color: "#cfc5b4" }}>{t.price}</span><span style={{ color: up ? "#3ecf8e" : "#e07a70" }}>{up ? "+" : "−"}{Math.abs(parseFloat(t.change)).toFixed(2)}%</span></span>; })}<CreditStrip /></span>
+      <span style={{ flex: "1 1 0", minWidth: 0 }}>UNIVERSITY OF ARKANSAS · DFW</span>
+      <span className="statusbar-quotes" style={{ display: "flex", gap: 18, flex: "0 0 auto" }}>{pricesLive && ["SPY", "QQQ", "TLT", "GLD"].map(sym => { const t = prices.find(p => p.symbol === sym); if (!t || t.price === "—") return null; const up = parseFloat(t.change) >= 0; return <span key={sym} style={{ display: "inline-flex", gap: 6 }}><span style={{ color: "#7d7568" }}>{sym}</span><span style={{ color: "#cfc5b4" }}>{t.price}</span><span style={{ color: up ? "#3ecf8e" : "#e07a70" }}>{up ? "+" : "−"}{Math.abs(parseFloat(t.change)).toFixed(2)}%</span></span>; })}<CreditStrip /></span>
       {/* The four disciplines used to be listed here too, and they still sit in the masthead tag
           about 40px directly below — same four, twice, one on top of the other. Cutting them here
           costs no recruiter signal and buys back ~320px of the width this bar never had. */}
-      <span style={{ whiteSpace: "nowrap" }}><span style={{ color: "#3ecf8e" }}>●</span> OPEN TO OPPORTUNITIES</span>
+      <span style={{ flex: "1 1 0", minWidth: 0, textAlign: "right", whiteSpace: "nowrap" }}><span style={{ color: "#3ecf8e" }}>●</span> OPEN TO OPPORTUNITIES</span>
     </div>
 
     <div className="masthead" style={{ background: "rgba(250,244,235,0.95)", padding: "20px 32px 16px", position: "relative", zIndex: 90 }}>
