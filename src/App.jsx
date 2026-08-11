@@ -3653,10 +3653,19 @@ export default function App() {
     <div className="bg-fx" style={{ position: "fixed", top: "30%", right: -100, width: 600, height: 600, background: "radial-gradient(circle,rgba(109,84,158,0.025) 0%,transparent 55%)", pointerEvents: "none", animation: "breathe 12s ease-in-out infinite", animationDelay: "4s" }} />
     <div className="bg-fx" style={{ position: "fixed", inset: 0, opacity: 0.045, backgroundImage: "url('data:image/svg+xml,%3Csvg viewBox=%220 0 256 256%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22n%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.9%22 numOctaves=%224%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23n)%22/%3E%3C/svg%3E')", pointerEvents: "none" }} />
 
-    <div className="status-bar" style={{ background: "#2b2825", padding: "7px 32px", display: "flex", justifyContent: "space-between", fontSize: 9, fontFamily: "JetBrains Mono, monospace", color: "#cfc5b4", letterSpacing: 1, position: "relative", zIndex: 2 }}>
-      <span>WALTON COLLEGE OF BUSINESS · UNIVERSITY OF ARKANSAS · DALLAS–FORT WORTH, TX</span>
+    {/* gap is load-bearing, not decoration. space-between only spaces columns out of the space
+        LEFT OVER, and these three columns have never had any: measured on the live site they total
+        ~2280px of content, so the bar would need a 2345px window to sit on one line and every real
+        screen renders all three wrapped and butted together at exactly 0px apart — which is what
+        drove the 2s10s ▲ into the ● of the availability line. gap guarantees the channel at any
+        width; the two columns either side of the quotes were also cut back to earn the room. */}
+    <div className="status-bar" style={{ background: "#2b2825", padding: "7px 32px", display: "flex", justifyContent: "space-between", gap: 28, fontSize: 9, fontFamily: "JetBrains Mono, monospace", color: "#cfc5b4", letterSpacing: 1, position: "relative", zIndex: 2 }}>
+      <span>UNIVERSITY OF ARKANSAS · DALLAS–FORT WORTH, TX</span>
       <span className="statusbar-quotes" style={{ display: "flex", gap: 18 }}>{pricesLive && ["SPY", "QQQ", "TLT", "GLD"].map(sym => { const t = prices.find(p => p.symbol === sym); if (!t || t.price === "—") return null; const up = parseFloat(t.change) >= 0; return <span key={sym} style={{ display: "inline-flex", gap: 6 }}><span style={{ color: "#7d7568" }}>{sym}</span><span style={{ color: "#cfc5b4" }}>{t.price}</span><span style={{ color: up ? "#3ecf8e" : "#e07a70" }}>{up ? "+" : "−"}{Math.abs(parseFloat(t.change)).toFixed(2)}%</span></span>; })}<CreditStrip /></span>
-      <span><span style={{ color: "#3ecf8e" }}>●</span> OPEN TO OPPORTUNITIES · WEALTH MANAGEMENT / CORPORATE FINANCE / IB / PE</span>
+      {/* The four disciplines used to be listed here too, and they still sit in the masthead tag
+          about 40px directly below — same four, twice, one on top of the other. Cutting them here
+          costs no recruiter signal and buys back ~320px of the width this bar never had. */}
+      <span style={{ whiteSpace: "nowrap" }}><span style={{ color: "#3ecf8e" }}>●</span> OPEN TO OPPORTUNITIES</span>
     </div>
 
     <div className="masthead" style={{ background: "rgba(250,244,235,0.95)", padding: "20px 32px 16px", position: "relative", zIndex: 90 }}>
