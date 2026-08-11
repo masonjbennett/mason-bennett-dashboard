@@ -477,6 +477,34 @@ async function ensureEditorHint(handle) {
   } catch {}
 }
 
+// The clip file, written out beside the editions. Clips are per-device localStorage — the only copy
+// otherwise lives in one browser, recoverable only through a whole-state Desk Records dump — so the
+// folder is what gets them onto disk and, through OneDrive, onto the phone.
+//
+// Rewritten in full every sync rather than appended to, because the clips ARE the source here and
+// the file is the mirror; appending would strand anything discarded on the site. Skipped entirely
+// when there are no clips, so an empty file never appears.
+async function writeClipFile(handle) {
+  try {
+    const clips = lsGet("mjb_clippings", []);
+    if (!clips.length) return;
+    const rows = clips.map(c => `<div class="sw"><h3>${esc(c.title || "")}</h3>
+<p class="dev">${esc(c.label || "")}${c.d ? ` &middot; clipped ${esc(c.d)}` : ""}</p>
+${c.note ? `<div class="take"><b>Marginalia</b>${esc(c.note)}</div>` : ""}
+<div class="row"><span class="lab l1">Source</span><span><a href="${esc(c.link || "#")}" target="_blank" rel="noopener noreferrer">${esc(c.link || "")}</a></span></div></div>`).join("\n");
+    await writeInto(handle, "clip-file.html", htmlPage("Clip File — masonjbennett.com",
+      `<div class="kick">masonjbennett.com &middot; The Editor's File</div><h1>Clip File</h1>
+<div class="dateline">${clips.length} clipping${clips.length === 1 ? "" : "s"} &middot; mirrored from the wire desk</div>${rows}`));
+    const md = [`# Clip File`, "", `*${clips.length} clipping${clips.length === 1 ? "" : "s"} · masonjbennett.com*`, ""];
+    for (const c of clips) {
+      md.push(`## ${c.title || ""}`, "", `${c.label || ""}${c.d ? ` · clipped ${c.d}` : ""}`, "");
+      if (c.note) md.push(`> ${c.note}`, "");
+      md.push(c.link || "", "");
+    }
+    await writeInto(await handle.getDirectoryHandle(MD_SUBDIR, { create: true }), "clip-file.md", md.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n");
+  } catch {} // a clip file that didn't write must never fail the briefing sync around it
+}
+
 // Back-fill everything the folder is missing. Returns a tally rather than throwing on a single bad
 // edition: one unreachable record must not abandon the other ninety-nine.
 //
@@ -485,6 +513,11 @@ async function ensureEditorHint(handle) {
 // zero or two fetches. Today is the sole exception and is always rewritten, because the implications
 // pass and the fact-check land minutes to hours after the draft that created the file.
 async function syncBriefFolder(handle, secret, onProgress) {
+  // The two purely LOCAL writes go first, before anything that can fail. Clips live in this browser
+  // and owe nothing to the briefing desk, so a desk that is down or a secret that is wrong must not
+  // also stop them reaching disk — which is exactly what happened when this ran after the index.
+  await ensureEditorHint(handle);
+  await writeClipFile(handle);
   const index = await loadBriefIndex(secret);
   if (!index) throw new Error(lastSyncError || "the desk didn't answer");
   const have = new Set();
@@ -498,7 +531,6 @@ async function syncBriefFolder(handle, secret, onProgress) {
     // sync claim it found something.
     if (e.date === today || !have.has(file)) jobs.push({ date: e.date, type, file, fresh: !have.has(file) });
   }
-  await ensureEditorHint(handle);
   let written = 0, refreshed = 0, failed = 0, i = 0;
   // Sequential, not parallel: this hits Mason's own serverless function once per edition, a routine
   // run is one or two of them, and the only slow case is a first sync or a long absence — where a
@@ -1696,7 +1728,27 @@ function clusterWire(items) {
 }
 const wireAgo = ts => { if (!ts) return ""; const m = Math.max(1, Math.round((Date.now() - ts) / 60000)); return m < 60 ? `${m}m ago` : m < 1440 ? `${Math.round(m / 60)}h ago` : `${Math.round(m / 1440)}d ago`; };
 // Reading-diet log for the Circulation Audit: which sources Mason actually clicks (ring buffer, local only)
-function logRead(it) { const r = lsGet("mjb_reads", []); r.push({ d: todayISO(), label: it.label }); if (r.length > 500) r.splice(0, r.length - 500); lsSet("mjb_reads", r); }
+// TWO stores on purpose, and the split is about backup size. mjb_reads stays the lightweight tally
+// the Circulation Audit counts — outlet and date only, ~30 bytes each, 500 of them. mjb_readlog is
+// the titled history, which is ~5x heavier per row and is therefore capped far lower: both ride
+// Desk Records, and a 75KB backup for a feature nobody asked to carry between devices is exactly
+// the bloat that rule exists to prevent.
+//
+// Clipping asks you to decide an article matters BEFORE you have read it, which is the wrong moment.
+// This captures the ones you demonstrably cared about with no button at all, so a headline that
+// scrolled off the wire hours ago is still reachable and can be promoted to a clip later.
+function logRead(it) {
+  const r = lsGet("mjb_reads", []);
+  r.push({ d: todayISO(), label: it.label });
+  if (r.length > 500) r.splice(0, r.length - 500);
+  lsSet("mjb_reads", r);
+  if (!it || !it.link || !it.title) return;
+  const log = lsGet("mjb_readlog", []).filter(x => x.link !== it.link); // re-reading moves it back to the top
+  log.unshift({ title: it.title, link: it.link, label: it.label || "", ts: Date.now() });
+  if (log.length > 120) log.length = 120;
+  lsSet("mjb_readlog", log);
+  learnPing();
+}
 function clipHeadline(it) {
   const c = lsGet("mjb_clippings", []);
   if (c.some(x => x.link === it.link)) return;
@@ -1705,15 +1757,42 @@ function clipHeadline(it) {
   lsSet("mjb_clippings", c);
   learnPing();
 }
+const isClipped = link => lsGet("mjb_clippings", []).some(x => x.link === link);
+// What you opened, newest first, minus anything already in the file — a clip and a read are the same
+// row twice otherwise. Desk-only, and it renders nothing until there is something to show.
+function ReadLog() {
+  useLearnTick();
+  const [open, setOpen] = useState(false);
+  const log = lsGet("mjb_readlog", []).filter(x => !isClipped(x.link));
+  if (!log.length) return null;
+  const shown = open ? log : log.slice(0, 5);
+  return <div style={{ borderTop: "1px solid #ddcfb8", marginTop: 12, paddingTop: 10 }}>
+    <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
+      <span style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#8a8072", letterSpacing: 2, textTransform: "uppercase" }}>Recently read — clip anything worth keeping</span>
+      {log.length > 5 && <button onClick={() => setOpen(!open)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 8, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, textTransform: "uppercase", color: "#8a8072", textDecoration: "underline dotted", textUnderlineOffset: 3 }}>{open ? "Show fewer" : `All ${log.length}`}</button>}
+    </div>
+    {shown.map((r, i) => <div key={r.link} style={{ display: "flex", gap: 8, alignItems: "baseline", padding: "5px 0", borderTop: i ? "1px solid #efe4d2" : "none" }}>
+      <a href={r.link} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: "#4a443c", textDecoration: "none", flex: 1, lineHeight: 1.5 }}>{r.title}</a>
+      <span style={{ fontSize: 8, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", flexShrink: 0 }}>{r.label}</span>
+      <button onClick={() => clipHeadline(r)} title="Move to the editor's file" style={{ background: "none", border: "none", cursor: "pointer", color: "#0d6d56", fontSize: 8, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, padding: 0, textDecoration: "underline dotted", textUnderlineOffset: 2, flexShrink: 0 }}>CLIP</button>
+    </div>)}
+  </div>;
+}
 function ClippingsBoard() {
   useLearnTick();
+  const [open, setOpen] = useState(false);
   const items = lsGet("mjb_clippings", []);
   const save = (i, note) => { const c = lsGet("mjb_clippings", []); if (c[i]) { c[i] = { ...c[i], note }; lsSet("mjb_clippings", c); } };
   const drop = i => { const c = lsGet("mjb_clippings", []); c.splice(i, 1); lsSet("mjb_clippings", c); learnPing(); };
   if (!items.length) return null;
   return <div style={{ borderTop: "1px solid #ddcfb8", marginTop: 12, paddingTop: 10 }}>
-    <div style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#8a8072", letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Clippings — the editor's file</div>
-    {items.slice(0, 6).map((c, i) => <div key={c.link} style={{ padding: "6px 0", borderTop: i ? "1px solid #efe4d2" : "none" }}>
+    <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 6 }}>
+      <span style={{ fontSize: 8, fontFamily: "'JetBrains Mono',monospace", color: "#8a8072", letterSpacing: 2, textTransform: "uppercase" }}>Clippings — the editor's file</span>
+      {/* The file used to end at six with "+14 more" and no way to reach them, which made everything
+          past the sixth clip unreachable rather than merely hidden. */}
+      {items.length > 6 && <button onClick={() => setOpen(!open)} style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", padding: 0, fontSize: 8, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.5, textTransform: "uppercase", color: "#8a8072", textDecoration: "underline dotted", textUnderlineOffset: 3 }}>{open ? "Show fewer" : `All ${items.length}`}</button>}
+    </div>
+    {(open ? items : items.slice(0, 6)).map((c, i) => <div key={c.link} style={{ padding: "6px 0", borderTop: i ? "1px solid #efe4d2" : "none" }}>
       <div style={{ display: "flex", gap: 8, alignItems: "baseline" }}>
         <a href={c.link} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11.5, color: "#33302c", textDecoration: "none", flex: 1, lineHeight: 1.5 }}>{c.title}</a>
         <span style={{ fontSize: 8, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", flexShrink: 0 }}>{c.label} · {c.d}</span>
@@ -1721,7 +1800,6 @@ function ClippingsBoard() {
       </div>
       <input defaultValue={c.note} onBlur={e => save(i, e.target.value.trim())} placeholder="Marginalia — why this one mattered…" style={{ ...S.input, fontSize: 10.5, padding: "3px 7px", fontStyle: "italic", background: "transparent", border: "none", borderBottom: "1px dotted #ddcfb8", borderRadius: 0 }} />
     </div>)}
-    {items.length > 6 && <div style={{ fontSize: 9, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", marginTop: 6 }}>+ {items.length - 6} more in the file</div>}
   </div>;
 }
 function StandingWire({ desk }) {
@@ -1742,7 +1820,14 @@ function StandingWire({ desk }) {
     })();
     return () => { on = false; };
   }, []);
-  if (!wire) return <p style={{ color: "#8a8072", fontSize: 12, textAlign: "center", padding: "12px 0", lineHeight: 1.6 }}>The always-on headline wire — Reuters, WSJ, CNBC, MarketWatch, and Yahoo Finance, clustered one story per line, no key required.<br /><span style={{ fontSize: 10, color: "#a2977f" }}>AWAITING WIRE — live in production</span></p>;
+  // The file and the read log live BELOW this early return as well as after it. They are local
+  // records, not wire data, and hiding them because an unrelated RSS fetch failed would make a
+  // month of saved clippings look deleted every time the feed hiccups.
+  if (!wire) return <div>
+    <p style={{ color: "#8a8072", fontSize: 12, textAlign: "center", padding: "12px 0", lineHeight: 1.6 }}>The always-on headline wire — Reuters, WSJ, CNBC, MarketWatch, and Yahoo Finance, clustered one story per line, no key required.<br /><span style={{ fontSize: 10, color: "#a2977f" }}>AWAITING WIRE — live in production</span></p>
+    {desk && <ClippingsBoard />}
+    {desk && <ReadLog />}
+  </div>;
   const savePrefs = patch => setPrefs(p => { const next = { ...p, ...patch }; lsSet("mjb_wire_prefs", next); return next; });
   const mut = (prefs.muted || []).map(s => s.toLowerCase()).filter(Boolean);
   const pri = (prefs.priority || []).map(s => s.toLowerCase()).filter(Boolean);
@@ -1785,6 +1870,7 @@ function StandingWire({ desk }) {
     </div>}
     {body}
     {desk && <ClippingsBoard />}
+    {desk && <ReadLog />}
     <SourceLine>Sources: Reuters (via Google News) · WSJ† · CNBC · MarketWatch · Yahoo Finance · headlines link to the publisher · † subscription · 10-min cache</SourceLine>
   </div>;
 }
@@ -3591,7 +3677,8 @@ function useFearGreed() {
 // SEC EDGAR current-filings column (public domain), via api/edgar.js
 const FORM_GLOSS = { "8-K": "material event", "13D": "activist / >5% stake", "S-1": "IPO registration" };
 const FORM_COLOR = { "8-K": "#1f5a9e", "13D": "#990f3d", "S-1": "#b0741e" };
-function FilingsWire() {
+function FilingsWire({ desk }) {
+  useLearnTick();
   const [items, setItems] = useState(null);
   useEffect(() => {
     let on = true;
@@ -3610,11 +3697,16 @@ function FilingsWire() {
   const when = iso => { try { const d = new Date(iso); return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); } catch { return ""; } };
   if (!items) return <p style={{ color: "#8a8072", fontSize: 12, textAlign: "center", padding: "12px 0", lineHeight: 1.6 }}>The primary-source wire — 8-Ks, activist stakes, and IPO registrations as they hit SEC EDGAR, continuously.<br /><span style={{ fontSize: 10, color: "#a2977f" }}>Live in production</span></p>;
   return <div>
-    {items.slice(0, 14).map((f, i) => <a key={i} href={f.link} target="_blank" rel="noopener noreferrer" style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "7px 2px", borderTop: i ? "1px solid #efe4d2" : "none", textDecoration: "none" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(13,109,86,0.03)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+    {/* The row was a single <a> wrapping everything, which left nowhere legal to put a button — an
+        interactive control nested inside a link. It is a div now, with the link on the title. */}
+    {items.slice(0, 14).map((f, i) => <div key={i} style={{ display: "flex", gap: 10, alignItems: "baseline", padding: "7px 2px", borderTop: i ? "1px solid #efe4d2" : "none" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(13,109,86,0.03)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
       <span style={{ fontSize: 8, color: "#a2977f", fontFamily: "'JetBrains Mono',monospace", flexShrink: 0, minWidth: 74 }}>{when(f.updated)}</span>
       <span style={{ fontSize: 8.5, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, color: FORM_COLOR[f.form] || "#6f675c", flexShrink: 0, minWidth: 34, fontWeight: 600 }}>{f.form}</span>
-      <span style={{ fontSize: 11.5, color: "#33302c", lineHeight: 1.5, flex: 1 }}>{clean(f.title)}<span style={{ fontSize: 8.5, color: "#a2977f", marginLeft: 7, fontStyle: "italic" }}>{FORM_GLOSS[f.form]}</span></span>
-    </a>)}
+      <a href={f.link} target="_blank" rel="noopener noreferrer" onClick={() => logRead({ title: clean(f.title), link: f.link, label: f.form })} style={{ fontSize: 11.5, color: "#33302c", lineHeight: 1.5, flex: 1, textDecoration: "none" }}>{clean(f.title)}<span style={{ fontSize: 8.5, color: "#a2977f", marginLeft: 7, fontStyle: "italic" }}>{FORM_GLOSS[f.form]}</span></a>
+      {/* A filing clips as itself: the form type is the outlet, since "8-K" is what identifies it in
+          the file a week later far better than "SEC" would. */}
+      {desk && <button onClick={() => clipHeadline({ title: clean(f.title), link: f.link, label: f.form })} title={isClipped(f.link) ? "Already in the editor's file" : "Clip for the editor's file"} disabled={isClipped(f.link)} style={{ background: "none", border: "none", cursor: isClipped(f.link) ? "default" : "pointer", color: isClipped(f.link) ? "#0d6d56" : "#8a8072", fontSize: 8, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, padding: 0, textDecoration: isClipped(f.link) ? "none" : "underline dotted", textUnderlineOffset: 2, flexShrink: 0 }}>{isClipped(f.link) ? "FILED" : "CLIP"}</button>}
+    </div>)}
     <SourceLine>Source: SEC EDGAR, latest filings · public domain · 10-min cache · filings link to sec.gov</SourceLine>
   </div>;
 }
@@ -4331,7 +4423,7 @@ export default function App() {
         </div>}
         <div id="filings-wire" style={{ ...S.card, marginTop: 16 }}>
           <h2 style={S.cardTitle}><span style={{ color: "#990f3d" }}>◆</span> Filings Wire<Info text="Material corporate events straight from the primary source: 8-K material-event reports, SC 13D activist stakes, and S-1 IPO registrations, live from SEC EDGAR's current-filings feed. Public-domain data; every line links to the filing itself on sec.gov." link="https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent" linkLabel="EDGAR latest filings" /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="news" id="filings-wire" /></span></h2>
-          <FilingsWire />
+          <FilingsWire desk={desk} />
         </div>
         <div id="reading-ledger" style={{ ...S.card, marginTop: 16 }}>
           <h2 style={S.cardTitle}><span style={{ color: "#1f5a9e" }}>◆</span> The Reading Ledger<Info text="The serious-reading rack: latest issue titles from Net Interest, Klement on Investing, The Transcript, and Apricitas Economics via their public feeds. Titles link to the publication; racks that go dormant hide themselves." /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="news" id="reading-ledger" /></span></h2>
