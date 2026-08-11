@@ -683,10 +683,19 @@ function usePrices(tickers) {
     // Only while the page is actually in front of you. A background tab refetching all day spends
     // invocations on quotes nobody is reading, and they are stale again the moment you look back —
     // so the return to the tab is itself a refresh, which is the moment the number matters.
-    const onVis = () => { if (document.visibilityState === "visible") pull(false); };
+    const tick = () => { if (document.visibilityState === "visible") pull(false); };
+    // The return-to-tab refresh is rate-limited by the age of the cache, and that limit is not
+    // optional. Wired straight to the event it fired on EVERY transition: measured in production,
+    // a pane toggling visibility produced a request every two seconds. Alt-tabbing back and forth
+    // would do the same. The interval below is already paced, so only this path needs the guard.
+    const onVis = () => {
+      if (document.visibilityState !== "visible") return;
+      const ts = cacheTs("mb_prices_proxy");
+      if (!ts || Date.now() - ts >= POLL_MS) pull(false);
+    };
     (async () => {
       if (!(await pull(true))) { startSim(); return; } // no proxy (local dev) — demo tape, no polling
-      poll = setInterval(onVis, POLL_MS);
+      poll = setInterval(tick, POLL_MS);
       document.addEventListener("visibilitychange", onVis);
     })();
     return () => {
