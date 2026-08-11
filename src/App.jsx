@@ -248,6 +248,192 @@ async function loadArchivedBrief(type, secret, date) {
   const d = await briefCall(`/api/brief?type=${type}&date=${encodeURIComponent(date)}`, { headers: { "x-mjb-sync": secret } });
   return d ? { ok: true, brief: d.found ? d.brief : null } : { ok: false, brief: null };
 }
+// ============ BRIEFING FOLDER ============
+// The briefings as real files in a real folder Mason owns and organises himself.
+//
+// What this is NOT: a second store. Vercel Blob stays the source of truth and the only thing the
+// site writes to; this is a one-way mirror of it onto a disk. If the folder and the store ever
+// disagree, the store wins — which is why nothing here ever reads a file back as data, only to ask
+// whether it is already there.
+//
+// A web page cannot write to disk while the browser is closed, so the honest shape is "back-fills
+// whatever is missing whenever the site is open", not "arrives overnight". In practice those are the
+// same thing: he opens the site to read the briefing anyway, and the cron has already filed it.
+// Pointed at a OneDrive folder, Windows carries the files to his phone with no code at all.
+//
+// Chromium-on-desktop only. Safari and iOS have no File System Access API and never will on his
+// timeline, so `folderSupported()` gates the whole feature and the month export below is the path
+// that works everywhere — the installed iOS app must not show a broken button.
+const FOLDER_DB = "mjb-folder", FOLDER_STORE = "handles", FOLDER_KEY = "briefings";
+// A directory handle is structured-cloneable but NOT serialisable to JSON, so localStorage can't
+// hold it and IndexedDB is the only option. Verified: a handle survives the round trip and its
+// entries() still works on the far side.
+function idbOpen() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open(FOLDER_DB, 1);
+    r.onupgradeneeded = () => { try { r.result.createObjectStore(FOLDER_STORE); } catch {} };
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+async function idbHandle(op, value) {
+  // Every caller treats a failure as "no folder configured". IndexedDB is unavailable in some
+  // private-browsing modes, and that must degrade to the export button, not to an error.
+  try {
+    const db = await idbOpen();
+    const out = await new Promise((res, rej) => {
+      const t = db.transaction(FOLDER_STORE, op === "get" ? "readonly" : "readwrite");
+      const s = t.objectStore(FOLDER_STORE);
+      const q = op === "get" ? s.get(FOLDER_KEY) : op === "put" ? s.put(value, FOLDER_KEY) : s.delete(FOLDER_KEY);
+      q.onsuccess = () => res(q.result);
+      t.onerror = () => rej(t.error);
+    });
+    db.close();
+    return out;
+  } catch { return null; }
+}
+const folderSupported = () => typeof window !== "undefined" && typeof window.showDirectoryPicker === "function";
+// Four states, and the UI is driven entirely by which one comes back — deliberately, because the
+// browser gets the final say on permission and the card must not promise silent sync it cannot
+// deliver. "locked" means the handle is still stored but the browser wants the grant confirmed
+// again, which only a click can do; that is one button, not a re-pick of the folder.
+async function folderState() {
+  if (!folderSupported()) return { status: "unsupported" };
+  const handle = await idbHandle("get");
+  if (!handle) return { status: "none" };
+  let p = "prompt";
+  try { p = await handle.queryPermission({ mode: "readwrite" }); } catch {}
+  return { status: p === "granted" ? "ready" : "locked", name: handle.name, handle };
+}
+async function pickFolder() {
+  const handle = await window.showDirectoryPicker({ id: "mjb-briefings", mode: "readwrite", startIn: "documents" });
+  await idbHandle("put", handle);
+  return handle;
+}
+
+// ---- Markdown. Plain text on purpose: it opens in Word, renders on GitHub and OneDrive, and stays
+// greppable — which is what "go back and reference a week" actually needs. No emoji (house rule),
+// and statuses spelled out as words so a fact-check reads the same in a plain-text editor.
+const MD_MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+// Built from the parts rather than new Date(iso) — that parses as UTC and prints the day before for
+// every reader west of Greenwich.
+function mdLongDate(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(y, m - 1, d);
+  return `${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][dt.getDay()]}, ${d} ${MD_MONTHS[m - 1]} ${y}`;
+}
+function briefMarkdown(rec) {
+  if (!rec || !rec.text) return "";
+  const L = [];
+  L.push(`# ${rec.type === "morning" ? "Morning" : "Close"} Briefing — ${mdLongDate(rec.date)}`, "");
+  const filed = rec.ts ? new Date(rec.ts).toLocaleString("en-US", { hour: "numeric", minute: "2-digit", timeZone: "America/Chicago" }) : null;
+  L.push(`*${[filed && `Filed ${filed} CT`, rec.searches && `${rec.searches} web searches`, "masonjbennett.com"].filter(Boolean).join(" · ")}*`, "");
+  for (const p of String(rec.text).split(/\n\s*\n/)) { const t = p.trim(); if (t) L.push(t, ""); }
+  if (Array.isArray(rec.sources) && rec.sources.length) {
+    L.push("## Sources", "");
+    rec.sources.forEach((s, i) => L.push(`${i + 1}. ${s.name || "Source"}${s.url && s.url !== "#" ? ` — ${s.url}` : ""}`));
+    L.push("");
+  }
+  if (Array.isArray(rec.soWhat) && rec.soWhat.length) {
+    L.push("## So What", "");
+    rec.soWhat.forEach((x, i) => {
+      L.push(`### ${String(i + 1).padStart(2, "0")} · ${x.headline || ""}`, "");
+      if (x.development) L.push(x.development, "");
+      for (const [k, v] of [["Why it matters", x.why_it_matters], ["Who affected", x.who_affected], ["Second order", x.second_order], ["Takeaway", x.takeaway]]) if (v) L.push(`**${k}** — ${v}`, "");
+    });
+  }
+  if (rec.verify && rec.verify.summary) {
+    const s = rec.verify.summary;
+    L.push("## Fact-check", "", `${s.verified || 0} of ${s.total || 0} claims sourced · ${s.confidence_pct || 0}% self-scored`, "");
+    const NAME = { verified: "SOURCED", minor_discrepancy: "DISCREPANCY", unverified: "UNVERIFIED" };
+    // Flagged claims lead, same as on the site: a single confidence score invites trusting the whole
+    // briefing at a glance, so the disputed lines have to be the ones you meet first.
+    const order = (rec.verify.claims || []).slice().sort((a, b) => (a.status === "verified" ? 1 : 0) - (b.status === "verified" ? 1 : 0));
+    for (const c of order) L.push(`- **${NAME[c.status] || String(c.status || "").toUpperCase()}** — ${c.claim || ""}${c.note ? ` (${c.note})` : ""}${c.source ? ` [${c.source}]` : ""}`);
+    L.push("");
+  }
+  return L.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
+}
+const briefFileName = (date, type) => `${date}-${type}.md`;
+async function writeInto(dir, name, text) {
+  const fh = await dir.getFileHandle(name, { create: true });
+  const w = await fh.createWritable();
+  await w.write(text);
+  await w.close();
+}
+
+// Back-fill everything the folder is missing. Returns a tally rather than throwing on a single bad
+// edition: one unreachable record must not abandon the other ninety-nine.
+//
+// Past editions are IMMUTABLE — api/brief.js pins every POST to today, so nothing can ever change a
+// filed day — which is what makes "the file exists, skip it" safe and keeps a routine sync down to
+// zero or two fetches. Today is the sole exception and is always rewritten, because the implications
+// pass and the fact-check land minutes to hours after the draft that created the file.
+async function syncBriefFolder(handle, secret, onProgress) {
+  const index = await loadBriefIndex(secret);
+  if (!index) throw new Error(lastSyncError || "the desk didn't answer");
+  const have = new Set();
+  for await (const [name] of handle.entries()) have.add(name);
+  const today = briefToday();
+  const jobs = [];
+  for (const e of index) for (const type of e.types) {
+    const file = briefFileName(e.date, type);
+    // `fresh` is what separates "three days you didn't have" from "today, rewritten again" in the
+    // tally. Both are real writes, but reporting a routine refresh as a new edition would have every
+    // sync claim it found something.
+    if (e.date === today || !have.has(file)) jobs.push({ date: e.date, type, file, fresh: !have.has(file) });
+  }
+  let written = 0, refreshed = 0, failed = 0, i = 0;
+  // Sequential, not parallel: this hits Mason's own serverless function once per edition, a routine
+  // run is one or two of them, and the only slow case is a first sync or a long absence — where a
+  // visible count is worth more than the seconds a pool would save.
+  for (const j of jobs) {
+    if (onProgress) onProgress(++i, jobs.length);
+    try {
+      const { ok, brief } = await loadArchivedBrief(j.type, secret, j.date);
+      if (!ok) { failed++; continue; }
+      if (!brief || !brief.text) continue; // the index listed it, the store didn't have it — not an error
+      await writeInto(handle, j.file, briefMarkdown(brief));
+      // The lossless copy, kept out of the way in raw/ so the folder he browses is only the readable
+      // ones. Written alongside the .md, so deleting a .json alone won't bring it back until that
+      // edition is written again.
+      try {
+        const raw = await handle.getDirectoryHandle("raw", { create: true });
+        await writeInto(raw, `${j.date}-${j.type}.json`, JSON.stringify(brief, null, 2));
+      } catch {}
+      if (j.fresh) written++; else refreshed++;
+    } catch { failed++; }
+  }
+  return { written, refreshed, failed, checked: jobs.length };
+}
+
+// ---- The export that works everywhere, including the installed iOS app: one month of briefings as
+// a single Markdown file. Not a lesser fallback — a month in one file is the better shape for
+// reading a week back, and it is the only shape Safari can offer at all.
+async function exportBriefMonth(secret, month, onProgress) {
+  const index = await loadBriefIndex(secret);
+  if (!index) throw new Error(lastSyncError || "the desk didn't answer");
+  const days = index.filter(e => e.date.slice(0, 7) === month).sort((a, b) => (a.date < b.date ? -1 : 1));
+  const parts = [];
+  let i = 0, total = days.reduce((n, e) => n + e.types.length, 0);
+  for (const e of days) for (const type of e.types) {
+    if (onProgress) onProgress(++i, total);
+    const { brief } = await loadArchivedBrief(type, secret, e.date);
+    if (brief && brief.text) parts.push(briefMarkdown(brief));
+  }
+  if (!parts.length) throw new Error("no briefings were filed that month");
+  const [y, m] = month.split("-").map(Number);
+  const head = `# Briefings — ${MD_MONTHS[m - 1]} ${y}\n\n*${parts.length} editions · masonjbennett.com*\n\n---\n\n`;
+  return { text: head + parts.join("\n---\n\n"), count: parts.length };
+}
+function downloadText(name, text) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: "text/markdown" }));
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
 // One step of the chain — "brief" | "verify" | "sowhat" — each returning the whole updated record.
 // Split into three requests so each serverless invocation stays short and partial results reach the
 // store (and the other device) as they land. Must be called in order; steps 2-3 read step 1's text.
@@ -3347,6 +3533,84 @@ function restoreRecords(entries) {
   }
   for (const [k, v] of entries) localStorage.setItem(k, v);
 }
+// The folder card. Every line of it is driven by folderState() rather than by an assumption about
+// what the browser will allow, because the browser is the one that decides: if Chrome hands the
+// permission back on a fresh launch this never shows a button, and if it wants the grant confirmed
+// again the card says so and offers the one click that does it. Promising silent sync and then
+// failing quietly would be the worst of the available outcomes.
+function BriefingFolder({ syncSecret }) {
+  const [st, setSt] = useState(null), [busy, setBusy] = useState(""), [msg, setMsg] = useState(""), [err, setErr] = useState("");
+  const [month, setMonth] = useState(() => briefToday().slice(0, 7));
+  const refresh = () => folderState().then(setSt).catch(() => setSt({ status: "none" }));
+  useEffect(() => { refresh(); }, []);
+  // The timer is held so a second message replaces the first cleanly. Without this the earlier
+  // timeout is still running and clears the NEW message early — two syncs in quick succession and
+  // the second one's result blinks out after a second, which reads as though it didn't happen.
+  const flashT = useRef();
+  const flash = t => { setMsg(t); setErr(""); clearTimeout(flashT.current); flashT.current = setTimeout(() => setMsg(""), 4000); };
+  useEffect(() => () => clearTimeout(flashT.current), []);
+  const run = async (handle) => {
+    setErr(""); setBusy("Reading the desk...");
+    try {
+      const r = await syncBriefFolder(handle, syncSecret, (i, n) => setBusy(`Filing ${i} of ${n}...`));
+      const tail = r.failed ? ` · ${r.failed} couldn't be read` : "";
+      flash(r.written ? `${r.written} edition${r.written === 1 ? "" : "s"} written${tail}.`
+        : r.refreshed ? `Up to date — today's edition refreshed${tail}.`
+        : `Already up to date${tail}.`);
+      try { localStorage.setItem("mb_folder_synced", String(Date.now())); } catch {}
+    } catch (e) { setErr(e.message || "the sync didn't finish"); }
+    setBusy("");
+  };
+  // Both of these must stay inside a click: showDirectoryPicker and requestPermission each need a
+  // user gesture, and calling either from an effect throws.
+  const choose = async () => {
+    try { const h = await pickFolder(); await refresh(); await run(h); }
+    catch (e) { if (e && e.name !== "AbortError") setErr(e.message || "couldn't open that folder"); }
+  };
+  const unlock = async () => {
+    try {
+      const p = await st.handle.requestPermission({ mode: "readwrite" });
+      if (p !== "granted") { setErr("the browser kept the folder locked — choose it again"); return; }
+      await refresh(); await run(st.handle);
+    } catch (e) { setErr(e.message || "couldn't reopen that folder"); }
+  };
+  const forget = async () => { await idbHandle("del"); setSt({ status: "none" }); flash("Folder forgotten. Nothing on disk was touched."); };
+  const exportMonth = async () => {
+    setErr(""); setBusy("Gathering...");
+    try {
+      const { text, count } = await exportBriefMonth(syncSecret, month, (i, n) => setBusy(`Reading ${i} of ${n}...`));
+      downloadText(`briefings-${month}.md`, text);
+      flash(`${count} edition${count === 1 ? "" : "s"} downloaded.`);
+    } catch (e) { setErr(e.message || "the export didn't finish"); }
+    setBusy("");
+  };
+  const B = { background: "#f6eee1", border: "1px solid #e9ddc9", borderRadius: 8, padding: "7px 12px", color: "#6f675c", fontSize: 10, cursor: busy ? "default" : "pointer", fontFamily: "'JetBrains Mono',monospace", letterSpacing: 0.5, opacity: busy ? 0.5 : 1 };
+  const months = [];
+  for (let i = 0; i < 12; i++) { const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - i); months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`); }
+  const s = st && st.status;
+  return <div style={{ marginBottom: 16, borderTop: "1px solid #efe4d2", paddingTop: 16 }}>
+    <label style={{ fontSize: 10, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 1.5, display: "block", marginBottom: 6 }}>Briefing Folder</label>
+    <p style={{ fontSize: 10, color: "#8a8072", lineHeight: 1.55, marginBottom: 8 }}>Keeps a Markdown copy of every briefing in a folder on this PC, back-filling whatever is missing each time you open the site. The desk stays the original — this is a mirror of it, so deleting a file here changes nothing there. Point it at a <b style={{ fontWeight: 600 }}>OneDrive folder</b> and Windows carries them to your phone on its own.</p>
+    {!syncSecret && <p style={{ fontSize: 10, color: "#b0741e", fontFamily: "'JetBrains Mono',monospace", lineHeight: 1.5, marginBottom: 8 }}>Add the sync secret above first — the folder is filled from the briefing desk.</p>}
+    {s === "unsupported" && <p style={{ fontSize: 10, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", lineHeight: 1.5, marginBottom: 8 }}>This browser can't write to a folder — that's Chrome or Edge on Windows only. The month download below works here.</p>}
+    {s === "ready" && <p style={{ fontSize: 10, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", marginBottom: 8 }}>Filing to {st.name} · syncs on open</p>}
+    {s === "locked" && <p style={{ fontSize: 10, color: "#b0741e", fontFamily: "'JetBrains Mono',monospace", lineHeight: 1.5, marginBottom: 8 }}>{st.name} is still set, but this browser wants the folder confirmed again before it writes.</p>}
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8, alignItems: "center" }}>
+      {s === "locked" && <button onClick={unlock} disabled={!!busy} style={{ ...B, color: "#b0741e", borderColor: "#b0741e30" }}>Reconnect folder</button>}
+      {folderSupported() && s !== "unsupported" && <button onClick={choose} disabled={!!busy || !syncSecret} style={B}>{s === "none" ? "Choose folder" : "Change folder"}</button>}
+      {s === "ready" && <button onClick={() => run(st.handle)} disabled={!!busy || !syncSecret} style={B}>Sync now</button>}
+      {(s === "ready" || s === "locked") && <button onClick={forget} disabled={!!busy} style={B}>Forget</button>}
+    </div>
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
+      <select value={month} onChange={e => setMonth(e.target.value)} style={{ ...B, cursor: "pointer", opacity: 1 }}>{months.map(m => <option key={m} value={m}>{MD_MONTHS[+m.slice(5) - 1]} {m.slice(0, 4)}</option>)}</select>
+      <button onClick={exportMonth} disabled={!!busy || !syncSecret} style={B}>Download that month (.md)</button>
+    </div>
+    <p style={{ fontSize: 9, color: "#a2977f", lineHeight: 1.6 }}>One file holding every edition of the month, which is the only shape iOS can take — and often the better one for reading a week back.</p>
+    {busy && <p style={{ fontSize: 10, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", marginTop: 6 }}>{busy}</p>}
+    {msg && <p style={{ fontSize: 10, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", marginTop: 6 }}>{msg}</p>}
+    {err && <p style={{ fontSize: 10, color: "#b2342b", fontFamily: "'JetBrains Mono',monospace", lineHeight: 1.5, marginTop: 6 }}>Couldn't finish — {err}.</p>}
+  </div>;
+}
 function DeskRecords() {
   const [msg, setMsg] = useState(""), [err, setErr] = useState(""), [paste, setPaste] = useState(""), [pending, setPending] = useState(null), [showPaste, setShowPaste] = useState(false);
   const fileRef = useRef();
@@ -3452,6 +3716,7 @@ function SettingsPanel({ apiKey, setApiKey, syncSecret, setSyncSecret, desk, set
         </div>
         <button onClick={()=>setDesk(!desk)} style={{background:desk?"#0d6d5615":"#f6eee1",border:`1px solid ${desk?"#0d6d5630":"#e9ddc9"}`,borderRadius:8,padding:"8px 16px",color:desk?"#0d6d56":"#8a8072",fontSize:11,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",fontWeight:600,flexShrink:0}}>{desk?"ON":"OFF"}</button>
       </div>
+      <BriefingFolder syncSecret={syncSecret} />
       <DeskRecords />
       <p style={{fontSize:9,color:"#a2977f",marginBottom:16,lineHeight:1.6}}>Both live in this browser only, and neither is ever committed to code. The Anthropic key leaves it only for Anthropic; the sync secret goes only to this site's own briefing desk, to prove the request is yours.</p>
       <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
@@ -3637,6 +3902,24 @@ export default function App() {
     const titles = { home: "Mason J. Bennett — M.S. Finance · Analyst Candidate", projects: "Projects & Deal Sheet — Mason J. Bennett", markets: "Markets — Mason J. Bennett", news: "News & Briefings — Mason J. Bennett", recruiter: "Recruiter Packet — Mason J. Bennett" };
     document.title = titles[tab] || titles.home;
   }, [tab]);
+  // The briefing folder fills itself, and this is the only place that happens unattended. Runs once
+  // a load, and ONLY when a folder is already chosen and the browser still calls the grant live: a
+  // locked folder needs a click, which no effect can supply, so it waits in Settings instead of
+  // failing here. Every error is swallowed on purpose — a copy that didn't reach the disk must
+  // never disturb the page showing the briefing, and the desk still holds the original either way.
+  useEffect(() => {
+    if (!syncSecret) return;
+    let live = true;
+    (async () => {
+      try {
+        const st = await folderState();
+        if (!live || st.status !== "ready") return;
+        await syncBriefFolder(st.handle, syncSecret);
+        try { localStorage.setItem("mb_folder_synced", String(Date.now())); } catch {}
+      } catch {}
+    })();
+    return () => { live = false; };
+  }, [syncSecret]);
   useEffect(() => { if (!window.location.hash) return; const id = window.location.hash.slice(1); const m = ANCHOR_SEG[id]; if (m) { setTabRaw(m[0]); if (m[1]) setSegment(m[0], m[1]); } const t = setTimeout(() => document.getElementById(id)?.scrollIntoView({ block: "start" }), showHero ? 3200 : 300); return () => clearTimeout(t); }, []);
   useEffect(() => { try { const v = new URLSearchParams(window.location.search).get("view"); const owner = { dossier: "home", personal: "home", portfolio: "projects", prep: "projects", tape: "markets", book: "markets" }; if (v && owner[v]) setSegment(owner[v], v); } catch {} }, []);
   useEffect(() => { window.scrollTo(0, 0); if (!showHero) { setMounted(true); return; } try { sessionStorage.setItem("mb_intro", "1"); } catch {} const t = setTimeout(() => { setShowHero(false); setMounted(true); }, 2900); return () => clearTimeout(t); }, []);
