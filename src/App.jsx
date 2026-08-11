@@ -1482,6 +1482,46 @@ const runStrip=(()=>{const filed=new Map((idx||[]).map(e=>[e.date,e.types]));con
 const BRIEF_COST=0.3;
 const monthKey=today.slice(0,7);
 const monthCount=(idx||[]).filter(e=>e.date.slice(0,7)===monthKey).reduce((n,e)=>n+e.types.length,0);
+// ---- Search. The archive was walkable a day at a time and not queryable at all, which is the gap
+// the stepper created: "what did I read about the Fed in July" had no answer on the site.
+//
+// Free in Anthropic spend and expensive in requests — there is no server-side search over Blob, so
+// finding a word means reading every edition. That is why results are held in `recs`, the same
+// session cache the stepper fills: the first search over a year of archive is a few hundred reads
+// with a running count, and every search after it is instant. It is also why it is a button and not
+// a keystroke-by-keystroke filter.
+const[q,setQ]=useState(""),[hits,setHits]=useState(null),[scanning,setScanning]=useState(""),[searchErr,setSearchErr]=useState("");
+const cancelled=useRef(false);
+// Body text plus the So What headlines and takeaways — the parts worth finding a week later. The
+// fact-check notes are left out on purpose: they are commentary on the briefing, not the news.
+const haystack=r=>[r.text,...(Array.isArray(r.soWhat)?r.soWhat.flatMap(s=>[s.headline,s.takeaway,s.development]):[])].filter(Boolean).join("\n");
+const runSearch=async()=>{
+  const needle=q.trim().toLowerCase();
+  if(!needle||!syncSecret||scanning)return;
+  setSearchErr("");setHits(null);cancelled.current=false;
+  const all=[];for(const e of(idx||[]))for(const t of e.types)all.push([e.date,t]);
+  const found=[],pulled={};let n=0,missed=0;
+  // Whatever was read before a stop is kept, not thrown away: the reads are already spent, and
+  // resuming the search should start from where it got to rather than from the beginning.
+  const keep=()=>{if(Object.keys(pulled).length)setRecs(r=>({...r,...pulled}))};
+  for(const[d,t]of all){
+    if(cancelled.current){keep();setScanning("");return}
+    setScanning(`Reading ${++n} of ${all.length}`);
+    const k=briefKey(d,t);
+    let rec=recs[k]!==undefined?recs[k]:pulled[k];
+    if(rec===undefined){
+      const r=await loadArchivedBrief(t,syncSecret,d);
+      if(!r.ok){missed++;continue}          // a dropped read is reported, never silently "no match"
+      rec=r.brief;pulled[k]=rec;
+    }
+    if(!rec||!rec.text)continue;
+    const hay=haystack(rec),at=hay.toLowerCase().indexOf(needle);
+    if(at>=0)found.push({date:d,type:t,at,hay});
+  }
+  keep(); // merged rather than replaced: the stepper may have cached a day while this was running
+  setScanning("");setHits({needle,found,missed,scanned:all.length});
+};
+const clearSearch=()=>{setHits(null);setQ("");setSearchErr("")};
 // Draft → fact-check → implications, one request each, in order (steps 2-3 read step 1 back out of
 // the store). A step the stored record already carries is skipped: another device did that work,
 // and re-running it would just re-bill the same call.
@@ -1550,6 +1590,17 @@ return <div style={{marginBottom:16,paddingBottom:12,borderBottom:"1px solid #e9
           outline:d.iso===date?"1px solid #0d6d56":"none",outlineOffset:1}}/>})}</div>
     <span style={{fontSize:9,color:"#a2977f",fontFamily:"'JetBrains Mono',monospace",letterSpacing:0.5,marginLeft:"auto"}} title="Drafting only — a fact-check costs about the same again, and the index can't see which days carry one.">{monthCount} edition{monthCount===1?"":"s"} this month · about ${(monthCount*BRIEF_COST).toFixed(2)} drafted</span>
   </div>
+  {/* Deliberately a button, not a live filter. Each keystroke would re-read every edition in the
+      store — free, but hundreds of requests — so the search is asked for once and then cached. */}
+  <div style={{display:"flex",gap:6,alignItems:"center",marginTop:10,flexWrap:"wrap"}}>
+    <input value={q} onChange={e=>setQ(e.target.value)} onKeyDown={e=>{if(e.key==="Enter")runSearch();if(e.key==="Escape")clearSearch()}} placeholder="Search every edition" disabled={!!scanning}
+      style={{flex:"1 1 180px",minWidth:0,background:"#f6eee1",border:"1px solid #e9ddc9",borderRadius:8,padding:"6px 10px",color:"#33302c",fontSize:11,fontFamily:"'JetBrains Mono',monospace",outline:"none"}}/>
+    <button onClick={scanning?()=>{cancelled.current=true}:runSearch} disabled={!scanning&&!q.trim()}
+      style={{background:"none",border:"1px solid #0d6d5625",borderRadius:8,padding:"6px 12px",color:scanning?"#b2342b":"#0d6d56",fontSize:9,cursor:(!scanning&&!q.trim())?"default":"pointer",opacity:(!scanning&&!q.trim())?0.45:1,fontFamily:"'JetBrains Mono',monospace",letterSpacing:1,textTransform:"uppercase"}}>{scanning?"Stop":"Search"}</button>
+    {hits&&!scanning&&<button onClick={clearSearch} style={{background:"none",border:"1px solid #e9ddc9",borderRadius:8,padding:"6px 12px",color:"#8a8072",fontSize:9,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",letterSpacing:1,textTransform:"uppercase"}}>Clear</button>}
+    {scanning&&<span style={{fontSize:9,color:"#8a8072",fontFamily:"'JetBrains Mono',monospace"}}>{scanning}</span>}
+  </div>
+  {searchErr&&<p style={{fontSize:10,color:"#b2342b",fontFamily:"'JetBrains Mono',monospace",marginTop:6}}>{searchErr}</p>}
 </div>;})()}
 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18,position:"relative",flexWrap:"wrap",gap:12}}><div><div style={{display:"flex",gap:6,marginBottom:8}}>{["morning","close"].map(t=>{
 /* On an archived day the index already knows which editions were filed, so the one that wasn't is
@@ -1562,6 +1613,27 @@ return <button key={t} onClick={()=>{setTab(t);setArchErr("")}} style={{fontSize
     overwriting a briefing he came back to read. */}
 {isToday&&<button onClick={()=>gen(tab,!!data)} disabled={loading||verifying} style={{...S.btn,opacity:(loading||verifying)?0.5:1}}>{loading?"⟳ Generating...":verifying||swLoad?"⟳ Analyzing...":data?"↻ Regenerate":"Generate Brief"}</button>}</div>
 {err&&<p style={{fontSize:11,color:"#b2342b",marginBottom:12,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.5}}>{err}</p>}
+{/* Results take the card over rather than sitting above the edition, because reading a briefing and
+    scanning a search are two different jobs and stacking them makes the card enormous. */}
+{hits&&<div style={{marginBottom:6}}>
+  <div style={{display:"flex",alignItems:"baseline",gap:10,flexWrap:"wrap",marginBottom:12}}>
+    <span style={{fontSize:11,color:"#33302c",fontFamily:"'JetBrains Mono',monospace"}}>{hits.found.length} edition{hits.found.length===1?"":"s"} mention “{hits.needle}”</span>
+    <span style={{fontSize:9,color:"#a2977f",fontFamily:"'JetBrains Mono',monospace"}}>of {hits.scanned} searched{hits.missed?` · ${hits.missed} couldn't be read`:""}</span>
+  </div>
+  {!hits.found.length&&<p style={{fontSize:12,color:"#6f675c",padding:"14px 0"}}>Nothing in the archive mentions that. The search covers the briefing text and the So What items, not the fact-check notes.</p>}
+  <div style={{display:"flex",flexDirection:"column",gap:6}}>{hits.found.map(h=>{
+    // A window around the first match, cut on the nearest space so a word isn't sliced in half.
+    const start=Math.max(0,h.at-70),end=Math.min(h.hay.length,h.at+hits.needle.length+120);
+    const raw=h.hay.slice(start,end).replace(/\s+/g," ");
+    const lead=start>0?"…":"",tail=end<h.hay.length?"…":"";
+    const i=raw.toLowerCase().indexOf(hits.needle);
+    return <button key={`${h.date}|${h.type}`} onClick={()=>{jump(h.date);setTab(h.type);clearSearch()}}
+      style={{textAlign:"left",background:"#f6eee180",border:"1px solid #e9ddc9",borderRadius:8,padding:"9px 12px",cursor:"pointer",display:"block",width:"100%"}}>
+      <div style={{fontSize:9,color:"#8a8072",fontFamily:"'JetBrains Mono',monospace",letterSpacing:1,textTransform:"uppercase",marginBottom:4}}>{fmtEdition(h.date)} · {h.type==="morning"?"Morning":"Close"}</div>
+      <div style={{fontSize:12,color:"#4a443c",lineHeight:1.6}}>{lead}{i<0?raw:<>{raw.slice(0,i)}<mark style={{background:"#0d6d5618",color:"#0d6d56",fontWeight:600,padding:"0 2px",borderRadius:3}}>{raw.slice(i,i+hits.needle.length)}</mark>{raw.slice(i+hits.needle.length)}</>}{tail}</div>
+    </button>})}</div>
+</div>}
+{!hits&&<>
 {data&&data.stored===false&&<p style={{fontSize:10,color:"#b0741e",marginBottom:12,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.5}}>Drafted, but the store wouldn't take it — this edition won't reach your other devices.</p>}
 {archErr&&<p style={{fontSize:11,color:"#b2342b",marginBottom:12,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.5}}>That edition didn't come back — {archErr}.</p>}
 {/* Three different nothings, and they are not interchangeable: today's briefing hasn't been drafted
@@ -1596,6 +1668,7 @@ return <button key={t} onClick={()=>{setTab(t);setArchErr("")}} style={{fontSize
 {soWhat&&showSW&&<div style={{display:"flex",flexDirection:"column",gap:8}}>{soWhat.map((item,i)=><div key={i} style={{padding:"12px 14px",borderRadius:10,background:"#f6eee1",border:"1px solid #e9ddc9",animation:"fadeUp 0.4s ease both",animationDelay:`${i*0.06}s`}}><div style={{display:"flex",alignItems:"baseline",gap:8,marginBottom:8}}><span style={{color:"#7d5fb2",fontSize:10,fontFamily:"'JetBrains Mono',monospace",fontWeight:700}}>{String(i+1).padStart(2,"0")}</span><h4 style={{color:"#33302c",fontSize:14,fontWeight:600}}>{item.headline}</h4></div><div style={{paddingLeft:24}}><p style={{color:"#6f675c",fontSize:12,marginBottom:8,lineHeight:1.5}}>{item.development}</p>{[["WHY IT MATTERS","#0d6d56",item.why_it_matters],["WHO AFFECTED","#1f5a9e",item.who_affected],["SECOND ORDER","#b0741e",item.second_order]].map(([l,c,t])=><div key={l} style={{display:"flex",gap:8,marginBottom:5}}><span style={{color:c,fontSize:9,fontFamily:"'JetBrains Mono',monospace",fontWeight:700,minWidth:80,flexShrink:0,paddingTop:2}}>{l}</span><span style={{color:"#4a443c",fontSize:12,lineHeight:1.5}}>{t}</span></div>)}<div style={{marginTop:8,padding:"6px 10px",borderRadius:6,background:"#7d5fb206",border:"1px solid #7d5fb212",display:"flex",alignItems:"baseline",gap:8}}><span style={{color:"#7d5fb2",fontSize:9,fontFamily:"'JetBrains Mono',monospace",fontWeight:700}}>TAKEAWAY</span><span style={{color:"#33302c",fontSize:12,lineHeight:1.5}}>{item.takeaway}</span></div></div></div>)}</div>}
 </div>}
 </div>}
+</>}
 </div>;}
 
 // ============ LBO SANDBOX ============
