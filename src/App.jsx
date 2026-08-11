@@ -203,6 +203,15 @@ async function callAPI(key, body) {
 // Cache helpers
 function cacheGet(key, maxAgeMin = 30) { try { const c = JSON.parse(localStorage.getItem(key)); if (c && Date.now() - c.ts < maxAgeMin * 60000) return c.data; } catch {} return null; }
 function cacheSet(key, data) { try { localStorage.setItem(key, JSON.stringify({ data, ts: Date.now() })); } catch {} }
+// The envelope's own timestamp, so a card can say when the data was actually fetched rather than
+// when it happened to be read back out of the cache. Reading only — the {data, ts} shape stays
+// exactly as cacheSet writes it, which Desk Records depends on to tell caches from records.
+function cacheTs(key) { try { const c = JSON.parse(localStorage.getItem(key)); return c && c.ts ? c.ts : null; } catch { return null; } }
+const clockOf = ts => new Date(ts).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+// How often the live quote tape refreshes itself while the page is in front of you. Nothing else on
+// the site polls: the wire, the calendars and the macro series all change on a scale of hours and
+// are cached accordingly, so the tape is the only thing worth keeping warm.
+const POLL_MS = 60000;
 
 // ============ BRIEFING SYNC ============
 // Briefings are the one piece of site state that is NOT per-browser. They're drafted AND stored by
@@ -645,16 +654,22 @@ function usePrices(tickers) {
   const [asOf, setAsOf] = useState(null);
   const stamp = () => setAsOf(new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
   useEffect(() => {
-    let cancelled = false, iv = null;
+    let cancelled = false, sim = null, poll = null;
     const startSim = () => {
       if (cancelled) return;
       setP(tickers.map(t => ({ ...t, price: (80 + Math.random() * 450).toFixed(2), change: (Math.random() * 7 - 3.5).toFixed(2) })));
-      iv = setInterval(() => setP(prev => prev.map(t => { const d = (Math.random() - 0.47) * 1.8; return { ...t, price: Math.max(1, parseFloat(t.price) + d).toFixed(2), change: (parseFloat(t.change) + d * 0.08).toFixed(2) }; })), 3000);
+      sim = setInterval(() => setP(prev => prev.map(t => { const d = (Math.random() - 0.47) * 1.8; return { ...t, price: Math.max(1, parseFloat(t.price) + d).toFixed(2), change: (parseFloat(t.change) + d * 0.08).toFixed(2) }; })), 3000);
     };
-    (async () => {
+    // allowCache is what separates the first paint from a refresh: on load a cached quote appears
+    // instantly and is stamped with the time it was ACTUALLY fetched, not the time it was read
+    // back; the poll below always goes to the wire, or it would just re-read the same cache.
+    const pull = async allowCache => {
       try {
-        const cached = cacheGet("mb_prices_proxy", 5);
-        if (cached) { if (!cancelled) { setP(cached); setLive(true); stamp(); } return; }
+        if (allowCache) {
+          const cached = cacheGet("mb_prices_proxy", 5);
+          const ts = cacheTs("mb_prices_proxy");
+          if (cached) { if (!cancelled) { setP(cached); setLive(true); setAsOf(ts ? clockOf(ts) : null); } return true; }
+        }
         const r = await fetch(`/api/quotes?symbols=${tickers.map(t => t.symbol).join(",")}`);
         if (!r.ok) throw 0;
         const d = await r.json();
@@ -662,9 +677,24 @@ function usePrices(tickers) {
         if (mapped.filter(Boolean).length < tickers.length / 2) throw 0;
         const filled = mapped.map((m, i) => m || { ...tickers[i], price: "—", change: "0.00" });
         if (!cancelled) { setP(filled); setLive(true); stamp(); cacheSet("mb_prices_proxy", filled); }
-      } catch { startSim(); }
+        return true;
+      } catch { return false; }
+    };
+    // Only while the page is actually in front of you. A background tab refetching all day spends
+    // invocations on quotes nobody is reading, and they are stale again the moment you look back —
+    // so the return to the tab is itself a refresh, which is the moment the number matters.
+    const onVis = () => { if (document.visibilityState === "visible") pull(false); };
+    (async () => {
+      if (!(await pull(true))) { startSim(); return; } // no proxy (local dev) — demo tape, no polling
+      poll = setInterval(onVis, POLL_MS);
+      document.addEventListener("visibilitychange", onVis);
     })();
-    return () => { cancelled = true; if (iv) clearInterval(iv); };
+    return () => {
+      cancelled = true;
+      if (sim) clearInterval(sim);
+      if (poll) clearInterval(poll);
+      document.removeEventListener("visibilitychange", onVis);
+    };
   }, []);
   return { prices: p, live, asOf };
 }
@@ -918,6 +948,15 @@ function RegimeIndicator({ apiKey }) {
   const [data, setData] = useState(null), [loading, setLoading] = useState(false), [error, setError] = useState(false), [fetchTime, setFetchTime] = useState(null);
   const fg = useFearGreed();
   const load = async () => { if (!apiKey) { setError(true); setLoading(false); return; } setLoading(true); setError(false); const r = await fetchRegime(apiKey); if (r) { setData(r); setFetchTime(new Date()); } else setError(true); setLoading(false); };
+  // Show a reading already sitting in the cache instead of making him click for something the
+  // browser is holding. This is the ONE card that spends Anthropic credit on load — six web
+  // searches a call — which is why it never fetches on its own and why the button stays: reading
+  // the cache is free, refreshing is not. Stamped with when it was really fetched, so a
+  // fourteen-minute-old regime doesn't present itself as current.
+  useEffect(() => {
+    const cached = cacheGet("mb_regime", 15), ts = cacheTs("mb_regime");
+    if (cached) { setData(cached); setFetchTime(ts ? new Date(ts) : null); }
+  }, []);
   const rc = data ? (data.regime === "Risk-On" ? "#0d6d56" : data.regime === "Risk-Off" ? "#b2342b" : "#b0741e") : "#8a8072";
   return <div style={{...S.card, animation:"fadeUp 0.5s ease 0.28s both"}}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:data?12:0}}>
@@ -1803,6 +1842,7 @@ function ClippingsBoard() {
   </div>;
 }
 function StandingWire({ desk }) {
+  useLearnTick(); // so a headline flips to FILED the moment it is clipped, not on the next render
   const [wire, setWire] = useState(null);
   const [mode, setMode] = useState("front");
   const [prefs, setPrefs] = useState(() => lsGet("mjb_wire_prefs", { priority: [], muted: [] }));
@@ -1837,7 +1877,18 @@ function StandingWire({ desk }) {
     .filter(x => !mut.some(k => x.title.toLowerCase().includes(k)))
     .filter(x => { const k = x.title.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
   const Head = ({ it, size = 15 }) => <a href={it.link} target="_blank" rel="noopener noreferrer" onClick={() => logRead(it)} style={{ fontFamily: "'Instrument Serif',serif", fontSize: size, color: "#262421", textDecoration: "none", lineHeight: 1.35 }} onMouseEnter={e => e.currentTarget.style.color = "#0d6d56"} onMouseLeave={e => e.currentTarget.style.color = "#262421"}>{it.title}{it.paywall && <sup style={{ fontSize: 9, color: "#b0741e" }}> †</sup>}</a>;
-  const Clip = ({ it }) => desk ? <button onClick={() => clipHeadline(it)} title="Clip for the editor's file" style={{ background: "none", border: "none", cursor: "pointer", color: "#8a8072", fontSize: 8, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, padding: 0, textDecoration: "underline dotted", textUnderlineOffset: 2 }}>CLIP</button> : null;
+  // A bordered teal chip, not another dotted-underlined word. In the byline row it sat among
+  // "WSJ Markets · 10h ago · also: CNBC · CNBC" in the same size and weight as the attribution, so
+  // the one thing on that line you can DO looked like more of the text you read. The border and the
+  // teal make it read as a control; the auto margin pushes it clear of the sources beside it.
+  const Clip = ({ it }) => {
+    if (!desk) return null;
+    const filed = isClipped(it.link);
+    return <button onClick={() => !filed && clipHeadline(it)} disabled={filed} title={filed ? "Already in the editor's file" : "Clip for the editor's file"}
+      style={{ marginLeft: "auto", flexShrink: 0, background: filed ? "#0d6d5612" : "transparent", border: `1px solid ${filed ? "#0d6d5630" : "#0d6d5628"}`, borderRadius: 6, padding: "2px 7px", cursor: filed ? "default" : "pointer", color: "#0d6d56", fontSize: 8, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.2, fontWeight: 600, lineHeight: 1.6 }}
+      onMouseEnter={e => { if (!filed) e.currentTarget.style.background = "#0d6d5610"; }}
+      onMouseLeave={e => { if (!filed) e.currentTarget.style.background = "transparent"; }}>{filed ? "FILED" : "CLIP"}</button>;
+  };
   let body;
   if (mode === "front") {
     const clusters = clusterWire(items);
@@ -3705,7 +3756,10 @@ function FilingsWire({ desk }) {
       <a href={f.link} target="_blank" rel="noopener noreferrer" onClick={() => logRead({ title: clean(f.title), link: f.link, label: f.form })} style={{ fontSize: 11.5, color: "#33302c", lineHeight: 1.5, flex: 1, textDecoration: "none" }}>{clean(f.title)}<span style={{ fontSize: 8.5, color: "#a2977f", marginLeft: 7, fontStyle: "italic" }}>{FORM_GLOSS[f.form]}</span></a>
       {/* A filing clips as itself: the form type is the outlet, since "8-K" is what identifies it in
           the file a week later far better than "SEC" would. */}
-      {desk && <button onClick={() => clipHeadline({ title: clean(f.title), link: f.link, label: f.form })} title={isClipped(f.link) ? "Already in the editor's file" : "Clip for the editor's file"} disabled={isClipped(f.link)} style={{ background: "none", border: "none", cursor: isClipped(f.link) ? "default" : "pointer", color: isClipped(f.link) ? "#0d6d56" : "#8a8072", fontSize: 8, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1, padding: 0, textDecoration: isClipped(f.link) ? "none" : "underline dotted", textUnderlineOffset: 2, flexShrink: 0 }}>{isClipped(f.link) ? "FILED" : "CLIP"}</button>}
+      {desk && (() => { const filed = isClipped(f.link); return <button onClick={() => !filed && clipHeadline({ title: clean(f.title), link: f.link, label: f.form })} disabled={filed} title={filed ? "Already in the editor's file" : "Clip for the editor's file"}
+        style={{ flexShrink: 0, background: filed ? "#0d6d5612" : "transparent", border: `1px solid ${filed ? "#0d6d5630" : "#0d6d5628"}`, borderRadius: 6, padding: "2px 7px", cursor: filed ? "default" : "pointer", color: "#0d6d56", fontSize: 8, fontFamily: "'JetBrains Mono',monospace", letterSpacing: 1.2, fontWeight: 600, lineHeight: 1.6 }}
+        onMouseEnter={e => { if (!filed) e.currentTarget.style.background = "#0d6d5610"; }}
+        onMouseLeave={e => { if (!filed) e.currentTarget.style.background = "transparent"; }}>{filed ? "FILED" : "CLIP"}</button>; })()}
     </div>)}
     <SourceLine>Source: SEC EDGAR, latest filings · public domain · 10-min cache · filings link to sec.gov</SourceLine>
   </div>;
