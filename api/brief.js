@@ -61,7 +61,11 @@ const CARDS_GUIDE = `\nThen ---CARDS--- then JSON: [{"q":"...","a":"..."}] — 2
 // will eventually deduce wrong, and every "overnight", "today" and "this week" in these prompts
 // hangs off that. Central, because the store keys on Central and Mason reads it in DFW.
 const todayLongCT = () => new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", weekday: "long", year: "numeric", month: "long", day: "numeric" }).format(new Date());
-const DATELINE = () => `Today is ${todayLongCT()} (US Central). If the US market is closed today, brief for the next trading session and name that session in one short opening line. If it is a normal trading day, say nothing about the date at all.`;
+// Framed POSITIVELY, and it has to be. The previous wording ended "if it is a normal trading day,
+// say nothing about the date at all" — a negative instruction the model satisfied by ANNOUNCING that
+// it was saying nothing, in 11 of the first 13 editions ("Today is a normal trading day, so no date
+// framing is needed"). Telling it what to open with instead removes the thing to comply with.
+const DATELINE = () => `Today is ${todayLongCT()} (US Central). Begin with the market news itself. If — and ONLY if — the US market is closed today, open instead with one short line naming the next trading session this briefing covers. Never comment on the date, the calendar, your own searching, or these instructions.`;
 // Written as functions of the date, so the dateline is evaluated per request rather than frozen at
 // cold start — a warm serverless instance can outlive the day it booted on.
 const BRIEF_PROMPTS = {
@@ -110,16 +114,21 @@ async function listEditions() {
     const r = await list({ prefix: "mjb/brief/", limit: 1000, cursor });
     for (const b of (r && r.blobs) || []) {
       // Match the pathname this file writes, and ignore anything else that ever lands in the folder.
-      const m = /^mjb\/brief\/(\d{4}-\d{2}-\d{2})-(morning|close)\.json$/.exec(b.pathname || "");
+      const m = /^mjb\/brief\/(\d{4}-\d{2}-\d{2})-(morning|close)\.(json|mp3)$/.exec(b.pathname || "");
       if (!m) continue;
-      const e = byDate.get(m[1]) || { date: m[1], types: [] };
-      if (!e.types.includes(m[2])) e.types.push(m[2]);
+      const e = byDate.get(m[1]) || { date: m[1], types: [], audio: [] };
+      // Two separate buckets on purpose. `types` stays exactly what it was — the editions that
+      // EXIST — and audio is reported beside it, so a stray mp3 can never invent a day that was
+      // never briefed (the entries with no types are dropped below).
+      const bucket = m[3] === "json" ? e.types : e.audio;
+      if (!bucket.includes(m[2])) bucket.push(m[2]);
       byDate.set(m[1], e);
     }
     cursor = r && r.hasMore ? r.cursor : null;
   } while (cursor && ++pages < 20);
   return [...byDate.values()]
-    .map(e => ({ date: e.date, types: ["morning", "close"].filter(t => e.types.includes(t)) })) // store order isn't edition order
+    .map(e => ({ date: e.date, types: ["morning", "close"].filter(t => e.types.includes(t)), audio: ["morning", "close"].filter(t => e.audio.includes(t)) })) // store order isn't edition order
+    .filter(e => e.types.length) // an mp3 with no record behind it is not an edition
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 }
 
@@ -225,26 +234,72 @@ function blocksToText(d, joiner) {
 // narrating its plan and which then got stored as the opening line of the day's news. Only strips
 // LEADING first-person process narration, and only whole paragraphs — a briefing that legitimately
 // begins with a headline or a section number is untouched.
-const PREAMBLE = /^(i'?ll\b|i will\b|i'?m going to\b|i need\b|let me\b|first,? let me\b|okay[,.]|sure[,.])/i;
+// Three layers of throat-clearing arrive in front of the news and they are NOT the same thing:
+//   1. process narration  — "Let me get current, more specific data on today's premarket movers"
+//   2. capability chatter — "I have enough information to compile this morning briefing now."
+//   3. instruction echo   — "Today is a normal trading day, so no date framing is needed."
+// Measured over the first 13 editions: 18 paragraphs, 371 words, ~11 seconds of speech an edition.
+// It was survivable on a page you skim. It is not survivable in audio, where it is the first thing
+// heard and cannot be skipped past.
+//
+// PLANNING is no longer anchored with ^. That anchor was the bug: the model routinely states an
+// observation FIRST and only then narrates — "The Fed search results are mixing 2025 Jackson Hole
+// coverage with this year's. Let me get current data…" — which sailed past a rule that only looked
+// at the head of the paragraph.
+const PREAMBLE = /(?:^|[.\s])(?:i'?ll|i will|i'?m going to|i need|i have enough|let me|first,? let me|okay[,.]|sure[,.])\b|\bsearch results\b/i;
+// The instruction echo, which only ever appears when the market IS open and the model should have
+// said nothing. Length-capped so it can only ever match a short opener, never a real paragraph that
+// happens to mention an open market.
+const DATE_ECHO = /\b(normal (?:us )?(?:trading|market)? ?(?:day|session)|markets? (?:is|are) open)\b/i;
+// The one date line DATELINE genuinely asks for. Checked FIRST, so a holiday opener can never be
+// mistaken for the echo it superficially resembles — that is the line a reader most needs.
+const DATE_WANTED = /\b(closed|shortened|half[- ]day|next trading session|observ)/i;
 // Backstop for the same behaviour the prompt now forbids. When the model sets a quotation on its
 // own line, the blank lines around it reach the renderer as real paragraph breaks and a sentence
 // arrives split across three of them — the citation stranded at the head of the next fragment. A
 // paragraph that does not end in terminal punctuation is not a paragraph, so glue it to the one
 // after it. Conservative on purpose: it only ever JOINS, so the worst case is prose left as the
 // model wrote it, never text lost.
-function reflow(text) {
+// A paragraph is UNFINISHED if it ends in a comma or dash, or in a word that cannot end a sentence —
+// a conjunction, a preposition, an article, or one of the attribution verbs this prose leans on
+// ("…[Yahoo Finance]. In fixed income, Edward Jones noted"). That is the real signal, and asking the
+// LEFT side of the seam is what the first attempt at this got wrong.
+const DANGLING = /(?:^|\s)(?:and|or|but|by|with|to|for|from|as|than|that|the|a|an|in|on|at|of|its|their|his|her|into|over|under|after|before|while|which|who|including|amid|per|via|said|says|noted|notes|added|adds|reported|reports|announced|showed|shows|told|according)$/i;
+const endsUnfinished = t => /[,\-—–]$/.test(t) || DANGLING.test(t);
+// Or the RIGHT side reads as a continuation: it opens lowercase, on a citation bracket, or on
+// punctuation. "…boosting its shares" + ", and" is one sentence in two paragraphs.
+const startsContinuation = t => /^[a-z[(,;:—–-]/.test(t);
+
+export function reflow(text) {
   const out = [];
   for (const para of text.split(/\n\s*\n/)) {
     const t = para.trim();
     if (!t) continue;
-    if (out.length && !/[.!?:;"”)]$/.test(out[out.length - 1])) out[out.length - 1] += " " + t;
+    const prev = out.length ? out[out.length - 1] : null;
+    // Non-terminal alone is NOT enough, and that was the defect. A markets paragraph ends in a
+    // figure all the time — "…which also sank more than 8%" — and gluing the next one onto it fused
+    // two complete sentences into one unreadable line, twice in the 2026-08-28 edition alone. Now
+    // one of the two halves must actually ask to be joined. Measured against the only unreflowed
+    // record in the archive: 43 of its 44 joins still happen, and the one that stops is a section
+    // heading swallowing the section under it, which was never right either.
+    if (prev !== null && !/[.!?:;"”)]$/.test(prev) && (endsUnfinished(prev) || startsContinuation(t))) out[out.length - 1] = prev + " " + t;
     else out.push(t);
   }
   return out.join("\n\n");
 }
-function stripPreamble(text) {
+function isOpeningNoise(p) {
+  const t = String(p).trim();
+  if (DATE_WANTED.test(t)) return false;
+  if (PREAMBLE.test(t)) return true;
+  return DATE_ECHO.test(t) && t.split(/\s+/).length <= 45;
+}
+// Still LEADING-ONLY, and that conservatism is deliberate rather than left over: a briefing may
+// legitimately quote someone mid-document, and only the front of the document is where the model
+// clears its throat. Verified over the archive — no non-leading paragraph is reachable except the
+// ones the loop reaches after dropping the noise in front of them.
+export function stripPreamble(text) {
   const paras = text.split(/\n\s*\n/);
-  while (paras.length > 1 && PREAMBLE.test(paras[0].trim())) paras.shift();
+  while (paras.length > 1 && isOpeningNoise(paras[0])) paras.shift();
   return paras.join("\n\n").trim();
 }
 const parseArr = s => { try { const t = String(s).trim().replace(/```json|```/g, "").trim(); const m = t.match(/\[[\s\S]*\]/); return JSON.parse(m ? m[0] : t); } catch { return null; } };
@@ -310,6 +365,206 @@ async function stepSoWhat(t, type, deadline) {
   return sw;
 }
 
+// ============ AUDIO ============
+// The listening edition. The briefings were going unread — not because they were wrong but because
+// reading one costs ten minutes at a screen, and a commute or a shift has no screen in it. Audio is
+// the format that fits the gap, and it is the same record read a different way, never a second
+// briefing.
+//
+// NOT a new serverless function. api/ sits at Hobby's 12-function cap, which is the same constraint
+// that made the archive index a mode of GET rather than a 13th file. Audio is a fourth POST step and
+// a flag on GET.
+//
+// THE SCRIPT IS NOT THE BRIEFING, and that is the whole design problem. The prose is written to be
+// READ: every factual sentence carries an inline bracketed citation, which runs about sixteen an
+// edition and would arrive as sixteen interruptions inside ten minutes of speech. They come out of
+// the spoken body — and the attribution is then RESTORED where audio can carry it, in a sign-off
+// naming the outlets. Stripping them and saying nothing would make the spoken edition the one
+// artifact on this site that asserts facts from nowhere, which is the Exxon collapsed-table lesson:
+// a transformed artifact has to say what it is.
+const TTS_URL = "https://api.openai.com/v1/audio/speech";
+// Anthropic has no text-to-speech API, so this is the one part of the briefing desk that talks to a
+// different vendor. Both are env-overridable so a voice can be changed without touching this file;
+// tts-1 is the cheap long-standing model and onyx is the closest thing to a desk voice.
+const TTS_MODEL = () => process.env.TTS_MODEL || "tts-1";
+const TTS_VOICE = () => process.env.TTS_VOICE || "onyx";
+// The endpoint caps input at 4096 characters and a briefing runs about 9,000, so every edition is
+// several calls whose audio is joined below. 3800 leaves room for the sentence that straddles the
+// boundary rather than trusting the cap exactly.
+const TTS_CHUNK = 3800;
+const audioPathFor = (date, type) => `mjb/brief/${date}-${type}.mp3`;
+
+// Said aloud, not printed. Deliberately a short list: every entry is a string a speech engine gets
+// audibly wrong, and guessing at more of them is how a pronunciation table starts mangling ordinary
+// prose. Order matters — the longer patterns run first.
+const SAY = [
+  [/\bS&P\b/g, "S and P"], [/\bM&A\b/g, "M and A"], [/\bP&L\b/g, "P and L"],
+  [/(\d)\s*bps\b/gi, "$1 basis points"], [/\bbps\b/gi, "basis points"],
+  [/\by\/y\b/gi, "year over year"],
+  [/\bq\/q\b/gi, "quarter over quarter"], [/\bm\/m\b/gi, "month over month"],
+  [/\b(\d+)-K\b/g, "$1 K"], [/\b(\d+)-Q\b/g, "$1 Q"],
+  [/\bET\b/g, "Eastern"], [/\bCT\b/g, "Central"],
+  [/(\d)\s*bn\b/gi, "$1 billion"], [/(\d)\s*mn\b/gi, "$1 million"],
+];
+// The citation and the whitespace in front of it go together: taking only the bracket out of
+// "a record [CNBC]." leaves "a record ." and the engine pauses on the orphaned space.
+export function stripCites(s) {
+  return String(s == null ? "" : s)
+    .replace(/\s*\[[A-Z][^\]]{0,28}\]/g, "")
+    .replace(/\s+([.,;:!?])/g, "$1")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+export const say = s => SAY.reduce((t, [re, to]) => t.replace(re, to), stripCites(s)).replace(/[ \t]{2,}/g, " ").trim();
+// "Reuters, CNBC and Bloomberg" — spoken lists need the conjunction a rendered list can leave out.
+const listWords = a => a.length <= 1 ? (a[0] || "") : `${a.slice(0, -1).join(", ")} and ${a[a.length - 1]}`;
+
+// The record, read in the order it is written, with the parts audio can't carry left out. The
+// So What is nearly half the spoken length and is the best of it — headline, then why, then the
+// takeaway is already a spoken shape. The fact-check contributes only its summary and the claims
+// that FAILED, for the same reason the card prints those first: reading twenty confirmations aloud
+// buries the two that matter.
+export function spokenScript(rec) {
+  const L = [];
+  // Noon UTC is the same calendar day in Central, which is what keeps this off the new Date(iso)
+  // rake that prints the day before for every reader west of Greenwich.
+  const when = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", weekday: "long", month: "long", day: "numeric" }).format(new Date(`${rec.date}T12:00:00Z`));
+  L.push(`${rec.type === "morning" ? "Morning" : "Closing"} briefing. ${when}.`);
+  // stripPreamble again, at READ time, and not as belt-and-braces. It runs at draft time over text
+  // that is then frozen — every POST is pinned to todayCT(), so a stored edition never passes through
+  // stepBrief a second time and can never be cleaned in place. Audio is made from that stored text,
+  // which means without this the reading opens with exactly the throat-clearing the draft-time fix
+  // removes: "Morning briefing. Friday, August 28. Friday, August 28, 2026 is a normal US trading
+  // day, so today's session proceeds as scheduled." The date twice, the second time as instruction
+  // echo. On a page you skim past it; in speech you sit through it before any news.
+  //
+  // The same function, called in one more place — not a second implementation of the rule.
+  for (const p of stripPreamble(String(rec.text || "")).split(/\n\s*\n/)) { const t = say(p); if (t) L.push(t); }
+  if (Array.isArray(rec.soWhat) && rec.soWhat.length) {
+    L.push("Now, what it means.");
+    rec.soWhat.forEach((x, i) => {
+      const bits = [
+        `Number ${i + 1}. ${x.headline || ""}.`, x.development, x.why_it_matters,
+        x.second_order && `What happens next. ${x.second_order}`,
+        x.takeaway && `The takeaway. ${x.takeaway}`,
+      ].filter(Boolean).join(" ");
+      const t = say(bits); if (t) L.push(t);
+    });
+  }
+  if (rec.verify && rec.verify.summary) {
+    const s = rec.verify.summary, flagged = (rec.verify.claims || []).filter(c => c && c.status !== "verified");
+    if (flagged.length) {
+      L.push(`A note on the fact-check. ${s.verified || 0} of ${s.total || 0} claims found a source. ${flagged.length === 1 ? "One did not" : `${flagged.length} did not`}.`);
+      // Capped, and the cap is SAID when it bites — a spoken list that silently stops is worse than
+      // a short one, because nothing in the audio tells you there was more.
+      for (const c of flagged.slice(0, 5)) { const t = say(`${c.claim || ""}${c.note ? `. ${c.note}` : ""}`); if (t) L.push(t); }
+      if (flagged.length > 5) L.push(`${flagged.length - 5} further unconfirmed claims are in the written edition.`);
+    } else if (s.total) L.push(`The fact-check found a source for all ${s.total} claims.`);
+  } else L.push("This edition has not been fact-checked.");
+  const names = [...new Set((rec.sources || []).map(s => s && s.name).filter(Boolean))];
+  // The citations came out of the body; this is where they go back in. A spoken briefing that never
+  // names an outlet is a briefing with no provenance at all.
+  L.push(`${names.length ? `Reported by ${listWords(names)}. ` : ""}The written edition, with the sources and every link, is in your briefings folder.`);
+  return L.join("\n\n");
+}
+
+// Split for the endpoint's input cap, on the largest boundary that fits: paragraphs first, then
+// sentences, then — for a single sentence longer than the cap, which no briefing has produced but
+// which would otherwise loop forever — a hard cut.
+export function chunkScript(text, max) {
+  const out = [];
+  let cur = "";
+  const flush = () => { if (cur.trim()) out.push(cur.trim()); cur = ""; };
+  const pushLong = p => {
+    let s = "";
+    for (const sent of p.match(/[^.!?]+[.!?]*\s*/g) || [p]) {
+      if (sent.length > max) { if (s.trim()) { out.push(s.trim()); s = ""; } for (let i = 0; i < sent.length; i += max) out.push(sent.slice(i, i + max).trim()); continue; }
+      if ((s + sent).length > max) { if (s.trim()) out.push(s.trim()); s = sent; } else s += sent;
+    }
+    if (s.trim()) out.push(s.trim());
+  };
+  for (const para of String(text).split(/\n\s*\n/)) {
+    const p = para.trim();
+    if (!p) continue;
+    if (p.length > max) { flush(); pushLong(p); continue; }
+    if ((cur ? cur.length + 2 : 0) + p.length > max) flush();
+    cur = cur ? `${cur}\n\n${p}` : p;
+  }
+  flush();
+  return out.filter(Boolean);
+}
+
+// MP3 is a stream of independent frames, so the chunks concatenate byte-wise and play as one file.
+// PCM would join more cleanly still and was rejected on size: ten minutes of 24kHz mono is ~29MB
+// against ~3MB of MP3, and this file syncs to a phone over OneDrive every weekday.
+//
+// An ID3v2 tag is NOT a frame. One at the head of the file is normal and fine; one sitting in the
+// MIDDLE of the stream is what makes players report the wrong duration and scrub badly, so every
+// chunk after the first has its tag removed.
+export function stripID3(buf) {
+  if (buf.length > 10 && buf[0] === 0x49 && buf[1] === 0x44 && buf[2] === 0x33) {
+    const size = ((buf[6] & 0x7f) << 21) | ((buf[7] & 0x7f) << 14) | ((buf[8] & 0x7f) << 7) | (buf[9] & 0x7f);
+    const end = 10 + size;
+    if (end < buf.length) return buf.subarray(end);
+  }
+  return buf;
+}
+async function ttsChunk(text, deadline) {
+  const left = deadline - Date.now();
+  if (left <= 0) throw new Error("the audio took too long — the desk ran out of time");
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), left);
+  let r;
+  try {
+    r = await fetch(TTS_URL, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${process.env.OPENAI_KEY}` },
+      body: JSON.stringify({ model: TTS_MODEL(), voice: TTS_VOICE(), input: text, response_format: "mp3" }),
+      signal: ctrl.signal,
+    });
+  } catch (e) {
+    if (e && (e.name === "AbortError" || e.name === "TimeoutError")) throw new Error("the audio took too long — the voice service was still answering when the desk ran out of time");
+    throw e;
+  } finally { clearTimeout(timer); }
+  if (!r.ok) {
+    let msg = "";
+    try { const d = await r.json(); msg = (d && d.error && d.error.message) || ""; } catch {}
+    // Named, for the same reason every other failure here is: "the voice service answered 401" sends
+    // you to the right key instead of to the briefing.
+    if (r.status === 401) throw new Error("the server's voice-service key was rejected");
+    if (r.status === 429) throw new Error("the voice service is rate-limited — wait a moment and try again");
+    throw new Error(msg ? `the voice service said: ${msg.slice(0, 120)}` : `the voice service answered ${r.status}`);
+  }
+  return Buffer.from(await r.arrayBuffer());
+}
+
+// Step 4 — read the stored edition aloud and put the file beside it in the store.
+async function stepAudio(rec, deadline) {
+  const script = spokenScript(rec);
+  if (!script.trim()) throw new Error("there was nothing in this edition to read aloud");
+  const chunks = chunkScript(script, TTS_CHUNK);
+  const parts = [];
+  for (let i = 0; i < chunks.length; i++) {
+    const buf = await ttsChunk(chunks[i], deadline);
+    parts.push(i === 0 ? buf : stripID3(buf));
+  }
+  const mp3 = Buffer.concat(parts);
+  if (!mp3.length) throw new Error("the voice service returned no audio");
+  const path = audioPathFor(rec.date, rec.type);
+  await put(path, mp3, {
+    access: "private", addRandomSuffix: false, allowOverwrite: true,
+    contentType: "audio/mpeg", cacheControlMaxAge: 60,
+  });
+  console.log(`[brief] audio ${rec.date}-${rec.type} — ${chunks.length} chunks, ${script.length} chars, ${mp3.length} bytes`);
+  // What the audio was BUILT FROM, not just that it exists. The so-what and the fact-check land
+  // after the draft, so an edition can carry audio that predates half its own content — and the
+  // card has to be able to say so rather than offering a stale file as the finished thing.
+  return {
+    path, bytes: mp3.length, chars: script.length, chunks: chunks.length, ts: Date.now(),
+    model: TTS_MODEL(), voice: TTS_VOICE(), hadSoWhat: !!(rec.soWhat && rec.soWhat.length), hadVerify: !!rec.verify,
+  };
+}
+
 // ============ HANDLER ============
 export default async function handler(req, res) {
   res.setHeader("Cache-Control", "no-store"); // private, and it changes as the steps land
@@ -345,12 +600,33 @@ export default async function handler(req, res) {
 
   if (req.method === "GET") {
     const rec = await readRecord(date, type);
+    // The audio file itself, back through the same auth as everything else. Deliberately NOT a
+    // public blob URL: a public URL is the one thing here that would put an unlisted briefing on the
+    // open web, and both callers that want the bytes — the folder sync and the card's player — can
+    // send a header. Returns audio/mpeg on success and JSON on every failure, so a caller that gets
+    // a 404 can still read why.
+    if (req.query.audio !== undefined) {
+      if (!rec || !rec.audio || !rec.audio.path) return res.status(404).json({ error: "no audio has been made for that edition" });
+      try {
+        const a = await get(rec.audio.path, { access: "private", useCache: false });
+        if (!a || a.statusCode !== 200 || !a.stream) return res.status(404).json({ error: "the audio is listed on the record but missing from the store" });
+        const buf = Buffer.from(await new Response(a.stream).arrayBuffer());
+        res.setHeader("Content-Type", "audio/mpeg");
+        res.setHeader("Content-Length", String(buf.length));
+        return res.status(200).send(buf);
+      } catch (e) {
+        console.error("brief audio read failed:", e && e.message);
+        return res.status(502).json({ error: "the audio file couldn't be read" });
+      }
+    }
     return res.status(200).json({ date, type, found: !!rec, brief: rec });
   }
   if (req.method !== "POST") { res.setHeader("Allow", "GET, POST"); return res.status(405).json({ error: "method not allowed" }); }
-  if (!process.env.ANTHROPIC_KEY) return res.status(503).json({ error: "the server has no Anthropic key configured" });
 
   const step = String(body.step || "");
+  // Scoped to the steps that actually call Anthropic. Audio talks to the voice service instead, and
+  // gating it on a key it never uses would make a working feature 503 on a half-configured deploy.
+  if (step !== "audio" && !process.env.ANTHROPIC_KEY) return res.status(503).json({ error: "the server has no Anthropic key configured" });
   const deadline = Date.now() + DEADLINE_MS;
   try {
     if (step === "brief") {
@@ -363,11 +639,18 @@ export default async function handler(req, res) {
       const rec = { v: 1, date, type, ts: Date.now(), ...(await stepBrief(type, deadline)) };
       return res.status(200).json({ ...rec, stored: await writeRecord(rec) });
     }
-    if (step !== "verify" && step !== "sowhat") return res.status(400).json({ error: "step must be brief, verify, or sowhat" });
+    if (step !== "verify" && step !== "sowhat" && step !== "audio") return res.status(400).json({ error: "step must be brief, verify, sowhat, or audio" });
 
     const rec = await readRecord(date, type);
     if (!rec || !rec.text) return res.status(409).json({ error: "no briefing stored for today yet — draft it first" });
-    if (step === "verify") rec.verify = await stepVerify(rec.text, deadline);
+    if (step === "audio") {
+      if (!process.env.OPENAI_KEY) return res.status(503).json({ error: "the server has no voice-service key configured" });
+      // The same guard step=brief carries, for the same reason: a reading costs money per character,
+      // and two devices opening the card must not both buy it. Regenerate is what sends force.
+      if (!body.force && rec.audio && rec.audio.path) return res.status(200).json({ ...rec, stored: true, reused: true });
+      rec.audio = await stepAudio(rec, deadline);
+    }
+    else if (step === "verify") rec.verify = await stepVerify(rec.text, deadline);
     else rec.soWhat = await stepSoWhat(rec.text, type, deadline);
     rec.ts = Date.now();
     return res.status(200).json({ ...rec, stored: await writeRecord(rec) });

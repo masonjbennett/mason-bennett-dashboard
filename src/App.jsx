@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { fedWordDiff } from "./feddiff.js";
 
 // ============ CONFIG ============
 const TICKERS = [
@@ -260,6 +261,23 @@ async function loadArchivedBrief(type, secret, date) {
   const d = await briefCall(`/api/brief?type=${type}&date=${encodeURIComponent(date)}`, { headers: { "x-mjb-sync": secret } });
   return d ? { ok: true, brief: d.found ? d.brief : null } : { ok: false, brief: null };
 }
+// The mp3 for one edition, as a Blob. Deliberately NOT briefCall — that parses JSON and this answer
+// is audio, so the content type is CHECKED rather than assumed: every failure from the desk still
+// comes back as JSON, and handing those bytes to an <audio> element would produce a player that sits
+// there silently failing instead of an error anyone can read.
+async function loadBriefAudio(type, secret, date) {
+  if (!secret) { lastSyncError = "add the sync secret in Settings"; return null; }
+  try {
+    const r = await fetch(`/api/brief?type=${type}&date=${encodeURIComponent(date)}&audio=1`, { headers: { "x-mjb-sync": secret } });
+    if (!r.ok) {
+      let msg = ""; try { const d = await r.json(); msg = d && d.error; } catch {}
+      lastSyncError = msg || `the desk answered ${r.status}`; return null;
+    }
+    if (!/audio/i.test(r.headers.get("content-type") || "")) { lastSyncError = "the desk sent something that wasn't audio"; return null; }
+    lastSyncError = ""; return await r.blob();
+  } catch { lastSyncError = "the desk is unreachable — check your connection"; return null; }
+}
+
 // ============ BRIEFING FOLDER ============
 // The briefings as real files in a real folder Mason owns and organises himself.
 //
@@ -466,7 +484,8 @@ const briefHTML = rec => htmlPage(`${rec.type === "morning" ? "Morning" : "Close
 // today's edition is the thing done every morning. The .md and the .json are the same names one
 // level down — same archive, three formats, one naming scheme.
 const briefFileName = (date, type) => `${date}-${type}.html`;
-const MD_SUBDIR = "markdown", RAW_SUBDIR = "raw";
+const MD_SUBDIR = "markdown", RAW_SUBDIR = "raw", AUDIO_SUBDIR = "audio";
+const audioFileName = (date, type) => `${date}-${type}.mp3`;
 async function writeInto(dir, name, text) {
   const fh = await dir.getFileHandle(name, { create: true });
   const w = await fh.createWritable();
@@ -535,15 +554,32 @@ async function syncBriefFolder(handle, secret, onProgress) {
   const have = new Set();
   for await (const [name] of handle.entries()) have.add(name);
   const today = briefToday();
+  // Local audio by NAME AND MTIME. The name alone is not enough: today's mp3 is remade when the
+  // fact-check lands after it, so "the file is there" and "the file is current" are different
+  // questions. A missing audio/ folder is not an error — it is every edition being new.
+  const haveAudio = new Map();
+  try {
+    const adir = await handle.getDirectoryHandle(AUDIO_SUBDIR, { create: false });
+    for await (const [name, h] of adir.entries()) {
+      if (h.kind !== "file") continue;
+      try { haveAudio.set(name, (await h.getFile()).lastModified); } catch { haveAudio.set(name, 0); }
+    }
+  } catch {}
   const jobs = [];
   for (const e of index) for (const type of e.types) {
     const file = briefFileName(e.date, type);
+    // The STORE is the authority on whether audio exists. The folder only ever mirrors it — nothing
+    // here can cause a reading to be made, because that spends money and a sync runs unattended on
+    // every page load.
+    const hasAudio = Array.isArray(e.audio) && e.audio.includes(type);
+    const aname = audioFileName(e.date, type);
     // `fresh` is what separates "three days you didn't have" from "today, rewritten again" in the
     // tally. Both are real writes, but reporting a routine refresh as a new edition would have every
     // sync claim it found something.
-    if (e.date === today || !have.has(file)) jobs.push({ date: e.date, type, file, fresh: !have.has(file) });
+    if (e.date === today || !have.has(file) || (hasAudio && !haveAudio.has(aname)))
+      jobs.push({ date: e.date, type, file, fresh: !have.has(file), hasAudio, aname });
   }
-  let written = 0, refreshed = 0, failed = 0, i = 0;
+  let written = 0, refreshed = 0, failed = 0, audio = 0, i = 0;
   // Sequential, not parallel: this hits Mason's own serverless function once per edition, a routine
   // run is one or two of them, and the only slow case is a first sync or a long absence — where a
   // visible count is worth more than the seconds a pool would save.
@@ -561,10 +597,23 @@ async function syncBriefFolder(handle, secret, onProgress) {
       for (const [dir, name, text] of [[MD_SUBDIR, `${j.date}-${j.type}.md`, briefMarkdown(brief)], [RAW_SUBDIR, `${j.date}-${j.type}.json`, JSON.stringify(brief, null, 2)]]) {
         try { await writeInto(await handle.getDirectoryHandle(dir, { create: true }), name, text); } catch {}
       }
+      // The mp3 last, and only when it is missing or older than the reading the record describes.
+      // Past editions are immutable so this is a one-time download each; TODAY's is refetched when
+      // the audio has been remade since the copy on disk. Re-pulling several megabytes on every page
+      // load would be the one part of this sync that is expensive on a phone tether.
+      if (j.hasAudio) {
+        const localTs = haveAudio.get(j.aname), remoteTs = (brief.audio && brief.audio.ts) || 0;
+        if (localTs === undefined || (remoteTs && localTs < remoteTs)) {
+          try {
+            const bytes = await loadBriefAudio(j.type, secret, j.date);
+            if (bytes) { await writeInto(await handle.getDirectoryHandle(AUDIO_SUBDIR, { create: true }), j.aname, bytes); audio++; }
+          } catch {}
+        }
+      }
       if (j.fresh) written++; else refreshed++;
     } catch { failed++; }
   }
-  return { written, refreshed, failed, checked: jobs.length };
+  return { written, refreshed, failed, audio, checked: jobs.length };
 }
 
 // ---- The export that works everywhere, including the installed iOS app: one month of briefings as
@@ -1633,6 +1682,41 @@ const factCheck=async()=>{if(!data||data.verify||busy||!isToday)return;setErr(""
   else setErr(`The fact-check didn't finish — ${lastSyncError||"try again"}. The briefing itself still stands.`);
   setBusy("");setBusyTab("")};
 const data=recs[briefKey(date,tab)]||null,here=isToday&&busyTab===tab,loading=here&&busy==="brief",verifying=here&&busy==="verify",swLoad=here&&busy==="sowhat",verify=data&&data.verify,soWhat=data&&data.soWhat,time=data&&data.ts?new Date(data.ts):null;
+// ---- The listening edition. The mp3 sits in the store beside the record; an <audio src> cannot
+// send the sync secret as a header, so the bytes are fetched here and handed over as an object URL.
+const[aud,setAud]=useState(null),[audBusy,setAudBusy]=useState(""),[audErr,setAudErr]=useState("");
+// One object URL alive at a time. A blob URL outliving its player keeps several megabytes pinned for
+// the life of the tab, and stepping through a week of the archive would hold every one of them.
+const audRef=useRef(null);
+const dropAud=()=>{if(audRef.current){try{URL.revokeObjectURL(audRef.current)}catch{}audRef.current=null}setAud(null)};
+useEffect(()=>()=>dropAud(),[]);
+useEffect(()=>{dropAud();setAudErr("")},[date,tab]);
+const listen=async()=>{
+  if(!data||!data.audio||audBusy)return;
+  setAudErr("");setAudBusy("load");
+  const blob=await loadBriefAudio(tab,syncSecret,date);
+  setAudBusy("");
+  if(!blob){setAudErr(lastSyncError||"the audio didn't come back");return}
+  const url=URL.createObjectURL(blob);audRef.current=url;setAud(url);
+};
+// A reading costs money per character, so it is always a click and never automatic on this card.
+// The cron makes the day's audio before Mason is awake; this is the button for an edition it missed,
+// and — with force — for one whose analysis or fact-check landed after the reading did.
+const makeAudio=async(force=false)=>{
+  if(!isToday||busy||audBusy)return;
+  setAudErr("");setAudBusy("make");dropAud();
+  const next=await runBriefStep(tab,"audio",syncSecret,force);
+  setAudBusy("");
+  if(next)setRecs(r=>({...r,[briefKey(today,tab)]:next}));
+  else setAudErr(lastSyncError||"the reading didn't finish");
+};
+// ~900 characters a minute at the default speaking rate, measured across the archive: a ten-minute
+// edition runs about 9,100 characters.
+const audMins=a=>Math.max(1,Math.round(((a&&a.chars)||0)/900));
+// Audio built BEFORE the implications or the fact-check landed is a reading of half an edition. The
+// record carries what it was made from precisely so the card can offer to remake it rather than
+// quietly serve it as the finished thing.
+const audStale=!!(data&&data.audio&&((soWhat&&!data.audio.hadSoWhat)||(verify&&!data.audio.hadVerify)));
 const SC={verified:"#0d6d56",minor_discrepancy:"#b0741e",unverified:"#b2342b"},SI={verified:"✓",minor_discrepancy:"~",unverified:"✗"},SL={verified:"Verified",minor_discrepancy:"Discrepancy",unverified:"Unverified"};
 // One checked claim. Claims that FAILED the check print by default (see Briefings) — a single
 // confidence score invites trusting the whole briefing at a glance, so the disputed lines lead.
@@ -1717,6 +1801,23 @@ return <button key={t} onClick={()=>{setTab(t);setArchErr("")}} style={{fontSize
     </button>})}</div>
 </div>}
 {!hits&&<>
+{/* The listening edition. Sits above the text because the whole point of it is not reading the
+    text — a player below a screen of prose is a player you scroll past. */}
+{data&&(()=>{const AB={background:"#0d6d5610",border:"1px solid #0d6d5630",borderRadius:8,padding:"6px 14px",color:"#0d6d56",fontSize:10,cursor:(audBusy||busy)?"default":"pointer",fontFamily:"'JetBrains Mono',monospace",fontWeight:600,letterSpacing:0.5,opacity:(audBusy||busy)?0.5:1,flexShrink:0};
+return <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap",padding:"8px 12px",borderRadius:8,background:"#0d6d5606",border:"1px solid #0d6d5614",marginBottom:12}}>
+  <span style={{fontSize:10,fontFamily:"'JetBrains Mono',monospace",color:"#0d6d56",letterSpacing:1.5,textTransform:"uppercase",flexShrink:0}}>Listen</span>
+  {data.audio?<>
+    {!aud&&<button onClick={listen} disabled={!!audBusy} style={AB}>{audBusy==="load"?"Loading...":`Play · ${audMins(data.audio)} min`}</button>}
+    {aud&&<audio src={aud} controls autoPlay style={{height:32,flex:"1 1 240px",minWidth:180}}/>}
+    <span style={{fontSize:9,color:"#a2977f",fontFamily:"'JetBrains Mono',monospace"}}>{(data.audio.bytes/1048576).toFixed(1)} MB{data.audio.hadVerify?" · read after the check":""}</span>
+    {audStale&&isToday&&<button onClick={()=>makeAudio(true)} disabled={!!audBusy||!!busy} title="This reading was made before the rest of the edition landed — remaking it costs a few cents" style={{...AB,background:"#b0741e10",borderColor:"#b0741e30",color:"#b0741e"}}>{audBusy==="make"?"Reading...":"Remake — made before the rest landed"}</button>}
+  </>:isToday
+    ?<button onClick={()=>makeAudio(false)} disabled={!!audBusy||!!busy} title="Reads this edition aloud and files the mp3 beside it in the store — a few cents" style={AB}>{audBusy==="make"?"Reading it aloud...":"Make audio"}</button>
+    /* An archived day gets no button: the desk only ever writes today, so there is nothing here that
+       could produce one, and offering it would be a control that fails on click. */
+    :<span style={{fontSize:10,color:"#8a8072",fontFamily:"'JetBrains Mono',monospace"}}>No reading was made for this edition.</span>}
+  {audErr&&<span style={{fontSize:10,color:"#b2342b",fontFamily:"'JetBrains Mono',monospace",lineHeight:1.5,flexBasis:"100%"}}>{audErr}</span>}
+</div>})()}
 {data&&data.stored===false&&<p style={{fontSize:10,color:"#b0741e",marginBottom:12,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.5}}>Drafted, but the store wouldn't take it — this edition won't reach your other devices.</p>}
 {archErr&&<p style={{fontSize:11,color:"#b2342b",marginBottom:12,fontFamily:"'JetBrains Mono',monospace",lineHeight:1.5}}>That edition didn't come back — {archErr}.</p>}
 {/* Three different nothings, and they are not interchangeable: today's briefing hasn't been drafted
@@ -3941,7 +4042,7 @@ function BriefingFolder({ syncSecret }) {
     setErr(""); setBusy("Reading the desk...");
     try {
       const r = await syncBriefFolder(handle, syncSecret, (i, n) => setBusy(`Filing ${i} of ${n}...`));
-      const tail = r.failed ? ` · ${r.failed} couldn't be read` : "";
+      const tail = `${r.audio ? ` · ${r.audio} recording${r.audio === 1 ? "" : "s"}` : ""}${r.failed ? ` · ${r.failed} couldn't be read` : ""}`;
       flash(r.written ? `${r.written} edition${r.written === 1 ? "" : "s"} written${tail}.`
         : r.refreshed ? `Up to date — today's edition refreshed${tail}.`
         : `Already up to date${tail}.`);
@@ -3978,7 +4079,7 @@ function BriefingFolder({ syncSecret }) {
   const s = st && st.status;
   return <div style={{ marginBottom: 16, borderTop: "1px solid #efe4d2", paddingTop: 16 }}>
     <label style={{ fontSize: 10, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 1.5, display: "block", marginBottom: 6 }}>Briefing Folder</label>
-    <p style={{ fontSize: 10, color: "#8a8072", lineHeight: 1.55, marginBottom: 8 }}>Keeps a copy of every briefing in a folder on this PC, back-filling whatever is missing each time you open the site. Each edition lands three ways under one name — a formatted <b style={{ fontWeight: 600 }}>.html</b> to read at the top level, the same text as <b style={{ fontWeight: 600 }}>.md</b> in <i>markdown/</i> for searching, and the lossless record in <i>raw/</i>. The desk stays the original — this is a mirror of it, so deleting a file here changes nothing there. Point it at a <b style={{ fontWeight: 600 }}>OneDrive folder</b> and Windows carries them to your phone on its own.</p>
+    <p style={{ fontSize: 10, color: "#8a8072", lineHeight: 1.55, marginBottom: 8 }}>Keeps a copy of every briefing in a folder on this PC, back-filling whatever is missing each time you open the site. Each edition lands four ways under one name — a formatted <b style={{ fontWeight: 600 }}>.html</b> to read at the top level, the spoken <b style={{ fontWeight: 600 }}>.mp3</b> in <i>audio/</i>, the same text as <b style={{ fontWeight: 600 }}>.md</b> in <i>markdown/</i> for searching, and the lossless record in <i>raw/</i>. The desk stays the original — this is a mirror of it, so deleting a file here changes nothing there. Point it at a <b style={{ fontWeight: 600 }}>OneDrive folder</b> and Windows carries them to your phone on its own.</p>
     {!syncSecret && <p style={{ fontSize: 10, color: "#b0741e", fontFamily: "'JetBrains Mono',monospace", lineHeight: 1.5, marginBottom: 8 }}>Add the sync secret above first — the folder is filled from the briefing desk.</p>}
     {s === "unsupported" && <p style={{ fontSize: 10, color: "#8a8072", fontFamily: "'JetBrains Mono',monospace", lineHeight: 1.5, marginBottom: 8 }}>This browser can't write to a folder — that's Chrome or Edge on Windows only. The month download below works here.</p>}
     {s === "ready" && <p style={{ fontSize: 10, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", marginBottom: 8 }}>Filing to {st.name} · syncs on open</p>}
@@ -4230,18 +4331,8 @@ function fedFmtDate(iso) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || ""); if (!m) return iso || "";
   return new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
-// Word-level LCS diff (statements are a few hundred tokens — O(m·k) is trivial). Each token is a word
-// plus its TRAILING whitespace, so a replaced word can never end up jammed against its replacement
-// (the space always travels with its word) and paragraph breaks survive inside the tokens.
-function fedWordDiff(oldS, newS) {
-  const o = oldS.match(/\S+\s*/g) || [], n = newS.match(/\S+\s*/g) || [], m = o.length, k = n.length;
-  const dp = Array.from({ length: m + 1 }, () => new Int32Array(k + 1));
-  for (let i = m - 1; i >= 0; i--) for (let j = k - 1; j >= 0; j--) dp[i][j] = o[i] === n[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
-  const out = []; let i = 0, j = 0;
-  while (i < m && j < k) { if (o[i] === n[j]) { out.push(["eq", n[j]]); i++; j++; } else if (dp[i + 1][j] >= dp[i][j + 1]) { out.push(["del", o[i]]); i++; } else { out.push(["ins", n[j]]); j++; } }
-  while (i < m) out.push(["del", o[i++]]); while (j < k) out.push(["ins", n[j++]]);
-  return out;
-}
+// fedWordDiff moved to src/feddiff.js so a test can drive it without a browser — it shipped a defect
+// nothing offline could reach (see the module's header).
 function FedLedger() {
   const [d, setD] = useState(undefined);
   useEffect(() => { let ok = true; fetch("/api/fed").then(r => r.ok ? r.json() : null).then(j => { if (ok) setD(j && j.ok ? j : null); }).catch(() => { if (ok) setD(null); }); return () => { ok = false; }; }, []);

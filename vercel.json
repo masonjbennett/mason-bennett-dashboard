@@ -6,6 +6,7 @@
     { "source": "/recruiter", "destination": "/index.html" }
   ],
   "crons": [
-    { "path": "/api/cron-brief", "schedule": "0 11 * * 1-5" }
+    { "path": "/api/cron-brief?type=morning", "schedule": "0 11 * * 1-5" },
+    { "path": "/api/cron-brief?type=close", "schedule": "0 22 * * 1-5" }
   ]
 }
