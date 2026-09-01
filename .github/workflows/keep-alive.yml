@@ -54,6 +54,17 @@ jobs:
           CHROME_PATH: ${{ steps.chrome.outputs.path }}
         run: node .github/scripts/wake.mjs
 
+      # The budgeting app's Supabase project pauses after ~a week of inactivity
+      # and is eventually reclaimed — which is exactly how it died the first
+      # time, silently, while the app told users their password was wrong. This
+      # read keeps it active AND asserts that an unauthenticated caller sees no
+      # rows, i.e. that row-level security is still on.
+      - name: Keep Supabase awake and assert RLS
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: node .github/scripts/supabase-ping.mjs
+
       - name: Check the website itself
         run: |
           code=$(curl -sSL -m 30 -o /dev/null -w '%{http_code}' https://masonjbennett.com/)
