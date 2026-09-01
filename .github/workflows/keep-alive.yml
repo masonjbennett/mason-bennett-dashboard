@@ -1,16 +1,61 @@
+# Keeps the two Streamlit Community Cloud demos awake. They sleep after about
+# a week of no traffic, and both are linked as "live demo" from the recruiter
+# links on masonjbennett.com — a sleeping app shows a "Zzzz / wake it back up?"
+# page and a ~40s wait, which reads as abandoned.
+#
+# The previous version of this file curled the app URLs and swallowed the
+# result with `|| true`. A *.streamlit.app URL answers 303 into a cookie-based
+# auth redirect loop, so curl without -L took an 86-byte redirect stub and
+# curl WITH -L looped 50 times and gave up. It never reached either app, and
+# reported success every four hours regardless. The budgeting app was found
+# asleep on 2026-08-29 underneath two months of green check marks.
+#
+# So this drives a real headless browser: it follows the auth cookies the way
+# a visitor does, opens the WebSocket session Streamlit actually counts, wakes
+# an app that is already asleep, and FAILS if an app does not come up.
+#
+# NOTE: GitHub disables scheduled workflows after 60 days with no repository
+# activity. This repo is worked on regularly, which is why the job lives here
+# rather than in one of the app repos — but if the site ever goes quiet for two
+# months, GitHub emails a warning and this stops until re-enabled.
 name: Keep Streamlit apps awake
 
 on:
   schedule:
-    - cron: "17 */4 * * *"   # every 4 hours
+    - cron: "17 */6 * * *"
   workflow_dispatch:
 
 jobs:
   ping:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - name: Ping live demo apps
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install puppeteer-core
+        run: npm install --no-save --no-audit --no-fund puppeteer-core@23
+
+      - name: Locate Chrome
+        id: chrome
         run: |
-          curl -sS -o /dev/null -w "budgeting-app: %{http_code}\n" "https://masonbennett-budget.streamlit.app/" || true
-          curl -sS -o /dev/null -w "portfolio-app: %{http_code}\n" "https://portfolio-app-ifh8afmcuxkyr6ivov9fmj.streamlit.app/" || true
-          curl -sS -o /dev/null -w "website: %{http_code}\n" "https://masonjbennett.com/" || true
+          for p in /usr/bin/google-chrome /usr/bin/google-chrome-stable /usr/bin/chromium-browser /usr/bin/chromium; do
+            if [ -x "$p" ]; then echo "path=$p" >> "$GITHUB_OUTPUT"; echo "using $p"; exit 0; fi
+          done
+          echo "No Chrome found on the runner image." >&2
+          exit 1
+
+      - name: Wake and hold a session on each app
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.path }}
+        run: node .github/scripts/wake.mjs
+
+      - name: Check the website itself
+        run: |
+          code=$(curl -sSL -m 30 -o /dev/null -w '%{http_code}' https://masonjbennett.com/)
+          echo "masonjbennett.com: $code"
+          # -L because the apex 307-redirects to www; assert rather than `|| true`.
+          if [ "$code" != "200" ]; then echo "site returned $code" >&2; exit 1; fi
