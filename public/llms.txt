@@ -30,8 +30,8 @@ he was NOT part of the actual transactions.
 - Interactive mini-LBO model, merger math (accretion/dilution) sandbox, and a
   paper-LBO drill generator, all built in React (/projects)
 - ML credit-default classifier: 0.9931 ROC-AUC on 70,000 loans
-- Live apps: budgeting app (masonbennett-budget.streamlit.app) and portfolio
-  analytics app (Streamlit)
+- Live apps: budgeting app (budget.masonjbennett.com — Next.js + FastAPI on
+  Vercel) and portfolio analytics app (Streamlit)
 
 ## Contact
 - Email: bennettmasonj@gmail.com
