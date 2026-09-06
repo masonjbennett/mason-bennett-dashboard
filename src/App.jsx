@@ -35,14 +35,14 @@ const PROJECTS = [
   { title: "Filings Terminal", desc: "Type a ticker and get eight years of any US public company's financial statements, straight from its SEC filings — every figure clickable back to the filing it came from. Nothing is estimated and no AI touches the data. It exports to a real Excel workbook, builds comps sets, and breaks a company into its reported segments. Filers share no common format, so it reads all 10,387 on their own terms and rebuilds the sheet by business type — banks, insurers and REITs are judged on different measures, and each gets the ones analysts use. Anything a company never reported is marked as such rather than guessed. Tested against 426 companies across six deliberately different populations — mega caps, micro caps, foreign issuers, fiscal-year changes, restatements and bankruptcy emergences.", tags: ["React", "SEC Filings", "XBRL", "Financial Statements", "Serverless"], status: "Live", completed: "Aug 2026", updated: "Aug 17, 2026", img: "/projects/filings-terminal.png", url: "https://github.com/masonjbennett/filings-terminal", demo: "https://filings.masonjbennett.com" },
   { title: "ML Credit Default Classifier", desc: "A machine-learning credit-risk study on a 70,000-loan near-prime dataset that reached 0.9931 ROC-AUC, up from a 0.58 gradient-boosting baseline — through pairwise-interaction features, PCA noise-filtering, pseudo-labelling, and a 60-seed bagged neural-network ensemble with per-fold LightGBM feature selection. I directed the project and reviewed and interpreted the full six-stage workflow; the coding and much of the experimental brainstorming were AI-driven, which the course explicitly encouraged. The write-up documents every stage, ablation, and negative result.", tags: ["Machine Learning", "AI-Directed", "Ensembling & PCA", "Credit Risk"], status: "Completed", completed: "May 2026", url: "/projects/fda2-report.pdf" },
   { title: "Personal Budgeting App", desc: "Personal finance planner: a Next.js front end over a Python calculation service. Income and tax estimation for all 50 states on 2026 IRS brackets (OBBBA SALT phase-out, the new charitable floors, Medicare surtax by filing status), a budget builder, expense tracking with bank-CSV import, a calendar-year view, net worth and savings goals, an avalanche-vs-snowball debt planner with amortization, an investment projector with employer-match modelling, and FIRE projections with a Monte Carlo and a savings-rate curve. Accounts and cloud sync on Supabase with row-level security. Every figure is computed server-side from one shared Python engine — no arithmetic in the front end, because the maths had already drifted into three copies that disagreed. 521 assertions and 33 mutation tests run against the shipping engine, plus 225 browser assertions covering every route in both themes.", tags: ["Next.js", "FastAPI", "Python", "Supabase", "Tax Planning"], status: "Completed", completed: "Apr 2026", updated: "Sep 3, 2026", img: "/projects/budgeting-app.png", url: "https://github.com/masonjbennett/budgeting-app", demo: "https://budget.masonjbennett.com" },
-  { title: "Portfolio Analytics App", desc: "Real-time equity portfolio construction and optimization tool with 6 analytical modules. Mean-variance optimization (GMV & Tangency), efficient frontier with CAL, CAPM beta/alpha regression, risk contribution decomposition (PRC), and estimation window sensitivity analysis. Features a tiered tooltip system (Beginner/Intermediate/Advanced) that adapts explanations to the user's knowledge level, custom portfolio builder with live frontier plotting, and CSV/Excel export.", tags: ["Python", "Streamlit", "Portfolio Optimization", "scipy"], status: "Completed", completed: "Apr 2026", updated: "Aug 29, 2026", img: "/projects/portfolio-app.png", url: "https://github.com/masonjbennett/portfolio-app", demo: "https://portfolio-app-ifh8afmcuxkyr6ivov9fmj.streamlit.app/" },
+  { title: "Portfolio Analytics App", desc: "Name three to ten tickers and get the full mean-variance treatment on their real price history: annualized return and volatility, the correlation structure, drawdowns, CAPM beta and alpha, and three constructed portfolios — equal-weight, minimum-variance and max-Sharpe — plotted on an efficient frontier with the capital allocation line. A risk-contribution view shows where portfolio risk actually sits, which is rarely where the money sits, and a sensitivity tab re-runs every optimization across five lookback windows so the instability of the inputs is visible rather than hidden. Tooltips rewrite themselves for beginner, intermediate or advanced readers. I walk-forward tested the optimizer over six rolling one-year holding periods: equal-weighting beat both optimized portfolios on similar assets — the max-Sharpe portfolio's 1.107 in-sample Sharpe became 0.659 out of sample — and optimization only added value across genuinely different asset classes.", tags: ["Python", "Streamlit", "Portfolio Optimization", "scipy", "Out-of-Sample Testing"], status: "Completed", completed: "Apr 2026", updated: "Sep 6, 2026", img: "/projects/portfolio-app.png", url: "https://github.com/masonjbennett/portfolio-app", demo: "https://portfolio-app-ifh8afmcuxkyr6ivov9fmj.streamlit.app/" },
   { title: "Applied Econometrics — Hurricane Michael", desc: "Regression analysis studying Hurricane Michael's impact on Florida housing prices across 67 counties. Built MLR and Difference-in-Difference models achieving R² of 0.59, identifying a $36,631 median price decline in affected counties. Analyzed median income, unemployment, elevation, FEMA risk indices, and population density as determinants.", tags: ["Stata", "Econometrics", "Regression Analysis", "Diff-in-Diff"], status: "Completed", completed: "Apr 2024", url: "/hurricane-paper.docx" },
 ];
 // Home-page "Featured Work" — a curated, ordered set (not every project with an image).
 const FEATURED = [
   { title: "Filings Terminal", note: "Live tool", img: "/projects/filings-terminal.png", blurb: "Type a ticker, get eight years of a company's financial statements pulled straight from its SEC filings — and click any number to open the filing it came from.", tab: "projects" },
   { title: "EA $55B Take-Private LBO", note: "Student reconstruction", img: "/projects/ea-featured.png", blurb: "A graduate-course reconstruction of the Electronic Arts take-private — 35-page investment memo, 26-slide IC deck, and a 12-tab LBO model.", tab: "projects", id: "ea-take-private" },
-  { title: "Portfolio Analytics App", note: "Live demo", img: "/projects/portfolio-app.png", blurb: "Real-time mean-variance optimization, efficient frontier with CAL, CAPM beta/alpha, and risk-contribution decomposition — built in Streamlit.", tab: "projects" },
+  { title: "Portfolio Analytics App", note: "Live demo", img: "/projects/portfolio-app.png", blurb: "Mean-variance optimization on any basket of stocks — efficient frontier, CAPM beta, and a risk-contribution view showing where the risk actually sits. Walk-forward tested against a naive equal split.", tab: "projects" },
 ];
 const DEALS = [
   { id: "ea-take-private", value: "$55B", type: "Take-Private LBO", co: "Electronic Arts Inc.", sub: "NASDAQ: EA", detail: "35-page IM · 26-slide IC deck · 12-tab LBO model", date: "Apr 2026", model: "/deals/ea-lbo-model.xlsx", memo: "/deals/ea-memo.pdf", deck: "/deals/ea-ic-deck.pptx",
@@ -75,6 +75,7 @@ const ARTIFACTS = [
   { label: "Filings Terminal — eight years of any public company's financials, live tool", href: "https://filings.masonjbennett.com", recruiterSafe: true },
   { label: "Personal budgeting app — live demo", href: "https://budget.masonjbennett.com", recruiterSafe: true },
   { label: "Portfolio analytics app — live demo", href: "https://portfolio-app-ifh8afmcuxkyr6ivov9fmj.streamlit.app/", recruiterSafe: true },
+  { label: "Method note — walk-forward test of the portfolio optimizer", tab: "projects", id: "portfolio-method", recruiterSafe: true },
   { label: "Bloomberg Market Concepts certificate (PDF)", href: "/bmc-certificate.pdf", recruiterSafe: true },
   { label: "GitHub", href: "https://github.com/masonjbennett", recruiterSafe: true },
   { label: "Shollmier Investment Fund — Garrison Financial Institute", href: "https://gfi.uark.edu/shollmier-fund.php", recruiterSafe: true },
@@ -90,7 +91,7 @@ const ANCHOR_SEG = {
   "lexicon": ["projects", "prep"], "bias-ledger": ["projects", "prep"], "name-that-regime": ["projects", "prep"], "explain-desk": ["projects", "prep"], "query-drill": ["projects", "prep"],
   "curve-time-machine": ["markets", "tape"], "drawdown-meter": ["markets", "tape"], "fed-ledger": ["markets", "tape"],
   "watchlist": ["markets", "tape"], "rates-page": ["markets", "tape"], "econ-calendar": ["markets", "tape"], "earnings-calendar": ["markets", "tape"],
-  "deal-sheet": ["projects", "portfolio"], "daily-drill": ["projects", "prep"],
+  "deal-sheet": ["projects", "portfolio"], "portfolio-method": ["projects", "portfolio"], "daily-drill": ["projects", "prep"],
   "standing-wire": ["news", null], "filings-wire": ["news", null], "reading-ledger": ["news", null], "proofs-tray": ["news", null],
 };
 // House codes — the Bloomberg-style mnemonics the "/" lookup answers to. Typed input is matched
@@ -4660,6 +4661,63 @@ export default function App() {
             {p.url && <a href={p.url} target="_blank" rel="noopener noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 10, color: "#0d6d56", textDecoration: "none", fontFamily: "JetBrains Mono, monospace", padding: "4px 0", transition: "opacity 0.2s" }} onMouseEnter={e=>e.currentTarget.style.opacity="0.7"} onMouseLeave={e=>e.currentTarget.style.opacity="1"}>{p.url.includes("github") ? "GitHub" : p.url.includes("report") ? "Read the Report" : p.url.includes("paper") ? "View Paper" : "View"} <span style={{fontSize:9}}>↗</span></a>}
           </div>}
         </div>)}</div>
+        <div id="portfolio-method" style={{ ...S.card, marginTop: 16 }}>
+          <h2 style={S.cardTitle}><span style={{ color: "#1f5a9e" }}>◆</span> Method Note — Testing the Optimizer<Info text="Mean-variance optimization is the centerpiece of the Portfolio Analytics app. This is the walk-forward test of whether its recommended weights survive on data they were not fitted to: fit on all prior history, hold one year, re-fit, roll forward. The answer turns out to depend entirely on what you point it at." link="https://portfolio-app-ifh8afmcuxkyr6ivov9fmj.streamlit.app/" linkLabel="Open the app" /><span style={{ marginLeft: "auto" }}><CopyAnchor tab="projects" id="portfolio-method" /></span></h2>
+          <p style={{ fontSize: 11, color: "#8a8072", fontStyle: "italic", margin: "-6px 0 16px" }}>Walk-forward test of the Portfolio Analytics app · six rolling one-year holding periods · 2019–2026</p>
+          <p style={{ fontSize: 13, color: "#4a443c", lineHeight: 1.75, marginBottom: 18 }}>
+            Every optimizer looks good on the window it was fitted to. The question worth asking is whether the weights it
+            recommends hold up on data it has never seen — so I fitted each portfolio on all history up to a point in time,
+            held those weights untouched for the following year, then re-fitted and rolled forward. No lookahead. This is
+            what actually using the tool to invest would have produced.
+          </p>
+          <div style={{ overflowX: "auto", marginBottom: 18 }}>
+            <table style={{ borderCollapse: "collapse", width: "100%", minWidth: 460, fontFamily: "'JetBrains Mono',monospace" }}>
+              <thead>
+                <tr>
+                  {["Asset set", "Equal-weight", "Min-variance", "Max-Sharpe"].map((h, i) => <th key={h} style={{ fontSize: 8.5, color: "#8a8072", letterSpacing: 1.5, textTransform: "uppercase", fontWeight: 500, textAlign: i === 0 ? "left" : "right", padding: "0 12px 9px", borderBottom: "1px solid #ddcfb8", whiteSpace: "nowrap" }}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  { set: "Five mega-caps", note: "AAPL · MSFT · GOOGL · AMZN · JPM", ew: "0.864", gmv: "0.710", tan: "0.659", win: "ew" },
+                  { set: "Seven sector ETFs", note: "XLK · XLF · XLV · XLE · XLI · XLP · XLY", ew: "0.915", gmv: "0.450", tan: "0.661", win: "ew" },
+                  { set: "Cross-asset", note: "VTI · AGG · GLD · VNQ · EFA", ew: "0.704", gmv: "−0.247", tan: "0.883", win: "tan" },
+                ].map(r => <tr key={r.set}>
+                  <td style={{ padding: "11px 12px", borderBottom: "1px solid #efe4d2", textAlign: "left" }}>
+                    <div style={{ fontSize: 12, color: "#33302c", fontFamily: "'Space Grotesk',sans-serif", fontWeight: 500 }}>{r.set}</div>
+                    <div style={{ fontSize: 8.5, color: "#a2977f", letterSpacing: 0.5, marginTop: 3 }}>{r.note}</div>
+                  </td>
+                  {["ew", "gmv", "tan"].map(k => <td key={k} style={{ padding: "11px 12px", borderBottom: "1px solid #efe4d2", textAlign: "right", fontSize: 13, fontWeight: r.win === k ? 700 : 400, color: r.win === k ? "#0d6d56" : r[k].startsWith("−") ? "#b2342b" : "#6f675c", whiteSpace: "nowrap" }}>{r[k]}</td>)}
+                </tr>)}
+              </tbody>
+            </table>
+          </div>
+          <p style={{ fontSize: 10.5, color: "#8a8072", lineHeight: 1.6, margin: "-6px 0 20px", fontStyle: "italic" }}>
+            Out-of-sample Sharpe ratio. Teal marks the winner in each row; every portfolio is re-fitted annually on all prior history and held unchanged for the year that follows.
+          </p>
+          {[
+            ["The optimizer lost to a naive equal split on similar assets", "On the five mega-caps, the max-Sharpe portfolio's in-sample Sharpe of 1.107 became 0.659 out of sample. Pairwise correlations averaged 0.51 and every beta sat near 1.1 — there was no cross-sectional signal to find, so the optimizer fitted noise and concentrated on it."],
+            ["It earned its keep across asset classes", "On stocks, bonds, gold, REITs and international equity it beat equal weight 0.883 to 0.704. Differences that are large and structural survive estimation error; the difference between two mega-cap technology names does not."],
+            ["Minimum variance is not the conservative choice", "GMV finished last in every set and went negative on the cross-asset run, where minimizing variance meant holding 95.3% in aggregate bonds going into 2022. Lowest measured risk and lowest actual risk are different claims."],
+          ].map(([l, t]) => <div key={l} style={{ marginBottom: 12, paddingLeft: 14, borderLeft: "2px solid #e9ddc9" }}>
+            <div style={{ fontSize: 9, color: "#0d6d56", fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: 4 }}>{l}</div>
+            <div style={{ fontSize: 12.5, color: "#4a443c", lineHeight: 1.7 }}>{t}</div>
+          </div>)}
+          <p style={{ fontSize: 13, color: "#4a443c", lineHeight: 1.75, margin: "18px 0 0" }}>
+            The mechanism is estimation error, and it is asymmetric. The standard error on an annualized mean return is
+            σ/√T — roughly ±11 percentage points a year on a 30%-volatility stock over this sample. Covariances estimated
+            from the same data are an order of magnitude tighter. Max-Sharpe leans hardest on the input that can least be
+            estimated, which is why the app's sensitivity tab shows its Apple weight moving 41.7% → 3.8% → 6.4% → 21.0% →
+            44.8% across five lookback windows while the minimum-variance weights barely move. The 1/N result itself is
+            well documented — DeMiguel, Garlappi and Uppal (2009) found the same across fourteen datasets; this is that
+            test run against my own tool rather than cited from theirs.
+          </p>
+          <div style={{ marginTop: 18, paddingTop: 14, borderTop: "1px solid #e9ddc9" }}>
+            <span style={{ fontSize: 9, color: "#b0741e", fontFamily: "'JetBrains Mono',monospace", textTransform: "uppercase", letterSpacing: 1.5 }}>Takeaway — </span>
+            <span style={{ fontSize: 13, color: "#33302c", lineHeight: 1.7 }}>The only result worth defending about an optimizer is the one measured on data it never saw. In-sample Sharpe is a curve fit; this table is the number I would put in front of an interviewer.</span>
+          </div>
+          <SourceLine>Computed Sep 2026 against the shipping application · weights re-fitted annually, held one year, no lookahead · analytical result on historical data, not investment advice</SourceLine>
+        </div>
         </>}
         {seg.projects === "prep" && <>
         <h1 style={S.pageTitle}>The Prep Floor</h1><p style={{ color: "#6f675c", marginBottom: 32, fontSize: 14 }}>Interview-prep drills and a spaced-repetition learning engine — seeded generators, dated daily editions, and a house question bank. Everything regenerates on its own; every mark stays in your browser.</p>
